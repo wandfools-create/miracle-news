@@ -1,0 +1,35 @@
+import type { HomeNewsLabels } from "@/components/home/HomeNewsView";
+
+export const enHomeLabels: HomeNewsLabels = {
+  edition: "English News",
+  tagline:
+    "Editor-reviewed stories in English. Headline, latest list, categories, and sources.",
+  navLatest: "Latest",
+  navCategories: "Categories",
+  navSources: "Sources",
+  alternateLang: "한국어",
+  featuredEyebrow: "Headline",
+  featuredTitle: "Top story",
+  readArticle: "Read article",
+  latestEyebrow: "Latest",
+  latestTitle: "Top stories",
+  latestDesc: "US and Korea stories side by side, sorted by publish date.",
+  columnEmpty: "No stories in this column.",
+  trendingTitle: "Trending Issues",
+  trendingRegionUs: "United States",
+  trendingRegionKr: "Korea",
+  categoriesEyebrow: "Categories",
+  categoriesTitle: "Stories by category",
+  sourcesEyebrow: "Sources",
+  sourcesTitle: "Major outlets",
+  sourcesDesc:
+    "Source outlets currently represented among published stories.",
+  sourceLeadsTitle: "Lead stories by source",
+  sidebarEyebrow: "More",
+  sidebarTitle: "More headlines",
+  sidebarDesc: "Other recent stories from the newsroom.",
+  navHome: "English home",
+  empty: "There are no published English articles yet.",
+  errorPrefix: "Error loading data:",
+  noImage: "No image",
+};

@@ -1,0 +1,28 @@
+import type { ArticleDetailLabels } from "@/components/article/ArticleDetailView";
+
+export const enArticleDetailLabels: ArticleDetailLabels = {
+  breadcrumbHome: "English Home",
+  viewOriginal: "View original article",
+  alternateVersion: "View Korean version",
+  sourceLabel: "Source",
+  originalTitleLabel: "Original title",
+  bodyHeading: "Article body",
+  summaryHeading: "Key summary",
+  emptyBody: "No body available.",
+  sidebarInfoEyebrow: "Article Info",
+  sidebarInfoTitle: "Article info",
+  sidebarSource: "Source",
+  sidebarCategory: "Category",
+  sidebarPublished: "Published",
+  sidebarTopic: "Topic",
+  relatedTopicEyebrow: "Related Topic",
+  relatedTopicTitle: "More on this topic",
+  relatedCategoryEyebrow: "Related Category",
+  relatedCategoryTitle: "More in this category",
+  navEyebrow: "Navigation",
+  navTitle: "Quick links",
+  navHome: "Back to English home",
+  navOriginal: "View original article",
+  navAlternate: "View Korean version",
+  noImage: "No image",
+};

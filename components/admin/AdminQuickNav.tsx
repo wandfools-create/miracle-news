@@ -1,0 +1,91 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import AdminLogoutButton from "@/components/admin/AdminLogoutButton";
+
+type AdminQuickNavProps = {
+  counts: {
+    review: number;
+    onHold: number;
+    revision: number;
+    approved: number;
+    published: number;
+    rejected: number;
+  };
+};
+
+const navItems = [
+  { href: "/admin", label: "관리자 홈", key: "home" },
+  { href: "/admin/from-link", label: "링크 초안", key: "from-link" },
+  { href: "/admin/review", label: "검토 대기", key: "review" },
+  { href: "/admin/on-hold", label: "보류 기사", key: "on-hold" },
+  { href: "/admin/revision", label: "수정 대기", key: "revision" },
+  { href: "/admin/approved", label: "승인 완료", key: "approved" },
+  { href: "/admin/published", label: "공개 기사", key: "published" },
+  { href: "/admin/rejected", label: "반려 기사", key: "rejected" },
+] as const;
+
+export default function AdminQuickNav({ counts }: AdminQuickNavProps) {
+  const pathname = usePathname();
+
+  function getCount(key: string) {
+    if (key === "review") return counts.review;
+    if (key === "on-hold") return counts.onHold;
+    if (key === "revision") return counts.revision;
+    if (key === "approved") return counts.approved;
+    if (key === "published") return counts.published;
+    if (key === "rejected") return counts.rejected;
+    return null;
+  }
+
+  function isActive(href: string) {
+    if (href === "/admin") return pathname === "/admin";
+    return pathname.startsWith(href);
+  }
+
+  return (
+    <div className="sticky top-0 z-40 border-b bg-white/90 backdrop-blur">
+      <section className="mx-auto max-w-6xl px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-semibold tracking-wide text-gray-500">
+            관리자 빠른 메뉴
+          </p>
+          <AdminLogoutButton />
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-3">
+          {navItems.map((item) => {
+            const active = isActive(item.href);
+            const count = getCount(item.key);
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition ${
+                  active
+                    ? "border-black bg-black text-white"
+                    : "border-gray-300 bg-white text-gray-800 hover:bg-gray-100"
+                }`}
+              >
+                <span>{item.label}</span>
+                {count !== null ? (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      active
+                        ? "bg-white/20 text-white"
+                        : "bg-gray-100 text-gray-700"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                ) : null}
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+}

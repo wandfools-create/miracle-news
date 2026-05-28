@@ -1,0 +1,35 @@
+import type { HomeNewsLabels } from "@/components/home/HomeNewsView";
+
+export const koHomeLabels: HomeNewsLabels = {
+  edition: "한국어 뉴스",
+  tagline:
+    "검토 후 공개된 한국어 기사입니다. 대표 기사·최신 목록·카테고리·주요 언론사별로 모았습니다.",
+  navLatest: "주요 기사",
+  navCategories: "카테고리",
+  navSources: "주요 언론사",
+  alternateLang: "English",
+  featuredEyebrow: "Headline",
+  featuredTitle: "오늘의 주요 기사",
+  readArticle: "기사 보기",
+  latestEyebrow: "Latest",
+  latestTitle: "주요 기사",
+  latestDesc: "한국·미국 기사를 나란히 모았습니다. 발행일 최신순입니다.",
+  columnEmpty: "이 영역에 해당하는 기사가 없습니다.",
+  trendingTitle: "지금 뜨는 이슈",
+  trendingRegionUs: "미국",
+  trendingRegionKr: "한국",
+  categoriesEyebrow: "Sections",
+  categoriesTitle: "카테고리별 기사",
+  sourcesEyebrow: "Sources",
+  sourcesTitle: "주요 언론사",
+  sourcesDesc:
+    "공개 기사에 반영 중인 출처입니다. 언론사별 대표 기사를 확인할 수 있습니다.",
+  sourceLeadsTitle: "언론사별 대표 기사",
+  sidebarEyebrow: "More",
+  sidebarTitle: "지금 주목",
+  sidebarDesc: "다른 섹션에 올라온 최근 헤드라인입니다.",
+  navHome: "한국어 홈",
+  empty: "현재 공개된 한국어 기사가 없습니다.",
+  errorPrefix: "데이터를 불러오는 중 오류가 발생했습니다:",
+  noImage: "이미지 없음",
+};

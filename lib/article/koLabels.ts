@@ -1,0 +1,30 @@
+import type { ArticleDetailLabels } from "@/components/article/ArticleDetailView";
+
+export const koArticleDetailLabels: ArticleDetailLabels = {
+  breadcrumbHome: "한국어 홈",
+  viewOriginal: "원문 기사 보기",
+  alternateVersion: "English version",
+  sourceLabel: "출처",
+  originalTitleLabel: "원문 제목",
+  bodyHeading: "본문",
+  summaryHeading: "핵심 요약",
+  emptyBody: "본문이 없습니다.",
+  footerNote:
+    "이 기사는 원문을 바탕으로 핵심 내용을 정리한 해설형 기사입니다.",
+  sidebarInfoEyebrow: "Article Info",
+  sidebarInfoTitle: "기사 정보",
+  sidebarSource: "Source",
+  sidebarCategory: "Category",
+  sidebarPublished: "Published",
+  sidebarTopic: "Topic",
+  relatedTopicEyebrow: "Related Topic",
+  relatedTopicTitle: "같은 이슈 기사",
+  relatedCategoryEyebrow: "Related Category",
+  relatedCategoryTitle: "같은 카테고리 기사",
+  navEyebrow: "Navigation",
+  navTitle: "바로가기",
+  navHome: "한국어 홈으로 돌아가기",
+  navOriginal: "원문 기사 바로 보기",
+  navAlternate: "영어 버전 보기",
+  noImage: "이미지 없음",
+};
