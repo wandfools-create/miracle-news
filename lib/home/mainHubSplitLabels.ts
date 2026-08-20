@@ -3,9 +3,9 @@ import { koHomeLabels } from "./koHomeLabels";
 
 export const mainHubSplitLabels: MainHubSplitLabels = {
   ...koHomeLabels,
-  edition: "메인 뉴스",
+  edition: "한눈",
   tagline:
-    "미국·한국 뉴스를 좌우로 나눠 보여 줍니다. 각 칼럼에 주요·최신·언론사·카테고리·YouTube·SNS 기사를 모았습니다.",
+    "한눈에 보는 글로벌 뉴스. 미국·한국 뉴스를 좌우로 나눠 보여 줍니다.",
   featuredTitle: "주요 기사",
   latestTitle: "최신 기사",
   latestDesc: "발행일 최신순입니다.",

@@ -552,7 +552,7 @@ export default function MainHubSplitView({
                 {showDateInHeader ? headerDate : labels.edition}
               </p>
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-news-navy sm:text-4xl">
-                Miracle News
+                한눈
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-relaxed text-neutral-600 sm:text-[15px]">
                 {labels.tagline}

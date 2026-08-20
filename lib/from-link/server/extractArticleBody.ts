@@ -8,31 +8,25 @@ import {
 } from "../constants";
 import { normalizePublishedAtToIso } from "../extractPublishedAt";
 import { removeChromeFromHtml, stripHtmlToPlain } from "../htmlText";
+import type {
+  ArticleBodyExtractionResult,
+  ExtractionStepLog,
+  JsonLdArticleFields,
+} from "./articleBodyTypes";
+import { normalizeBody } from "./bodyNormalize";
+import {
+  countBodyParagraphs,
+  resolvePublisherKey,
+} from "./publisherExtractors/shared";
+import { extractPublisherArticleBody } from "./publisherExtractors";
+import type { BodyExtractMethodCategory } from "./publisherExtractors/types";
 import { extractWithReadability } from "./extractReadability";
+
+export type { ExtractionStepLog, JsonLdArticleFields, ArticleBodyExtractionResult };
 
 const LOG_PREFIX = "[from-link/extract]";
 
-export type ExtractionStepLog = {
-  step: string;
-  ok: boolean;
-  length: number;
-  detail?: string;
-};
-
-export type JsonLdArticleFields = {
-  articleBody: string | null;
-  headline: string | null;
-  datePublished: string | null;
-};
-
-export type ArticleBodyExtractionResult = {
-  body: string | null;
-  method: string;
-  steps: ExtractionStepLog[];
-  /** True when body meets MIN_USABLE_BODY_CHARS (not meta description). */
-  success: boolean;
-  jsonLd: JsonLdArticleFields;
-};
+export { normalizeBody };
 
 function hostKey(pageUrl: string): string {
   try {
@@ -42,24 +36,6 @@ function hostKey(pageUrl: string): string {
   }
 }
 
-export function normalizeBody(
-  text: string,
-  maxLen = ARTICLE_BODY_MAX_CHARS
-): string {
-  const plain = text
-    .replace(/\r\n/g, "\n")
-    .replace(/\t/g, " ")
-    .split("\n")
-    .map((line) => line.replace(/\s+/g, " ").trim())
-    .filter(Boolean)
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  if (!plain) return "";
-  if (plain.length <= maxLen) return plain;
-  return `${plain.slice(0, maxLen - 1)}…`;
-}
-
 function scoreBody(text: string): number {
   if (!text) return 0;
   const paragraphs = text.split(/\n\n+/).filter((p) => p.trim().length > 50);
@@ -67,22 +43,41 @@ function scoreBody(text: string): number {
 }
 
 function pickBest(
-  candidates: Array<{ method: string; body: string | null }>
-): { method: string; body: string | null } {
-  let best: { method: string; body: string | null; score: number } = {
+  candidates: Array<{ method: string; body: string | null; methodCategory?: BodyExtractMethodCategory }>
+): {
+  method: string;
+  body: string | null;
+  methodCategory: BodyExtractMethodCategory;
+} {
+  let best: {
+    method: string;
+    body: string | null;
+    score: number;
+    methodCategory: BodyExtractMethodCategory;
+  } = {
     method: "none",
     body: null,
     score: 0,
+    methodCategory: "generic",
   };
   for (const c of candidates) {
     const body = c.body?.trim();
     if (!body || body.length < 80) continue;
     const s = scoreBody(body);
     if (s > best.score) {
-      best = { method: c.method, body, score: s };
+      best = {
+        method: c.method,
+        body,
+        score: s,
+        methodCategory: c.methodCategory ?? "generic",
+      };
     }
   }
-  return { method: best.method, body: best.body };
+  return {
+    method: best.method,
+    body: best.body,
+    methodCategory: best.methodCategory,
+  };
 }
 
 function isArticleType(types: string[]): boolean {
@@ -220,7 +215,8 @@ function extractAllByPattern(html: string, pattern: RegExp): string[] {
   return out;
 }
 
-function extractPublisherBody(html: string, host: string): string | null {
+/** Legacy publisher hooks (Reuters, etc.) — AP/Fox/PBS/CSM use dedicated extractors. */
+function extractLegacyPublisherBody(html: string, host: string): string | null {
   if (host.includes("reuters.com")) {
     const paragraphs = extractAllByPattern(
       html,
@@ -235,7 +231,11 @@ function extractPublisherBody(html: string, host: string): string | null {
       /<article[^>]*data-testid=["']Article["'][^>]*>([\s\S]*?)<\/article>/gi
     );
     const bestArticle = pickBest(
-      articleChunks.map((b, i) => ({ method: `reuters-article-${i}`, body: b }))
+      articleChunks.map((b, i) => ({
+        method: `reuters-article-${i}`,
+        body: b,
+        methodCategory: "article" as const,
+      }))
     );
     if (bestArticle.body && bestArticle.body.length >= MIN_USABLE_BODY_CHARS) {
       return normalizeBody(bestArticle.body);
@@ -246,46 +246,6 @@ function extractPublisherBody(html: string, host: string): string | null {
       /<div[^>]+class=["'][^"']*\barticle-body__content__[^"']*["'][^>]*>([\s\S]*?)<\/div>/i
     );
     if (legacy && legacy.length >= MIN_USABLE_BODY_CHARS) return legacy;
-  }
-
-  if (host.includes("foxnews.com")) {
-    const selectors = [
-      /<div[^>]+class=["'][^"']*\barticle-body\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-      /<div[^>]+class=["'][^"']*\barticle-content\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-      /<div[^>]+itemprop=["']articleBody["'][^>]*>([\s\S]*?)<\/div>/i,
-    ];
-    for (const pattern of selectors) {
-      const body = extractByAttributePattern(html, pattern);
-      if (body && body.length >= MIN_USABLE_BODY_CHARS) return body;
-    }
-
-    const articleBlocks = extractTagBlocks(html, "article")
-      .map((b) => stripHtmlToPlain(b, ARTICLE_BODY_MAX_CHARS))
-      .filter((b) => b.length >= MIN_USABLE_BODY_CHARS);
-    if (articleBlocks.length) {
-      return articleBlocks.sort((a, b) => b.length - a.length)[0] ?? null;
-    }
-  }
-
-  if (host.includes("apnews.com")) {
-    const selectors = [
-      /<div[^>]+class=["'][^"']*RichTextStoryBody[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-      /<div[^>]+class=["'][^"']*StoryBody[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-      /<div[^>]+class=["'][^"']*Article[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-      /<article[^>]*>([\s\S]*?)<\/article>/i,
-    ];
-    for (const pattern of selectors) {
-      const body = extractByAttributePattern(html, pattern);
-      if (body && body.length >= MIN_USABLE_BODY_CHARS) return body;
-    }
-
-    const apParagraphs = extractAllByPattern(
-      html,
-      /<p[^>]+class=["'][^"']*RichTextStoryBody[^"']*["'][^>]*>([\s\S]*?)<\/p>/gi
-    );
-    if (apParagraphs.length >= 3) {
-      return normalizeBody(apParagraphs.join("\n\n"));
-    }
   }
 
   return null;
@@ -360,16 +320,39 @@ function extractFallbackPageText(html: string): string | null {
   return body.length >= MIN_USABLE_BODY_CHARS ? body : null;
 }
 
+function resolveMethodCategory(method: string): BodyExtractMethodCategory {
+  if (method.includes("jsonld") || method.includes("json-ld")) return "jsonld";
+  if (
+    method.includes("article") ||
+    method.includes("container") ||
+    method.includes("html-article") ||
+    method.includes("publisher:")
+  ) {
+    return "article";
+  }
+  if (method.includes("og-description")) return "og-description";
+  return "generic";
+}
+
 export function logArticleBodyExtraction(
   pageUrl: string,
-  result: ArticleBodyExtractionResult
+  result: ArticleBodyExtractionResult,
+  pageFetchMethod?: "http" | "playwright" | null
 ): void {
   const body = result.body ?? "";
+  const extractChannel =
+    pageFetchMethod === "playwright" ? "playwright" : result.methodCategory;
+
   console.log(LOG_PREFIX, {
     url: pageUrl,
+    publisher: result.publisher,
     method: result.method,
+    methodCategory: result.methodCategory,
+    extractChannel,
+    pageFetchMethod: pageFetchMethod ?? null,
     success: result.success,
     bodyLength: body.length,
+    paragraphCount: result.paragraphCount,
     preview: body.slice(0, BODY_PREVIEW_LOG_CHARS),
     jsonLdHeadline: result.jsonLd.headline,
     jsonLdDatePublished: result.jsonLd.datePublished,
@@ -380,8 +363,12 @@ export function logArticleBodyExtraction(
     const failed = result.steps.filter((s) => !s.ok);
     console.warn(`${LOG_PREFIX} 본문 추출 실패`, {
       url: pageUrl,
+      publisher: result.publisher,
       finalMethod: result.method,
+      methodCategory: result.methodCategory,
+      pageFetchMethod: pageFetchMethod ?? null,
       bodyLength: body.length,
+      paragraphCount: result.paragraphCount,
       failedSteps: failed,
     });
   }
@@ -389,17 +376,52 @@ export function logArticleBodyExtraction(
 
 export function extractArticleBodyFromHtml(
   html: string,
-  pageUrl: string
+  pageUrl: string,
+  options?: { pageFetchMethod?: "http" | "playwright" | null }
 ): ArticleBodyExtractionResult {
   const host = hostKey(pageUrl);
+  const publisherKey = resolvePublisherKey(pageUrl);
   const steps: ExtractionStepLog[] = [];
   const jsonLd = extractJsonLdArticleFields(html);
+
+  const publisherResult = extractPublisherArticleBody({
+    html,
+    pageUrl,
+    jsonLd,
+  });
+
+  if (publisherResult) {
+    for (const s of publisherResult.steps) {
+      steps.push(s);
+    }
+  }
+
+  if (publisherResult?.success && publisherResult.body) {
+    const methodCategory =
+      options?.pageFetchMethod === "playwright"
+        ? "playwright"
+        : publisherResult.methodCategory;
+
+    const result: ArticleBodyExtractionResult = {
+      body: publisherResult.body,
+      method: publisherResult.method,
+      methodCategory,
+      steps,
+      success: true,
+      jsonLd,
+      publisher: publisherKey,
+      paragraphCount: countBodyParagraphs(publisherResult.body),
+    };
+    logArticleBodyExtraction(pageUrl, result, options?.pageFetchMethod);
+    return result;
+  }
 
   const tryStep = (
     step: string,
     body: string | null,
-    minChars = MIN_USABLE_BODY_CHARS
-  ): string | null => {
+    minChars = MIN_USABLE_BODY_CHARS,
+    methodCategory: BodyExtractMethodCategory = "generic"
+  ): { body: string | null; methodCategory: BodyExtractMethodCategory } => {
     const len = body?.trim().length ?? 0;
     const ok = len >= minChars;
     steps.push({
@@ -408,54 +430,61 @@ export function extractArticleBodyFromHtml(
       length: len,
       detail: ok ? undefined : `need >= ${minChars} chars`,
     });
-    return ok ? normalizeBody(body!) : null;
+    return ok
+      ? { body: normalizeBody(body!), methodCategory }
+      : { body: null, methodCategory };
   };
 
-  const readabilityBody = tryStep(
+  const readability = tryStep(
     "readability",
-    extractWithReadability(html, pageUrl)
+    extractWithReadability(html, pageUrl),
+    MIN_USABLE_BODY_CHARS,
+    "generic"
   );
 
-  const jsonLdBody = tryStep(
+  const jsonLdStep = tryStep(
     "json-ld-articleBody",
     jsonLd.articleBody && jsonLd.articleBody.length >= MIN_USABLE_BODY_CHARS
       ? jsonLd.articleBody
-      : null
+      : null,
+    MIN_USABLE_BODY_CHARS,
+    "jsonld"
   );
 
-  const publisherBody = tryStep(
+  const legacyPublisher = tryStep(
     `publisher:${host}`,
-    extractPublisherBody(html, host)
+    extractLegacyPublisherBody(html, host),
+    MIN_USABLE_BODY_CHARS,
+    "article"
   );
 
-  const articleTagBody = tryStep("html-article-tag", extractArticleTag(html));
-
-  const mainBody = tryStep("html-main-tag", extractRoleMain(html));
-
-  const sectionBody = tryStep("html-section-tag", extractSectionTags(html));
-
-  const classBody = tryStep("html-class-patterns", extractFromClassPatterns(html));
-
+  const articleTag = tryStep("html-article-tag", extractArticleTag(html), MIN_USABLE_BODY_CHARS, "article");
+  const mainBody = tryStep("html-main-tag", extractRoleMain(html), MIN_USABLE_BODY_CHARS, "article");
+  const sectionBody = tryStep("html-section-tag", extractSectionTags(html), MIN_USABLE_BODY_CHARS, "article");
+  const classBody = tryStep("html-class-patterns", extractFromClassPatterns(html), MIN_USABLE_BODY_CHARS, "article");
   const paragraphBody = tryStep(
     "html-paragraph-cluster",
-    extractParagraphCluster(html)
+    extractParagraphCluster(html),
+    MIN_USABLE_BODY_CHARS,
+    "article"
   );
-
   const fallbackBody = tryStep(
     "fallback-page-text",
-    extractFallbackPageText(html)
+    extractFallbackPageText(html),
+    MIN_USABLE_BODY_CHARS,
+    "generic"
   );
 
   const candidates = [
-    { method: "readability", body: readabilityBody },
-    { method: "json-ld-articleBody", body: jsonLdBody },
-    { method: `publisher:${host}`, body: publisherBody },
-    { method: "html-article-tag", body: articleTagBody },
-    { method: "html-main-tag", body: mainBody },
-    { method: "html-section-tag", body: sectionBody },
-    { method: "html-class-patterns", body: classBody },
-    { method: "html-paragraph-cluster", body: paragraphBody },
-    { method: "fallback-page-text", body: fallbackBody },
+    { method: "readability", body: readability.body, methodCategory: readability.methodCategory },
+    { method: "json-ld-articleBody", body: jsonLdStep.body, methodCategory: jsonLdStep.methodCategory },
+    { method: `publisher:${host}`, body: legacyPublisher.body, methodCategory: legacyPublisher.methodCategory },
+    { method: "html-article-tag", body: articleTag.body, methodCategory: articleTag.methodCategory },
+    { method: "html-main-tag", body: mainBody.body, methodCategory: mainBody.methodCategory },
+    { method: "html-section-tag", body: sectionBody.body, methodCategory: sectionBody.methodCategory },
+    { method: "html-class-patterns", body: classBody.body, methodCategory: classBody.methodCategory },
+    { method: "html-paragraph-cluster", body: paragraphBody.body, methodCategory: paragraphBody.methodCategory },
+    { method: "fallback-page-text", body: fallbackBody.body, methodCategory: fallbackBody.methodCategory },
   ];
 
   const best = pickBest(candidates);
@@ -464,14 +493,25 @@ export function extractArticleBodyFromHtml(
     normalizedBody && normalizedBody.length >= MIN_USABLE_BODY_CHARS
   );
 
+  let methodCategory = success
+    ? best.methodCategory
+  : resolveMethodCategory(best.method);
+
+  if (success && options?.pageFetchMethod === "playwright") {
+    methodCategory = "playwright";
+  }
+
   const result: ArticleBodyExtractionResult = {
     body: success ? normalizedBody : null,
     method: success ? best.method : BODY_EXTRACTION_FAILED_METHOD,
+    methodCategory,
     steps,
     success,
     jsonLd,
+    publisher: publisherKey,
+    paragraphCount: countBodyParagraphs(success ? normalizedBody : null),
   };
 
-  logArticleBodyExtraction(pageUrl, result);
+  logArticleBodyExtraction(pageUrl, result, options?.pageFetchMethod);
   return result;
 }

@@ -1,4 +1,12 @@
-export const SITE_NAME = "Miracle News";
+export {
+  BRAND_NAME_EN,
+  BRAND_NAME_KO,
+  SITE_NAME,
+  SITE_TAGLINE_EN,
+  SITE_TAGLINE_KO,
+  getBrandName,
+  getSiteTagline,
+} from "@/lib/brand";
 
 /** Canonical site origin (no trailing slash). */
 export function getSiteUrl(): string {

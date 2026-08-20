@@ -1,9 +1,9 @@
 import type { HomeNewsLabels } from "@/components/home/HomeNewsView";
 
 export const enHomeLabels: HomeNewsLabels = {
-  edition: "English News",
+  edition: "Hannoon",
   tagline:
-    "Editor-reviewed stories in English. Headline, latest list, categories, and sources.",
+    "Global news at a glance. Editor-reviewed stories in English — headlines, categories, and major outlets.",
   navLatest: "Latest",
   navCategories: "Categories",
   navSources: "Sources",
@@ -28,7 +28,7 @@ export const enHomeLabels: HomeNewsLabels = {
   sidebarEyebrow: "More",
   sidebarTitle: "More headlines",
   sidebarDesc: "Other recent stories from the newsroom.",
-  navHome: "English home",
+  navHome: "Hannoon home",
   empty: "There are no published English articles yet.",
   errorPrefix: "Error loading data:",
   noImage: "No image",

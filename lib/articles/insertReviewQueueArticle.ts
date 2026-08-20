@@ -392,6 +392,8 @@ export async function insertReviewQueueArticle(
         .insert(localizations);
 
       if (localizationError) {
+        await supabase.from("article_localizations").delete().eq("article_id", article.id);
+        await supabase.from("articles").delete().eq("id", article.id);
         await safeCollectionLog(
           supabase,
           {
@@ -410,6 +412,8 @@ export async function insertReviewQueueArticle(
         );
       }
     } catch (err) {
+      await supabase.from("article_localizations").delete().eq("article_id", article.id);
+      await supabase.from("articles").delete().eq("id", article.id);
       return toInsertFailure(
         formatSupabaseThrownError(
           "insert_article_localizations",

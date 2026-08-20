@@ -7,10 +7,10 @@ import { getCategoryLabel } from "@/lib/article/categoryLabels";
 import type { EditionSections } from "@/lib/home/prepareMainHubSections";
 
 const labels = {
-  edition: "English Edition",
+  edition: "Hannoon",
   tagline:
-    "Headlines and summaries in English. Browse by section for editor-reviewed stories.",
-  mainHub: "News home",
+    "Global news at a glance. Headlines and summaries in English from editor-reviewed stories.",
+  mainHub: "Hannoon home",
   korean: "한국어",
   latestEyebrow: "Just in",
   latestTitle: "Latest stories",

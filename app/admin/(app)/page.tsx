@@ -7,9 +7,7 @@ export default function AdminHomePage() {
         <p className="text-sm font-semibold tracking-wide text-gray-500">
           관리자 대시보드
         </p>
-        <h1 className="mt-4 text-4xl font-bold tracking-tight">
-          미라클 뉴스 관리자
-        </h1>
+        <h1 className="mt-4 text-4xl font-bold tracking-tight">한눈 관리자</h1>
         <p className="mt-6 max-w-2xl text-lg text-gray-600">
           이곳은 기사 검토, 수정 요청, 승인, 발행을 관리하는 내부 관리자 화면입니다.
         </p>
@@ -22,6 +20,16 @@ export default function AdminHomePage() {
             <h2 className="text-xl font-semibold">링크에서 초안</h2>
             <p className="mt-2 text-sm text-gray-600">
               URL로 미리보기·후보 생성 후 검토 대기에만 저장
+            </p>
+          </Link>
+
+          <Link
+            href="/admin/collection-candidates"
+            className="rounded-2xl border p-6 shadow-sm hover:bg-gray-50"
+          >
+            <h2 className="text-xl font-semibold">RSS 수집 후보</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              cron이 수집한 RSS 후보 목록 — 보강 전 단계
             </p>
           </Link>
 

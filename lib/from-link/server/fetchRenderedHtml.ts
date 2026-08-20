@@ -1,6 +1,7 @@
 import "server-only";
 
 import { DEFAULT_FETCH_HEADERS } from "../htmlText";
+import { playwrightWaitSelectorForUrl } from "./publisherExtractors";
 
 const PLAYWRIGHT_NAV_TIMEOUT_MS = 28_000;
 const PLAYWRIGHT_SETTLE_MS = 2_500;
@@ -70,12 +71,12 @@ export async function fetchRenderedHtmlWithPlaywright(
         };
       }
 
+      const waitSelector = playwrightWaitSelectorForUrl(pageUrl);
+
       await Promise.race([
-        page
-          .waitForSelector("article p, main p, [role='main'] p", {
-            timeout: 6_000,
-          })
-          .catch(() => null),
+        page.waitForSelector(waitSelector, {
+          timeout: 8_000,
+        }).catch(() => null),
         page.waitForTimeout(PLAYWRIGHT_SETTLE_MS),
       ]);
 

@@ -4,9 +4,9 @@ import { koHomeLabels } from "./koHomeLabels";
 /** Labels for bilingual main hub (/). */
 export const mainHubLabels: HomeNewsLabels = {
   ...koHomeLabels,
-  edition: "메인 뉴스",
+  edition: "한눈",
   tagline:
-    "한국어·영어 검토 기사를 한곳에서 모읍니다. 최근 7일 원문 발행일 기준 주요 기사를 선정합니다.",
+    "한눈에 보는 글로벌 뉴스. 한국어·영어 검토 기사를 한곳에서 모읍니다.",
   featuredTitle: "대표 기사",
   latestTitle: "주요 기사",
   latestDesc:

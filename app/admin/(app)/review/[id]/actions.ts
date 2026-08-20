@@ -71,6 +71,57 @@ export async function clearMainTopStory(articleId: string) {
   revalidateAdminPages(articleId);
 }
 
+export async function approveArticleFromForm(formData: FormData) {
+  const articleId = String(formData.get("articleId") ?? "").trim();
+  if (!articleId) {
+    console.error("[approveArticleFromForm] missing articleId");
+    return;
+  }
+  await approveArticle(articleId);
+}
+
+export async function holdArticleFromForm(formData: FormData) {
+  const articleId = String(formData.get("articleId") ?? "").trim();
+  if (!articleId) {
+    console.error("[holdArticleFromForm] missing articleId");
+    return;
+  }
+  await holdArticle(articleId);
+}
+
+export async function approveArticleDetailFromForm(formData: FormData) {
+  await approveArticleFromForm(formData);
+}
+
+export async function rejectArticleFromForm(formData: FormData) {
+  const articleId = String(formData.get("articleId") ?? "").trim();
+  const rejectedReason = String(formData.get("rejectedReason") ?? "");
+  if (!articleId) {
+    console.error("[rejectArticleFromForm] missing articleId");
+    return;
+  }
+  await rejectArticle(articleId, rejectedReason);
+}
+
+export async function setMainTopStoryFromForm(formData: FormData) {
+  const articleId = String(formData.get("articleId") ?? "").trim();
+  const order = String(formData.get("topStoryOrder") ?? "");
+  if (!articleId) {
+    console.error("[setMainTopStoryFromForm] missing articleId");
+    return;
+  }
+  await setMainTopStory(articleId, order);
+}
+
+export async function clearMainTopStoryFromForm(formData: FormData) {
+  const articleId = String(formData.get("articleId") ?? "").trim();
+  if (!articleId) {
+    console.error("[clearMainTopStoryFromForm] missing articleId");
+    return;
+  }
+  await clearMainTopStory(articleId);
+}
+
 export async function approveArticle(articleId: string) {
   const { error } = await supabase
     .from("articles")

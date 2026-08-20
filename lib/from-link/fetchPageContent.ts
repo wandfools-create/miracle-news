@@ -16,8 +16,12 @@ export type PageHtmlForExtraction = {
   extractionStats: FromLinkExtractionStats;
 };
 
-function bodyProbe(html: string, pageUrl: string) {
-  return extractArticleBodyFromHtml(html, pageUrl);
+function bodyProbe(
+  html: string,
+  pageUrl: string,
+  pageFetchMethod: PageFetchMethod | null
+) {
+  return extractArticleBodyFromHtml(html, pageUrl, { pageFetchMethod });
 }
 
 function emptyExtractionStats(): FromLinkExtractionStats {
@@ -64,14 +68,17 @@ export async function fetchPageHtmlForExtraction(
   const http = await fetchHtmlDocument(pageUrl);
 
   if (http.html) {
-    const probe = bodyProbe(http.html, http.finalUrl);
+    const probe = bodyProbe(http.html, http.finalUrl, "http");
     stats = statsFromProbe(stats, "http", probe);
 
     if (probe.success) {
       console.log("[from-link/extract] HTTP fetch succeeded with usable body", {
         url: pageUrl,
         bodyLength: probe.body?.length ?? 0,
+        paragraphCount: probe.paragraphCount,
         extractMethod: probe.method,
+        methodCategory: probe.methodCategory,
+        publisher: probe.publisher,
       });
       return {
         html: http.html,
@@ -88,7 +95,10 @@ export async function fetchPageHtmlForExtraction(
       {
         url: pageUrl,
         bodyLength: probe.body?.length ?? 0,
+        paragraphCount: probe.paragraphCount,
         extractMethod: probe.method,
+        methodCategory: probe.methodCategory,
+        publisher: probe.publisher,
         failedSteps: probe.steps.filter((s) => !s.ok),
       }
     );
@@ -103,14 +113,17 @@ export async function fetchPageHtmlForExtraction(
   const rendered = await fetchRenderedHtmlWithPlaywright(pageUrl);
 
   if (rendered.html) {
-    const pwProbe = bodyProbe(rendered.html, rendered.finalUrl);
+    const pwProbe = bodyProbe(rendered.html, rendered.finalUrl, "playwright");
     stats = statsFromProbe(stats, "playwright", pwProbe);
 
     if (pwProbe.success) {
       console.log("[from-link/extract] Playwright succeeded with usable body", {
         url: pageUrl,
         bodyLength: pwProbe.body?.length ?? 0,
+        paragraphCount: pwProbe.paragraphCount,
         extractMethod: pwProbe.method,
+        methodCategory: pwProbe.methodCategory,
+        publisher: pwProbe.publisher,
       });
     } else {
       console.warn(

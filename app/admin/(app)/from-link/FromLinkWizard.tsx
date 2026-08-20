@@ -37,9 +37,13 @@ type LastRun =
       diagnostics?: FromLinkAnalyzeDiagnostics;
     };
 
-export default function FromLinkWizard() {
+type FromLinkWizardProps = {
+  initialUrl?: string;
+};
+
+export default function FromLinkWizard({ initialUrl = "" }: FromLinkWizardProps) {
   const router = useRouter();
-  const [urlInput, setUrlInput] = useState("");
+  const [urlInput, setUrlInput] = useState(initialUrl);
   const [supplementalInput, setSupplementalInput] = useState("");
   const [allowShortSourceDraft, setAllowShortSourceDraft] = useState(false);
   const [lastRun, setLastRun] = useState<LastRun | null>(null);

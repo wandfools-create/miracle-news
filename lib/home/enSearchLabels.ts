@@ -12,7 +12,7 @@ export const enHomeSearchLabels: HomeNewsSearchLabels = {
 
 export const enSearchResultsLabels: NewsSearchResultsLabels = {
   title: "News search",
-  homeLink: "English home",
+  homeLink: "Hannoon home",
   alternateLang: "한국어",
   placeholder: "Search title, body, source, category",
   empty: "No stories matched your search.",

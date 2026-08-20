@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isAllowedAdminEmail } from "@/lib/admin/adminEmails";
 import { updateSupabaseSession } from "@/lib/supabase/middleware";
 
 export async function middleware(request: NextRequest) {
@@ -13,6 +14,7 @@ export async function middleware(request: NextRequest) {
 
   try {
     const { response, user } = await updateSupabaseSession(request);
+    const isAllowedAdmin = isAllowedAdminEmail(user?.email);
 
     if (!isLoginPage && !user) {
       const loginUrl = request.nextUrl.clone();
@@ -21,13 +23,21 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    if (isLoginPage && user) {
+    if (!isLoginPage && user && !isAllowedAdmin) {
+      return NextResponse.redirect(new URL("/403", request.url));
+    }
+
+    if (isLoginPage && user && isAllowedAdmin) {
       const next = request.nextUrl.searchParams.get("next");
       const destination =
         next && next.startsWith("/admin") && !next.startsWith("/admin/login")
           ? next
           : "/admin";
       return NextResponse.redirect(new URL(destination, request.url));
+    }
+
+    if (isLoginPage && user && !isAllowedAdmin) {
+      return response;
     }
 
     return response;

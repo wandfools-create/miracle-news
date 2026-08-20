@@ -1,11 +1,18 @@
 import { supabase } from "@/lib/supabase";
+import { countActionableCollectionCandidates } from "@/lib/admin/fetchCollectionCandidates";
 import AdminQuickNav from "@/components/admin/AdminQuickNav";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function AdminDashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const authClient = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+
   const [
     { count: reviewCount },
     { count: onHoldCount },
@@ -13,6 +20,7 @@ export default async function AdminDashboardLayout({
     { count: approvedCount },
     { count: publishedCount },
     { count: rejectedCount },
+    collectionCandidatesCount,
   ] = await Promise.all([
     supabase
       .from("articles")
@@ -49,13 +57,17 @@ export default async function AdminDashboardLayout({
       .select("*", { count: "exact", head: true })
       .eq("review_status", "rejected")
       .eq("status", "rejected"),
+
+    countActionableCollectionCandidates(),
   ]);
 
   return (
     <>
       <AdminQuickNav
+        userEmail={user?.email ?? null}
         counts={{
           review: reviewCount ?? 0,
+          collectionCandidates: collectionCandidatesCount,
           onHold: onHoldCount ?? 0,
           revision: revisionCount ?? 0,
           approved: approvedCount ?? 0,

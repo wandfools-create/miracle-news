@@ -1,7 +1,7 @@
 import type { ArticleDetailLabels } from "@/components/article/ArticleDetailView";
 
 export const enArticleDetailLabels: ArticleDetailLabels = {
-  breadcrumbHome: "English Home",
+  breadcrumbHome: "Hannoon home",
   viewOriginal: "View original article",
   alternateVersion: "View Korean version",
   sourceLabel: "Source",
@@ -21,7 +21,7 @@ export const enArticleDetailLabels: ArticleDetailLabels = {
   relatedCategoryTitle: "More in this category",
   navEyebrow: "Navigation",
   navTitle: "Quick links",
-  navHome: "Back to English home",
+  navHome: "Back to Hannoon home",
   navOriginal: "View original article",
   navAlternate: "View Korean version",
   noImage: "No image",

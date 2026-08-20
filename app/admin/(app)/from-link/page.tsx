@@ -3,7 +3,14 @@ import FromLinkWizard from "./FromLinkWizard";
 
 export const dynamic = "force-dynamic";
 
-export default function AdminFromLinkPage() {
+type PageProps = {
+  searchParams: Promise<{ url?: string }>;
+};
+
+export default async function AdminFromLinkPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const initialUrl = typeof params.url === "string" ? params.url : "";
+
   return (
     <main className="min-h-screen bg-white text-black">
       <section className="mx-auto max-w-6xl px-6 py-16">
@@ -30,7 +37,7 @@ export default function AdminFromLinkPage() {
         </p>
 
         <div className="mt-12">
-          <FromLinkWizard />
+          <FromLinkWizard initialUrl={initialUrl} />
         </div>
       </section>
     </main>

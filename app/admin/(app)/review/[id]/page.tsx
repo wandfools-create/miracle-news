@@ -1,11 +1,18 @@
+import Link from "next/link";
 import ReviewRevisionForm from "@/components/admin/ReviewRevisionForm";
-import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
+import {
+  buildReviewArticleDisplay,
+  getReviewKoBody,
+  isRssCollectArticle,
+  safeTrimmed,
+  type ReviewQueueArticleRow,
+} from "@/lib/admin/reviewArticleDisplay";
 import { supabase } from "../../../../../lib/supabase";
 import {
-  approveArticle,
-  clearMainTopStory,
-  rejectArticle,
-  setMainTopStory,
+  approveArticleDetailFromForm,
+  clearMainTopStoryFromForm,
+  rejectArticleFromForm,
+  setMainTopStoryFromForm,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -15,47 +22,6 @@ type PageProps = {
     id: string;
   }>;
 };
-
-const categoryLabelMap: Record<string, string> = {
-  politics: "정치",
-  economy: "경제",
-  society: "사회",
-  world: "국제",
-  religion: "종교",
-  other: "기타",
-};
-
-const aiReviewLabelMap: Record<string, string> = {
-  pending: "대기",
-  pass: "통과",
-  warning: "주의",
-  fail: "실패",
-};
-
-function getCategoryLabel(value: string | null) {
-  if (!value) return "미분류";
-  return categoryLabelMap[value] ?? value;
-}
-
-function getAiReviewLabel(value: string | null) {
-  if (!value) return "미정";
-  return aiReviewLabelMap[value] ?? value;
-}
-
-function formatDate(value: string | null) {
-  if (!value) return "날짜 미정";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "날짜 미정";
-
-  return new Intl.DateTimeFormat("ko-KR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
 
 export default async function AdminReviewDetailPage({ params }: PageProps) {
   const { id } = await params;
@@ -79,11 +45,15 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
       review_status,
       revision_status,
       thumbnail_url,
-      published_at
+      published_at,
+      collected_at,
+      status
     `;
 
-  let article: any | null = null;
+  let article: ReviewQueueArticleRow | null = null;
   let error: { message?: string } | null = null;
+  let isTopStory = false;
+  let topStoryOrder = 0;
 
   const withTopStory = await supabase
     .from("articles")
@@ -98,22 +68,25 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
     .single();
 
   if (!withTopStory.error && withTopStory.data) {
-    article = withTopStory.data;
+    const row = withTopStory.data as ReviewQueueArticleRow & {
+      is_top_story?: boolean;
+      top_story_order?: number;
+    };
+    article = row;
+    isTopStory = Boolean(row.is_top_story);
+    topStoryOrder = row.top_story_order ?? 0;
   } else {
     const fallback = await supabase
       .from("articles")
       .select(baseSelect)
       .eq("id", id)
       .single();
-    article = fallback.data as (typeof article);
+    article = fallback.data as ReviewQueueArticleRow | null;
     error = fallback.error;
-    if (article) {
-      article.is_top_story = false;
-      article.top_story_order = 0;
-    }
   }
 
   if (error || !article) {
+    console.error("[admin/review/detail] load failed", { id, error });
     return (
       <main className="min-h-screen bg-white text-black">
         <section className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
@@ -122,16 +95,38 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
           </h1>
           <p className="mt-4 text-sm text-gray-600 sm:text-base">
             해당 기사 상세 정보를 찾지 못했습니다.
+            {error?.message ? ` (${error.message})` : null}
           </p>
         </section>
       </main>
     );
   }
 
-  const sourceLabel = getArticleSourceLabel({
-    source: article.source,
-    original_url: article.original_url,
-  });
+  let display;
+  try {
+    display = buildReviewArticleDisplay(article);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[admin/review/detail] display failed", {
+      articleId: article.id,
+      error: message,
+    });
+    return (
+      <main className="min-h-screen bg-white text-black">
+        <section className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+          <h1 className="text-2xl font-bold text-red-800">기사 표시 오류</h1>
+          <p className="mt-4 text-sm text-gray-700">
+            기사 ID <strong>{article.id}</strong> — {message}
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  const bodyKo = getReviewKoBody(article);
+  const bodyTranslated = safeTrimmed(article.body_translated);
+  const bodyOriginal = safeTrimmed(article.body_original);
+  const isRss = isRssCollectArticle(article.source_section);
 
   return (
     <main className="min-h-screen bg-white text-black">
@@ -144,39 +139,98 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
           기사 상세 검토
         </h1>
 
+        {display.enrichFailure ? (
+          <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+            <p className="font-semibold">
+              RSS 자동 보강 실패 · {display.enrichFailure.categoryLabel}
+            </p>
+            {display.enrichFailure.step ? (
+              <p className="mt-1 text-xs opacity-90">단계: {display.enrichFailure.step}</p>
+            ) : null}
+            <p className="mt-2 leading-6">{display.enrichFailure.reason}</p>
+            <p className="mt-2 leading-6">
+              RSS 1차 기사(제목·링크·요약)는 유지됩니다.「from-link 보강」으로 수동
+              보강하거나 수정 요청을 사용하세요.
+            </p>
+          </div>
+        ) : display.isRssEnriched ? (
+          <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+            <p className="font-semibold">RSS 자동 보강 완료</p>
+            <p className="mt-1 leading-6">
+              from-link 파이프라인으로 본문·한글 번역·요약이 반영되었습니다. 검토 후
+              승인하세요.
+            </p>
+          </div>
+        ) : isRss ? (
+          <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900">
+            <p className="font-semibold">RSS 1차 수집 기사</p>
+            <p className="mt-1 leading-6">
+              제목·링크·요약만 있습니다. 아래「from-link 보강」으로 본문을 추출하거나,
+              수정 요청으로 AI 본문을 생성할 수 있습니다. 자동 공개되지 않습니다.
+            </p>
+          </div>
+        ) : null}
+
         <div className="mt-6 rounded-2xl border p-4 shadow-sm sm:mt-8 sm:p-6">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 sm:text-sm">
-            <span>{sourceLabel}</span>
+            <span>{display.sourceLabel}</span>
             <span>·</span>
-            <span>{getCategoryLabel(article.category)}</span>
+            <span>{display.categoryLabel}</span>
             <span>·</span>
-            <span>AI 검토: {getAiReviewLabel(article.ai_review_status)}</span>
+            <span>AI 검토: {display.aiReviewLabel}</span>
             <span>·</span>
-            <span>검토 상태: {article.review_status || "미정"}</span>
+            <span>검토 상태: {display.reviewStatusLabel}</span>
             <span>·</span>
             <span>
               메인 톱:{" "}
-              {article.is_top_story
-                ? `지정됨 (우선순위 ${article.top_story_order ?? 0})`
-                : "미지정"}
+              {isTopStory ? `지정됨 (우선순위 ${topStoryOrder})` : "미지정"}
+            </span>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${display.translationClassName}`}
+            >
+              {display.translationLabel}
+            </span>
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+              {display.bodyStatusLabel}
+            </span>
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+              {display.imageStatusLabel}
             </span>
           </div>
 
           <p className="mt-5 text-sm font-semibold text-gray-500">원문 링크</p>
-          <a
-            href={article.original_url}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-2 inline-block break-all text-sm leading-6 text-blue-600 underline"
-          >
-            {article.original_url}
-          </a>
+          {display.originalUrl ? (
+            <a
+              href={display.originalUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-block break-all text-sm leading-6 text-blue-600 underline"
+            >
+              {display.originalUrl}
+            </a>
+          ) : (
+            <p className="mt-2 text-sm text-gray-500">링크 없음</p>
+          )}
+
+          {display.fromLinkHref ? (
+            <div className="mt-4">
+              <Link
+                href={display.fromLinkHref}
+                className="inline-flex rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-900 hover:bg-violet-100"
+              >
+                from-link 보강
+              </Link>
+            </div>
+          ) : null}
 
           <div className="mt-6">
-            {article.thumbnail_url ? (
+            {display.hasThumbnail && display.thumbnailUrl ? (
               <img
-                src={article.thumbnail_url}
-                alt={article.title_ko || article.title_translated || article.title_original}
+                src={display.thumbnailUrl}
+                alt={display.displayTitle}
                 className="max-h-80 w-full rounded-2xl object-cover"
               />
             ) : (
@@ -188,39 +242,40 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
 
           <div className="mt-6 grid gap-4 sm:mt-8 sm:gap-6 md:grid-cols-2">
             <div className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6 md:col-span-2">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 sm:text-sm">
-                <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700">
-                  번역본
-                </span>
-                <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-700">
-                  출처: {sourceLabel}
-                </span>
-                <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-700">
-                  AI 검토: {getAiReviewLabel(article.ai_review_status)}
-                </span>
-                <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-700">
-                  검토 상태: {article.review_status || "미정"}
-                </span>
-              </div>
-
-              <h2 className="mt-4 break-words text-xl font-semibold leading-8 sm:text-2xl">
-                {article.title_ko || article.title_translated || article.title_original}
+              <h2 className="break-words text-xl font-semibold leading-8 sm:text-2xl">
+                {display.displayTitle}
               </h2>
 
               <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-6 text-gray-700 sm:text-base">
-                {article.summary_ko || article.summary_translated || article.summary_original || "-"}
+                {display.displaySummary === "요약 없음"
+                  ? "요약 없음 — from-link 또는 수정 요청으로 보강하세요."
+                  : display.displaySummary}
               </p>
 
-              {article.body_translated ? (
+              {bodyTranslated ? (
                 <div className="mt-6 border-t border-gray-100 pt-6">
                   <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
                     번역·요약 본문
                   </p>
                   <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-gray-800 sm:text-base">
-                    {article.body_translated}
+                    {bodyTranslated}
                   </p>
                 </div>
-              ) : null}
+              ) : bodyKo ? (
+                <div className="mt-6 border-t border-gray-100 pt-6">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                    한국어 본문
+                  </p>
+                  <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-gray-800 sm:text-base">
+                    {bodyKo}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-6 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                  본문 보강 필요 — from-link에서 원문 URL로 추출하거나 AI 수정 요청을
+                  사용하세요.
+                </p>
+              )}
             </div>
 
             <div className="rounded-2xl border bg-gray-50 p-4 sm:p-5">
@@ -232,7 +287,7 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
                     Original Title
                   </p>
                   <p className="mt-2 break-words text-sm leading-6 text-gray-800 sm:text-base">
-                    {article.title_original || "-"}
+                    {display.originalTitle}
                   </p>
                 </div>
 
@@ -241,7 +296,9 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
                     Original Summary
                   </p>
                   <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-gray-800 sm:text-base">
-                    {article.summary_original || "-"}
+                    {safeTrimmed(article.summary_original) ||
+                      safeTrimmed(article.summary_translated) ||
+                      "요약 없음"}
                   </p>
                 </div>
 
@@ -250,7 +307,7 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
                     Source Section
                   </p>
                   <p className="mt-2 break-words text-sm leading-6 text-gray-800 sm:text-base">
-                    {article.source_section || "-"}
+                    {safeTrimmed(article.source_section) || "-"}
                   </p>
                 </div>
 
@@ -259,7 +316,16 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
                     Published At
                   </p>
                   <p className="mt-2 break-words text-sm leading-6 text-gray-800 sm:text-base">
-                    {formatDate(article.published_at)}
+                    {display.publishedAtLabel}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                    Collected At
+                  </p>
+                  <p className="mt-2 break-words text-sm leading-6 text-gray-800 sm:text-base">
+                    {display.collectedAtLabel}
                   </p>
                 </div>
               </div>
@@ -268,7 +334,7 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
             <div className="rounded-2xl border p-4 sm:p-5">
               <h3 className="text-base font-semibold sm:text-lg">원문 본문</h3>
               <p className="mt-3 whitespace-pre-line break-words text-sm leading-7 text-gray-700 sm:mt-4">
-                {article.body_original || "원문 본문이 없습니다."}
+                {bodyOriginal || "본문 보강 필요"}
               </p>
             </div>
           </div>
@@ -282,7 +348,7 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
                   AI Review Status
                 </p>
                 <p className="mt-2 text-sm leading-6 text-amber-900">
-                  {getAiReviewLabel(article.ai_review_status)}
+                  {display.aiReviewLabel}
                 </p>
               </div>
 
@@ -291,7 +357,7 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
                   AI Review Notes
                 </p>
                 <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-amber-900">
-                  {article.ai_review_notes || "-"}
+                  {safeTrimmed(article.ai_review_notes) || "-"}
                 </p>
               </div>
             </div>
@@ -300,13 +366,8 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
           <div className="mt-6 rounded-2xl border bg-green-50 p-4 sm:mt-8 sm:p-5">
             <h4 className="text-base font-semibold text-green-800">기사 승인</h4>
 
-            <form
-              className="mt-4"
-              action={async () => {
-                "use server";
-                await approveArticle(article.id);
-              }}
-            >
+            <form className="mt-4" action={approveArticleDetailFromForm}>
+              <input type="hidden" name="articleId" value={article.id} />
               <button
                 type="submit"
                 className="w-full rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-700 sm:w-auto"
@@ -322,24 +383,19 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
             </h4>
             <p className="mt-2 text-sm text-indigo-900/90">
               수동 지정된 기사는 /ko, /en 메인 최상단 대표 기사 선정에서 자동 로직보다
-              우선합니다. 여러 개 지정 시 우선순위 숫자가 작은 기사가 먼저 노출됩니다.
+              우선합니다.
             </p>
             <p className="mt-2 text-sm text-indigo-800">
               현재 상태:{" "}
-              {article.is_top_story
-                ? `지정됨 (우선순위 ${article.top_story_order ?? 0})`
-                : "미지정"}
+              {isTopStory ? `지정됨 (우선순위 ${topStoryOrder})` : "미지정"}
             </p>
 
             <div className="mt-4 flex flex-wrap items-end gap-3">
               <form
                 className="flex flex-wrap items-end gap-3"
-                action={async (formData) => {
-                  "use server";
-                  const order = String(formData.get("topStoryOrder") || "");
-                  await setMainTopStory(article.id, order);
-                }}
+                action={setMainTopStoryFromForm}
               >
+                <input type="hidden" name="articleId" value={article.id} />
                 <label className="text-sm text-indigo-900">
                   우선순위
                   <input
@@ -347,7 +403,7 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
                     type="number"
                     min={0}
                     step={1}
-                    defaultValue={article.top_story_order ?? 0}
+                    defaultValue={topStoryOrder}
                     className="mt-1 w-24 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm"
                   />
                 </label>
@@ -359,13 +415,9 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
                 </button>
               </form>
 
-              {article.is_top_story ? (
-                <form
-                  action={async () => {
-                    "use server";
-                    await clearMainTopStory(article.id);
-                  }}
-                >
+              {isTopStory ? (
+                <form action={clearMainTopStoryFromForm}>
+                  <input type="hidden" name="articleId" value={article.id} />
                   <button
                     type="submit"
                     className="rounded-xl border border-indigo-300 bg-white px-4 py-2.5 text-sm font-semibold text-indigo-900 hover:bg-indigo-100"
@@ -382,14 +434,8 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
           <div className="mt-6 rounded-2xl border bg-red-50 p-4 sm:mt-8 sm:p-5">
             <h4 className="text-base font-semibold text-red-800">기사 반려</h4>
 
-            <form
-              className="mt-4 space-y-4"
-              action={async (formData) => {
-                "use server";
-                const rejectedReason = String(formData.get("rejectedReason") || "");
-                await rejectArticle(article.id, rejectedReason);
-              }}
-            >
+            <form className="mt-4 space-y-4" action={rejectArticleFromForm}>
+              <input type="hidden" name="articleId" value={article.id} />
               <div>
                 <label className="mb-2 block text-sm font-medium text-red-800">
                   반려 사유

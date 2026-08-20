@@ -75,7 +75,9 @@ function enrichExtractedFromHtml(
   html: string,
   pageUrl: string
 ): ExtractedPreview {
-  const extraction = extractArticleBodyFromHtml(html, pageUrl);
+  const extraction = extractArticleBodyFromHtml(html, pageUrl, {
+    pageFetchMethod: base.pageFetchMethod ?? null,
+  });
   const articleBodyExtractSuccess = extraction.success;
   const articleBodyPlain = extraction.body;
   const articleBodyExtractMethod = extraction.method;

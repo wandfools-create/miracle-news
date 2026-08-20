@@ -1,9 +1,9 @@
 import type { HomeNewsLabels } from "@/components/home/HomeNewsView";
 
 export const koHomeLabels: HomeNewsLabels = {
-  edition: "한국어 뉴스",
+  edition: "한눈",
   tagline:
-    "검토 후 공개된 한국어 기사입니다. 대표 기사·최신 목록·카테고리·주요 언론사별로 모았습니다.",
+    "한눈에 보는 글로벌 뉴스. 검토 후 공개된 한국어·국제 기사를 대표 기사·카테고리·주요 언론사별로 모았습니다.",
   navLatest: "주요 기사",
   navCategories: "카테고리",
   navSources: "주요 언론사",
@@ -28,7 +28,7 @@ export const koHomeLabels: HomeNewsLabels = {
   sidebarEyebrow: "More",
   sidebarTitle: "지금 주목",
   sidebarDesc: "다른 섹션에 올라온 최근 헤드라인입니다.",
-  navHome: "한국어 홈",
+  navHome: "한눈 홈",
   empty: "현재 공개된 한국어 기사가 없습니다.",
   errorPrefix: "데이터를 불러오는 중 오류가 발생했습니다:",
   noImage: "이미지 없음",

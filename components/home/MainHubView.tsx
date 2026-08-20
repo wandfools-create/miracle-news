@@ -150,7 +150,7 @@ export default function MainHubView({
                 {headerDate}
               </p>
               <h1 className="mt-2 text-[1.75rem] font-bold tracking-[-0.03em] text-neutral-950 sm:text-4xl">
-                Miracle News
+                한눈
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-600 sm:text-[15px]">
                 {labels.tagline}

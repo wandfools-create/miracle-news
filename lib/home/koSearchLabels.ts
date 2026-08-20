@@ -12,7 +12,7 @@ export const koHomeSearchLabels: HomeNewsSearchLabels = {
 
 export const koSearchResultsLabels: NewsSearchResultsLabels = {
   title: "뉴스 검색",
-  homeLink: "한국어 홈",
+  homeLink: "한눈 홈",
   alternateLang: "English",
   placeholder: "제목, 본문, 출처, 카테고리 검색",
   empty: "검색 결과가 없습니다.",

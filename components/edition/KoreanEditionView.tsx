@@ -8,9 +8,9 @@ import type { EditionSections } from "@/lib/home/prepareMainHubSections";
 import type { HomeArticleCard } from "@/lib/home/types";
 
 const labels = {
-  edition: "Korean Edition",
+  edition: "한눈",
   tagline:
-    "한국어 제목·요약·본문 중심의 뉴스룸입니다. 카테고리별로 검토 후 공개된 기사를 모았습니다.",
+    "한눈에 보는 글로벌 뉴스. 카테고리별로 검토 후 공개된 기사를 모았습니다.",
   mainHub: "뉴스 홈",
   english: "English",
   latestEyebrow: "Just in",

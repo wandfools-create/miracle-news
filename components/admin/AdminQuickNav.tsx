@@ -5,8 +5,10 @@ import { usePathname } from "next/navigation";
 import AdminLogoutButton from "@/components/admin/AdminLogoutButton";
 
 type AdminQuickNavProps = {
+  userEmail?: string | null;
   counts: {
     review: number;
+    collectionCandidates: number;
     onHold: number;
     revision: number;
     approved: number;
@@ -18,6 +20,11 @@ type AdminQuickNavProps = {
 const navItems = [
   { href: "/admin", label: "관리자 홈", key: "home" },
   { href: "/admin/from-link", label: "링크 초안", key: "from-link" },
+  {
+    href: "/admin/collection-candidates",
+    label: "수집 후보",
+    key: "collection-candidates",
+  },
   { href: "/admin/review", label: "검토 대기", key: "review" },
   { href: "/admin/on-hold", label: "보류 기사", key: "on-hold" },
   { href: "/admin/revision", label: "수정 대기", key: "revision" },
@@ -26,11 +33,12 @@ const navItems = [
   { href: "/admin/rejected", label: "반려 기사", key: "rejected" },
 ] as const;
 
-export default function AdminQuickNav({ counts }: AdminQuickNavProps) {
+export default function AdminQuickNav({ counts, userEmail }: AdminQuickNavProps) {
   const pathname = usePathname();
 
   function getCount(key: string) {
     if (key === "review") return counts.review;
+    if (key === "collection-candidates") return counts.collectionCandidates;
     if (key === "on-hold") return counts.onHold;
     if (key === "revision") return counts.revision;
     if (key === "approved") return counts.approved;
@@ -48,9 +56,14 @@ export default function AdminQuickNav({ counts }: AdminQuickNavProps) {
     <div className="sticky top-0 z-40 border-b bg-white/90 backdrop-blur">
       <section className="mx-auto max-w-6xl px-6 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm font-semibold tracking-wide text-gray-500">
-            관리자 빠른 메뉴
-          </p>
+          <div>
+            <p className="text-sm font-semibold tracking-wide text-gray-500">
+              관리자 빠른 메뉴
+            </p>
+            {userEmail ? (
+              <p className="mt-1 text-xs text-gray-500">로그인: {userEmail}</p>
+            ) : null}
+          </div>
           <AdminLogoutButton />
         </div>
 

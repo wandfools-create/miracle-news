@@ -1,7 +1,7 @@
 import type { ArticleDetailLabels } from "@/components/article/ArticleDetailView";
 
 export const koArticleDetailLabels: ArticleDetailLabels = {
-  breadcrumbHome: "한국어 홈",
+  breadcrumbHome: "한눈 홈",
   viewOriginal: "원문 기사 보기",
   alternateVersion: "English version",
   sourceLabel: "출처",
@@ -23,7 +23,7 @@ export const koArticleDetailLabels: ArticleDetailLabels = {
   relatedCategoryTitle: "같은 카테고리 기사",
   navEyebrow: "Navigation",
   navTitle: "바로가기",
-  navHome: "한국어 홈으로 돌아가기",
+  navHome: "한눈 홈으로 돌아가기",
   navOriginal: "원문 기사 바로 보기",
   navAlternate: "영어 버전 보기",
   noImage: "이미지 없음",

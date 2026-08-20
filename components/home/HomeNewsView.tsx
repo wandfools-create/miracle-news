@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { type ArticleLocale } from "@/lib/article/formatPublishedDate";
 import { getCategoryLabel } from "@/lib/article/categoryLabels";
 import {
@@ -21,6 +22,7 @@ import {
 } from "@/lib/home/newsPageLayout";
 import { resolveArticleHref } from "@/lib/home/resolveArticleHref";
 import type { HomeArticleCard, HomePageSections } from "@/lib/home/types";
+import { getBrandName } from "@/lib/brand";
 import TrendingIssuesPanel from "./TrendingIssuesPanel";
 
 export type HomeNewsLabels = {
@@ -159,28 +161,35 @@ function ArticleThumb({
   noImageLabel,
   priority = false,
   className = "",
+  sizes = "100vw",
 }: {
   article: HomeArticleCard;
   noImageLabel: string;
   priority?: boolean;
   className?: string;
+  sizes?: string;
 }) {
   if (!article.thumbnail_url) {
     return (
       <div
-        className={`flex h-full w-full items-center justify-center bg-neutral-100 text-center text-xs text-neutral-400 ${className}`}
+        className={`flex h-full w-full flex-col items-center justify-center bg-neutral-100 text-center text-xs text-neutral-400 ${className}`}
       >
+        <span className="mb-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-neutral-300 text-[10px] font-semibold text-neutral-500">
+          AI
+        </span>
         {noImageLabel}
       </div>
     );
   }
 
   return (
-    <img
+    <Image
       src={article.thumbnail_url}
-      alt=""
-      className={`h-full w-full object-cover object-center ${className}`}
-      loading={priority ? "eager" : "lazy"}
+      alt={article.title}
+      fill
+      sizes={sizes}
+      className={`object-cover object-center ${className}`}
+      priority={priority}
     />
   );
 }
@@ -294,11 +303,12 @@ function FeaturedHero({
     return (
       <article className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm lg:grid lg:grid-cols-[1.05fr_minmax(0,0.95fr)] lg:items-stretch">
         <Link href={href} className="block bg-neutral-100 lg:min-h-[190px]">
-          <div className="aspect-[16/10] w-full lg:aspect-auto lg:h-full lg:min-h-[190px]">
+          <div className="relative aspect-video w-full lg:aspect-auto lg:h-full lg:min-h-[190px]">
             <ArticleThumb
               article={article}
               noImageLabel={labels.noImage}
               priority
+              sizes="(max-width: 1024px) 100vw, 55vw"
             />
           </div>
         </Link>
@@ -310,11 +320,12 @@ function FeaturedHero({
   return (
     <article className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
       <Link href={href} className="block">
-        <div className="aspect-[2/1] w-full max-h-[520px] bg-neutral-100">
+        <div className="relative aspect-video w-full max-h-[520px] bg-neutral-100">
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
             priority
+            sizes="(max-width: 1024px) 100vw, 70vw"
           />
         </div>
       </Link>
@@ -344,9 +355,15 @@ function TopStoriesColumnCard({
       <div className="flex gap-3 sm:gap-4">
         <Link
           href={href}
-          className="block h-20 w-28 shrink-0 overflow-hidden rounded-md bg-neutral-100 ring-1 ring-neutral-200/80 sm:h-[5.25rem] sm:w-36"
+          className="relative block w-28 shrink-0 overflow-hidden rounded-md bg-neutral-100 ring-1 ring-neutral-200/80 sm:w-36"
         >
-          <ArticleThumb article={article} noImageLabel={labels.noImage} />
+          <div className="relative aspect-video w-full">
+            <ArticleThumb
+              article={article}
+              noImageLabel={labels.noImage}
+              sizes="(max-width: 640px) 112px, 144px"
+            />
+          </div>
         </Link>
         <div className="min-w-0 flex-1">
           <StoryMetaLine article={article} locale={displayLocale} />
@@ -387,11 +404,12 @@ function FeaturedLeadCard({
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
       <Link href={href} className="block bg-neutral-100">
-        <div className="aspect-[16/10] w-full max-h-[168px] sm:max-h-[180px]">
+        <div className="relative aspect-video w-full max-h-[180px]">
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
             priority={priority}
+            sizes="(max-width: 640px) 100vw, 50vw"
           />
         </div>
       </Link>
@@ -441,9 +459,15 @@ function FeaturedRelatedItem({
         </span>
         <Link
           href={href}
-          className="block h-16 w-24 shrink-0 overflow-hidden rounded-md bg-neutral-100 ring-1 ring-neutral-200/80 sm:h-20 sm:w-28"
+          className="relative block w-24 shrink-0 overflow-hidden rounded-md bg-neutral-100 ring-1 ring-neutral-200/80 sm:w-28"
         >
-          <ArticleThumb article={article} noImageLabel={labels.noImage} />
+          <div className="relative aspect-video w-full">
+            <ArticleThumb
+              article={article}
+              noImageLabel={labels.noImage}
+              sizes="(max-width: 640px) 96px, 112px"
+            />
+          </div>
         </Link>
         <div className="min-w-0 flex-1">
           <StoryMetaLine article={article} locale={displayLocale} />
@@ -583,9 +607,15 @@ function LatestRow({
       <div className="flex gap-4 sm:gap-5">
         <Link
           href={href}
-          className="relative block h-24 w-32 shrink-0 overflow-hidden rounded-md bg-neutral-100 ring-1 ring-neutral-200/80 sm:h-[7.5rem] sm:w-44"
+          className="relative block w-32 shrink-0 overflow-hidden rounded-md bg-neutral-100 ring-1 ring-neutral-200/80 sm:w-44"
         >
-          <ArticleThumb article={article} noImageLabel={labels.noImage} />
+          <div className="relative aspect-video w-full">
+            <ArticleThumb
+              article={article}
+              noImageLabel={labels.noImage}
+              sizes="(max-width: 640px) 128px, 176px"
+            />
+          </div>
           {showRank ? (
             <span className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded bg-news-navy text-[11px] font-bold text-white">
               {index + 1}
@@ -631,8 +661,12 @@ function CategoryCard({
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-xl border border-neutral-200/90 bg-white">
       <Link href={href} className="block bg-neutral-100">
-        <div className="aspect-[16/10] w-full">
-          <ArticleThumb article={article} noImageLabel={labels.noImage} />
+        <div className="relative aspect-video w-full">
+          <ArticleThumb
+            article={article}
+            noImageLabel={labels.noImage}
+            sizes="(max-width: 640px) 100vw, (max-width: 1280px) 33vw, 25vw"
+          />
         </div>
       </Link>
       <div className="flex flex-1 flex-col p-4 sm:p-5">
@@ -718,9 +752,15 @@ function SourceLeadMini({
     <article className="flex gap-3 rounded-lg border border-neutral-200/80 bg-white p-3">
       <Link
         href={href}
-        className="block h-16 w-20 shrink-0 overflow-hidden rounded-md bg-neutral-100"
+        className="relative block w-20 shrink-0 overflow-hidden rounded-md bg-neutral-100"
       >
-        <ArticleThumb article={article} noImageLabel={labels.noImage} />
+        <div className="relative aspect-video w-full">
+          <ArticleThumb
+            article={article}
+            noImageLabel={labels.noImage}
+            sizes="80px"
+          />
+        </div>
       </Link>
       <div className="min-w-0 flex-1">
         <span className="inline-flex rounded-md bg-neutral-900 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
@@ -836,7 +876,7 @@ export default function HomeNewsView({
   const showCategories = filteredVisibleCategories.length > 0;
   const showSources =
     filteredSourceLeadCards.length > 0 || sourceFilterOptions.length > 0;
-  const pageTitle = pageRole === "ko" ? "한국어 뉴스" : "English News";
+  const pageTitle = getBrandName(pageRole);
 
   const hasArticles =
     showFeatured ||
