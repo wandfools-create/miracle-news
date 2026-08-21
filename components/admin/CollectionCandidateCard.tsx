@@ -20,8 +20,6 @@ type CollectionCandidateCardProps = {
   feedLabel: string | null;
   rssTitle: string;
   rssSummary: string | null;
-  rssTitleKo: string | null;
-  rssSummaryKo: string | null;
   originalUrl: string;
   rssPublishedAt: string | null;
   status: CollectionCandidateStatus;
@@ -32,6 +30,8 @@ type CollectionCandidateCardProps = {
   statusFilter: string;
   sourceFilter: string;
   dateFilter: string;
+  /** Optional OpenAI localize tools (hidden by default in ops flow). */
+  showLocalizeTools?: boolean;
 };
 
 export default function CollectionCandidateCard({
@@ -40,8 +40,6 @@ export default function CollectionCandidateCard({
   feedLabel,
   rssTitle,
   rssSummary,
-  rssTitleKo,
-  rssSummaryKo,
   originalUrl,
   rssPublishedAt,
   status,
@@ -52,10 +50,10 @@ export default function CollectionCandidateCard({
   statusFilter,
   sourceFilter,
   dateFilter,
+  showLocalizeTools = false,
 }: CollectionCandidateCardProps) {
   const sourceLabel = feedLabel || SOURCE_LABELS[source] || source;
   const statusLabel = CANDIDATE_STATUS_LABELS[status] ?? status;
-  const localized = Boolean(rssTitleKo?.trim());
   const canMakeArticle =
     status === "pending" || status === "enrich_failed" || status === "enriching";
   const canDismiss =
@@ -69,14 +67,16 @@ export default function CollectionCandidateCard({
     <article className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="checkbox"
-            name="candidateIds"
-            value={id}
-            form="localize-candidates-form"
-            className="mt-0.5 h-4 w-4 rounded border-gray-300"
-            aria-label="한글화 대상으로 선택"
-          />
+          {showLocalizeTools ? (
+            <input
+              type="checkbox"
+              name="candidateIds"
+              value={id}
+              form="localize-candidates-form"
+              className="mt-0.5 h-4 w-4 rounded border-gray-300"
+              aria-label="OpenAI 한글화 대상으로 선택"
+            />
+          ) : null}
           <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700">
             {sourceLabel}
           </span>
@@ -97,46 +97,20 @@ export default function CollectionCandidateCard({
           >
             {statusLabel}
           </span>
-          {localized ? (
-            <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-800">
-              한글화 완료
-            </span>
-          ) : null}
         </div>
         <time className="text-xs text-gray-500" dateTime={createdAt}>
           수집 {formatDateTimeKo(createdAt)}
         </time>
       </div>
 
-      {localized ? (
-        <>
-          <h2 className="mt-3 text-lg font-semibold leading-snug text-gray-900">
-            {rssTitleKo!.trim()}
-          </h2>
-          {rssSummaryKo?.trim() ? (
-            <p className="mt-2 text-sm leading-6 text-gray-700">
-              {rssSummaryKo.trim()}
-            </p>
-          ) : null}
-          <p className="mt-2 text-xs leading-5 text-gray-500">{rssTitle}</p>
-          {rssSummary ? (
-            <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-400">
-              {rssSummary}
-            </p>
-          ) : null}
-        </>
-      ) : (
-        <>
-          <h2 className="mt-3 text-lg font-semibold leading-snug text-gray-900">
-            {rssTitle}
-          </h2>
-          {rssSummary ? (
-            <p className="mt-2 line-clamp-3 text-sm leading-6 text-gray-600">
-              {rssSummary}
-            </p>
-          ) : null}
-        </>
-      )}
+      <h2 className="mt-3 text-lg font-semibold leading-snug text-gray-900">
+        {rssTitle}
+      </h2>
+      {rssSummary ? (
+        <p className="mt-2 line-clamp-3 text-sm leading-6 text-gray-600">
+          {rssSummary}
+        </p>
+      ) : null}
 
       {rssPublishedAt ? (
         <p className="mt-2 text-xs text-gray-500">

@@ -5,7 +5,7 @@ import {
   MIN_USABLE_BODY_CHARS,
 } from "../../constants";
 import { decodeHtmlEntities, stripHtmlToPlain } from "../../htmlText";
-import { normalizeBody } from "../bodyNormalize";
+import { normalizeBody, splitBodyParagraphs } from "../bodyNormalize";
 import type {
   BodyExtractMethodCategory,
   PublisherExtractResult,
@@ -15,8 +15,7 @@ import type {
 
 export function countBodyParagraphs(text: string | null | undefined): number {
   if (!text?.trim()) return 0;
-  return text
-    .split(/\n\n+/)
+  return splitBodyParagraphs(normalizeBody(text))
     .map((p) => p.trim())
     .filter((p) => p.length >= 40).length;
 }
@@ -69,7 +68,8 @@ function elementPlainText(el: Element, maxLen = ARTICLE_BODY_MAX_CHARS): string 
   if (paragraphs.length >= 2) {
     return normalizeBody(paragraphs.join("\n\n"), maxLen);
   }
-  const raw = clone.textContent?.replace(/\s+/g, " ").trim() ?? "";
+  // Keep newlines from block structure instead of collapsing to one line.
+  const raw = clone.textContent?.replace(/\r\n/g, "\n") ?? "";
   return normalizeBody(raw, maxLen);
 }
 

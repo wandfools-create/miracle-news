@@ -17,6 +17,8 @@ import {
 import { isSuccessfulBodyExtraction } from "@/lib/from-link/articleBodyValidation";
 import { MIN_USABLE_BODY_CHARS } from "@/lib/from-link/constants";
 import { normalizeSupplementalText } from "@/lib/from-link/supplementalText";
+import { countSubstantiveParagraphs } from "@/lib/from-link/sanitizeArticleText";
+import { countBodyParagraphs } from "@/lib/from-link/server/publisherExtractors/shared";
 import type { FromLinkQualityCheckItem } from "@/lib/from-link/fromLinkDiagnostics";
 import { validateFromLinkDraftQuality } from "@/lib/from-link/validateArticleQuality";
 import type { AnalyzeFromLinkOptions, AnalyzeFromLinkResult } from "@/lib/from-link/actionTypes";
@@ -193,6 +195,20 @@ export async function analyzeFromLinkCore(
     bodyKo: summary.bodyKo,
   });
   if (!quality.ok) {
+    console.warn("[from-link/analyze] quality failed — diagnostic snapshot", {
+      url: submittedOriginalUrl,
+      reason: quality.reason,
+      failedCheckIds: quality.failedCheckIds ?? [],
+      sourceBodyLength: extracted.articleBodyPlain?.length ?? 0,
+      sourceParagraphCount: countBodyParagraphs(extracted.articleBodyPlain),
+      materialChars: summary.materialChars,
+      generatedBodyKoLength: summary.bodyKo.trim().length,
+      generatedBodyKoParagraphs: countSubstantiveParagraphs(summary.bodyKo),
+      under900Chars: summary.bodyKo.trim().length < 900,
+      under5Paragraphs: countSubstantiveParagraphs(summary.bodyKo) < 5,
+      extractMethod: extracted.articleBodyExtractMethod,
+      pageFetchMethod: extracted.pageFetchMethod,
+    });
     if (allowShortSourceDraft && diagnostics.canAllowShortSourceDraft) {
       const candidates = await proposeCandidates(
         extracted,

@@ -5,13 +5,16 @@ import { MIN_USABLE_BODY_CHARS } from "./constants";
 import type { ContentLanguage, ExtractedPreview, LinkType } from "./types";
 import { detectContentLanguage } from "./detectContentLanguage";
 import { fetchArticleBodyFromUrl } from "./fetchPlainText";
-import { stripUrlsFromArticleText } from "./sanitizeArticleText";
+import {
+  countSubstantiveParagraphs,
+  stripUrlsFromArticleText,
+} from "./sanitizeArticleText";
+import { countBodyParagraphs } from "./server/publisherExtractors/shared";
 import { MIN_YOUTUBE_TRANSCRIPT_LENGTH } from "./transcriptDiagnostic";
 import {
   formatSupplementalMaterialBlock,
   normalizeSupplementalText,
 } from "./supplementalText";
-import { INSUFFICIENT_MATERIAL_MESSAGE } from "./validateArticleQuality";
 import { KOREAN_EDITOR_JSON_SYSTEM_PROMPT } from "@/lib/articles/ai/editorPrompt";
 import { chatCompletionJson } from "@/lib/openai/chatCompletionJson";
 import { checkOpenAiEnv } from "@/lib/openai/env";
@@ -137,6 +140,9 @@ async function summarizeWithOpenAi(input: {
   usedTranscript: boolean;
   material: string;
   materialChars: number;
+  sourceBodyLength: number;
+  sourceParagraphCount: number;
+  extractMethod: string | null;
 }): Promise<SummarizeForArticleResult | null> {
   const env = checkOpenAiEnv();
   if (!env.ok) {
@@ -144,7 +150,21 @@ async function summarizeWithOpenAi(input: {
     return null;
   }
 
-  const material = input.material.slice(0, 28_000);
+  const MATERIAL_TRUNCATE = 28_000;
+  const truncateBefore = input.material.length;
+  const material = input.material.slice(0, MATERIAL_TRUNCATE);
+  const truncateAfter = material.length;
+
+  console.info("[from-link/summarize] OpenAI 호출 직전 원문", {
+    url: input.pageUrl,
+    extractMethod: input.extractMethod,
+    sourceBodyLength: input.sourceBodyLength,
+    sourceParagraphCount: input.sourceParagraphCount,
+    truncateBeforeLength: truncateBefore,
+    truncateAfterLength: truncateAfter,
+    truncated: truncateBefore > truncateAfter,
+    materialPreview300: material.slice(0, 300),
+  });
 
   const completion = await chatCompletionJson<Record<string, unknown>>({
     step: "from_link_summarize",
@@ -159,7 +179,15 @@ async function summarizeWithOpenAi(input: {
   });
 
   if (!completion.ok) {
-    console.error("[summarizeForArticle] OpenAI failed", completion);
+    console.error("[summarizeForArticle] OpenAI failed", {
+      url: input.pageUrl,
+      error: completion.error,
+      step: completion.step,
+      sourceBodyLength: input.sourceBodyLength,
+      sourceParagraphCount: input.sourceParagraphCount,
+      truncateBeforeLength: truncateBefore,
+      truncateAfterLength: truncateAfter,
+    });
     return null;
   }
 
@@ -201,6 +229,22 @@ async function summarizeWithOpenAi(input: {
         : ""
   );
 
+  const generatedBodyLength = article_body_ko.length;
+  const generatedParagraphCount = countSubstantiveParagraphs(article_body_ko);
+
+  console.info("[from-link/summarize] OpenAI 응답", {
+    url: input.pageUrl,
+    usable,
+    reason_ko,
+    generatedBodyLength,
+    generatedParagraphCount,
+    titleKoLength: title_ko.length,
+    summaryKoLength: summary_ko.length,
+    sourceBodyLength: input.sourceBodyLength,
+    sourceParagraphCount: input.sourceParagraphCount,
+    bodyPreview300: article_body_ko.slice(0, 300),
+  });
+
   const langRaw = String(o.source_language || "").toLowerCase();
   const contentLanguage: ContentLanguage =
     langRaw === "en" || langRaw === "ko"
@@ -220,12 +264,14 @@ async function summarizeWithOpenAi(input: {
   if (!usable) {
     return fail(
       reason_ko ||
-        "제공된 자료만으로는 기사 본문을 사실에 기반해 쓸 수 없습니다."
+        `OpenAI usable=false: 모델이 자료로 기사 본문을 쓸 수 없다고 판단함 (원문 ${input.sourceBodyLength}자 / ${input.sourceParagraphCount}문단, 생성본문 ${generatedBodyLength}자 / ${generatedParagraphCount}문단)`
     );
   }
 
   if (!title_ko || !summary_ko || !article_body_ko) {
-    return fail(reason_ko || INSUFFICIENT_MATERIAL_MESSAGE);
+    return fail(
+      `OpenAI 응답 필드 누락: title=${title_ko.length}자 summary=${summary_ko.length}자 body=${generatedBodyLength}자 (원문 ${input.sourceBodyLength}자 / ${input.sourceParagraphCount}문단)`
+    );
   }
 
   return {
@@ -339,6 +385,21 @@ export async function summarizeForArticle(
   );
 
   const materialChars = material.length;
+  const materialParagraphs = countBodyParagraphs(material);
+  const articleBodyParagraphs = countBodyParagraphs(
+    extracted.articleBodyPlain
+  );
+
+  console.info("[from-link/summarize] material before AI / insufficiency checks", {
+    url: extracted.submittedOriginalUrl,
+    materialChars,
+    materialParagraphs,
+    sourceBodyLength: extracted.articleBodyPlain?.length ?? 0,
+    sourceParagraphCount: articleBodyParagraphs,
+    extractMethod: extracted.articleBodyExtractMethod,
+    pageFetchMethod: extracted.pageFetchMethod,
+    supplementalLength: supplementalText?.length ?? 0,
+  });
 
   if (linkType === "youtube" && !usedTranscript && !supplementalText) {
     return {
@@ -350,19 +411,20 @@ export async function summarizeForArticle(
   }
 
   if (material.length < MIN_MATERIAL_WITH_AI) {
-    console.warn("[from-link/summarize] insufficient material (min ai)", {
+    console.warn("[from-link/summarize] 원문 자료 부족 판정 (min ai)", {
       url: extracted.submittedOriginalUrl,
       materialLength: material.length,
-      articleBodyLength: extracted.articleBodyPlain?.length ?? 0,
-      descriptionLength: extracted.description?.length ?? 0,
+      materialParagraphs,
+      sourceBodyLength: extracted.articleBodyPlain?.length ?? 0,
+      sourceParagraphCount: articleBodyParagraphs,
+      minRequired: MIN_MATERIAL_WITH_AI,
       extractMethod: extracted.articleBodyExtractMethod,
-      supplementalLength: supplementalText?.length ?? 0,
       step: "material-length-check",
     });
     return {
       ok: false,
       materialChars,
-      reason: INSUFFICIENT_MATERIAL_MESSAGE,
+      reason: `원문 자료 부족 판정: AI 최소 길이 ${MIN_MATERIAL_WITH_AI}자 미달 (현재 material ${material.length}자, 추출본문 ${extracted.articleBodyPlain?.length ?? 0}자 / ${articleBodyParagraphs}문단)`,
     };
   }
 
@@ -371,20 +433,20 @@ export async function summarizeForArticle(
     linkType !== "youtube" &&
     (supplementalText?.length ?? 0) < MIN_SOURCE_MATERIAL_CHARS
   ) {
-    console.warn("[from-link/summarize] insufficient material (source min)", {
+    console.warn("[from-link/summarize] 원문 자료 부족 판정 (source min)", {
       url: extracted.submittedOriginalUrl,
       materialLength: material.length,
-      articleBodyLength: extracted.articleBodyPlain?.length ?? 0,
-      descriptionLength: extracted.description?.length ?? 0,
+      materialParagraphs,
+      sourceBodyLength: extracted.articleBodyPlain?.length ?? 0,
+      sourceParagraphCount: articleBodyParagraphs,
+      minRequired: MIN_SOURCE_MATERIAL_CHARS,
       extractMethod: extracted.articleBodyExtractMethod,
-      extractNote: extracted.extractNote,
-      supplementalLength: supplementalText?.length ?? 0,
       step: "source-material-min-chars",
     });
     return {
       ok: false,
       materialChars,
-      reason: INSUFFICIENT_MATERIAL_MESSAGE,
+      reason: `원문 자료 부족 판정: 소스 최소 길이 ${MIN_SOURCE_MATERIAL_CHARS}자 미달 (현재 material ${material.length}자, 추출본문 ${extracted.articleBodyPlain?.length ?? 0}자 / ${articleBodyParagraphs}문단)`,
     };
   }
 
@@ -395,6 +457,9 @@ export async function summarizeForArticle(
     usedTranscript,
     material,
     materialChars,
+    sourceBodyLength: extracted.articleBodyPlain?.length ?? 0,
+    sourceParagraphCount: articleBodyParagraphs,
+    extractMethod: extracted.articleBodyExtractMethod ?? null,
   };
 
   const openAiHint = checkOpenAiEnv();

@@ -24,6 +24,8 @@ type PageProps = {
     queued?: string;
     dismissed?: string;
     dismissError?: string;
+    /** Show manual OpenAI localize tools (not default ops). */
+    advanced?: string;
   }>;
 };
 
@@ -48,6 +50,7 @@ export default async function CollectionCandidatesPage({
   const queuedCount = params.queued?.trim() || null;
   const dismissed = params.dismissed?.trim() || null;
   const dismissError = params.dismissError?.trim() || null;
+  const showLocalizeTools = params.advanced?.trim() === "1";
 
   const { candidates, error, statusFilter, query } =
     await fetchCollectionCandidates({
@@ -55,6 +58,12 @@ export default async function CollectionCandidatesPage({
       source: params.source,
       date: params.date,
     });
+
+  const listQueryBase = candidateListSearchParams(query);
+  const advancedOnHref = `/admin/collection-candidates?${listQueryBase}${
+    listQueryBase ? "&" : ""
+  }advanced=1`;
+  const advancedOffHref = `/admin/collection-candidates?${listQueryBase}`;
 
   return (
     <main className="min-h-screen bg-white text-black">
@@ -68,17 +77,10 @@ export default async function CollectionCandidatesPage({
         </h1>
 
         <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-600 sm:text-base">
-          목록 열기와 필터·제외는 비용이 없습니다. OpenAI는 「선택 항목 한글화」와
-          「기사 만들기」에서만 호출됩니다.
+          후보는 영어 원문 그대로 표시됩니다. 판단은 브라우저 자동 번역을
+          사용하세요. 목록·필터·제외에는 OpenAI 비용이 없고, OpenAI는 「기사
+          만들기」에서만 호출됩니다.
         </p>
-
-        <div className="mt-6">
-          <LocalizeCandidatesForm
-            status={query.status}
-            source={query.source}
-            date={query.date}
-          />
-        </div>
 
         <div className="mt-6 flex flex-wrap gap-2">
           {FILTER_TABS.map((tab) => {
@@ -86,7 +88,7 @@ export default async function CollectionCandidatesPage({
             const href = `/admin/collection-candidates?${candidateListSearchParams({
               ...query,
               status: tab.key,
-            })}`;
+            })}${showLocalizeTools ? "&advanced=1" : ""}`;
             return (
               <Link
                 key={tab.key}
@@ -109,6 +111,9 @@ export default async function CollectionCandidatesPage({
           className="mt-4 flex flex-wrap items-end gap-3"
         >
           <input type="hidden" name="status" value={query.status} />
+          {showLocalizeTools ? (
+            <input type="hidden" name="advanced" value="1" />
+          ) : null}
           <label className="flex flex-col gap-1 text-xs font-medium text-gray-600">
             출처
             <select
@@ -144,6 +149,34 @@ export default async function CollectionCandidatesPage({
             필터 적용
           </button>
         </form>
+
+        {showLocalizeTools ? (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium text-amber-950">
+                고급: OpenAI 후보 한글화 (비용 발생)
+              </p>
+              <Link
+                href={advancedOffHref}
+                className="text-xs font-medium text-amber-900 underline"
+              >
+                기본 화면으로
+              </Link>
+            </div>
+            <LocalizeCandidatesForm
+              status={query.status}
+              source={query.source}
+              date={query.date}
+            />
+          </div>
+        ) : (
+          <p className="mt-4 text-xs text-gray-400">
+            <Link href={advancedOnHref} className="underline hover:text-gray-600">
+              고급: OpenAI 후보 한글화
+            </Link>
+            {" · "}필요 시에만 사용
+          </p>
+        )}
 
         {localizedCount ? (
           <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
@@ -215,8 +248,6 @@ export default async function CollectionCandidatesPage({
               feedLabel={c.feed_label}
               rssTitle={c.rss_title}
               rssSummary={c.rss_summary}
-              rssTitleKo={c.rss_title_ko}
-              rssSummaryKo={c.rss_summary_ko}
               originalUrl={c.original_url}
               rssPublishedAt={c.rss_published_at}
               status={c.status as CollectionCandidateStatus}
@@ -227,6 +258,7 @@ export default async function CollectionCandidatesPage({
               statusFilter={query.status}
               sourceFilter={query.source}
               dateFilter={query.date}
+              showLocalizeTools={showLocalizeTools}
             />
           ))}
         </div>

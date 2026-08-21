@@ -19,7 +19,7 @@ export type FromLinkDraftQualityInput = {
 
 export type FromLinkDraftQualityResult =
   | { ok: true }
-  | { ok: false; reason: string };
+  | { ok: false; reason: string; failedCheckIds?: string[] };
 
 export type FromLinkQualityCheckItem = {
   id: string;
@@ -29,6 +29,7 @@ export type FromLinkQualityCheckItem = {
 };
 
 export const FROM_LINK_MIN_BODY_KO_CHARS = MIN_BODY_CHARS;
+export const FROM_LINK_MIN_BODY_KO_PARAGRAPHS = MIN_BODY_PARAGRAPHS;
 
 function normalizeForCompare(text: string): string {
   return text
@@ -102,13 +103,13 @@ export function evaluateFromLinkDraftQualityChecks(
       id: "body_ko_length",
       label: `생성 본문 길이 (최소 ${MIN_BODY_CHARS}자)`,
       passed: bodyKo.length >= MIN_BODY_CHARS,
-      detail: `${bodyKo.length}자`,
+      detail: `${bodyKo.length}자 / 기준 ${MIN_BODY_CHARS}자`,
     },
     {
       id: "body_ko_paragraphs",
       label: `생성 본문 문단 수 (최소 ${MIN_BODY_PARAGRAPHS}개)`,
       passed: paragraphs >= MIN_BODY_PARAGRAPHS,
-      detail: `${paragraphs}개`,
+      detail: `${paragraphs}개 / 기준 ${MIN_BODY_PARAGRAPHS}개`,
     },
     {
       id: "summary_body_similarity",
@@ -141,58 +142,84 @@ export function canAllowShortSourceDraftOverride(
   return failed.every((c) => SHORT_SOURCE_SOFT_CHECK_IDS.has(c.id));
 }
 
+function reasonForFailedCheck(
+  check: FromLinkQualityCheckItem,
+  bodyKo: string
+): string {
+  const paragraphs = countSubstantiveParagraphs(bodyKo);
+  const bodyLen = bodyKo.trim().length;
+
+  switch (check.id) {
+    case "original_url":
+      return "품질 실패: 원문 URL 형식 오류";
+    case "title_ko":
+      return "품질 실패: 한글 제목 없음";
+    case "summary_ko_length":
+      return `품질 실패: 핵심 요약 ${MIN_SUMMARY_CHARS}자 미달 (현재 ${check.detail})`;
+    case "summary_ko_max":
+      return `품질 실패: 핵심 요약 ${MAX_SUMMARY_CHARS}자 초과 (현재 ${check.detail})`;
+    case "body_ko_length":
+      return `품질 실패: 생성 본문 ${MIN_BODY_CHARS}자 미달 (현재 ${bodyLen}자)`;
+    case "body_ko_paragraphs":
+      return `품질 실패: 생성 본문 ${MIN_BODY_PARAGRAPHS}문단 미달 (현재 ${paragraphs}개)`;
+    case "summary_body_similarity":
+      return `품질 실패: 요약·본문 유사도 과다 (${check.detail})`;
+    default:
+      return `품질 실패: ${check.id} (${check.detail})`;
+  }
+}
+
 export function validateFromLinkDraftQuality(
   input: FromLinkDraftQualityInput
 ): FromLinkDraftQualityResult {
   const submitted = input.submittedOriginalUrl.trim();
-  if (!isValidOriginalUrl(submitted)) {
-    return {
-      ok: false,
-      reason: "원문 URL이 올바르지 않습니다. http(s) 링크를 다시 확인해 주세요.",
-    };
-  }
-
+  const bodyKo = input.bodyKo.trim();
   const checks = evaluateFromLinkDraftQualityChecks(input);
-  const firstFail = checks.find((c) => !c.passed);
-  if (!firstFail) return { ok: true };
+  const failed = checks.filter((c) => !c.passed);
+  const bodyLen = bodyKo.length;
+  const paragraphs = countSubstantiveParagraphs(bodyKo);
 
-  if (firstFail.id === "original_url") {
-    return {
-      ok: false,
-      reason: "원문 URL이 올바르지 않습니다. http(s) 링크를 다시 확인해 주세요.",
-    };
-  }
-  if (firstFail.id === "title_ko") {
-    return { ok: false, reason: "제목이 없어 저장할 수 없습니다." };
-  }
-  if (firstFail.id === "summary_ko_max") {
-    return {
-      ok: false,
-      reason:
-        "핵심 요약이 너무 깁니다. 요약과 본문이 구분되도록 다시 분석해 주세요.",
-    };
-  }
-  if (
-    firstFail.id === "summary_ko_length" ||
-    firstFail.id === "body_ko_length" ||
-    firstFail.id === "body_ko_paragraphs"
-  ) {
-    const paragraphs = countSubstantiveParagraphs(input.bodyKo.trim());
-    if (firstFail.id === "body_ko_paragraphs") {
-      return {
-        ok: false,
-        reason: `${INSUFFICIENT_MATERIAL_MESSAGE} (본문 문단 수: ${paragraphs}/${MIN_BODY_PARAGRAPHS})`,
-      };
-    }
-    return { ok: false, reason: INSUFFICIENT_MATERIAL_MESSAGE };
-  }
-  if (firstFail.id === "summary_body_similarity") {
-    return {
-      ok: false,
-      reason:
-        "본문이 핵심 요약과 거의 같습니다. 더 긴 본문이 생성되도록 링크를 다시 분석하거나 자료가 충분한 URL을 사용해 주세요.",
-    };
+  console.info("[from-link/quality] validator checks", {
+    url: submitted,
+    generatedBodyKoLength: bodyLen,
+    generatedBodyKoParagraphs: paragraphs,
+    minBodyChars: MIN_BODY_CHARS,
+    minBodyParagraphs: MIN_BODY_PARAGRAPHS,
+    under900Chars: bodyLen < MIN_BODY_CHARS,
+    under5Paragraphs: paragraphs < MIN_BODY_PARAGRAPHS,
+    checks: checks.map((c) => ({
+      id: c.id,
+      passed: c.passed,
+      detail: c.detail,
+    })),
+    failedIds: failed.map((c) => c.id),
+  });
+
+  if (failed.length === 0) {
+    console.info("[from-link/quality] validator passed", { url: submitted });
+    return { ok: true };
   }
 
-  return { ok: false, reason: INSUFFICIENT_MATERIAL_MESSAGE };
+  const firstFail = failed[0]!;
+  const reason = reasonForFailedCheck(firstFail, bodyKo);
+  const allReasons = failed.map((c) => reasonForFailedCheck(c, bodyKo));
+
+  console.warn("[from-link/quality] validator FAILED", {
+    url: submitted,
+    firstFailId: firstFail.id,
+    firstFailReason: reason,
+    allFailedReasons: allReasons,
+    under900Chars: bodyLen < MIN_BODY_CHARS,
+    under5Paragraphs: paragraphs < MIN_BODY_PARAGRAPHS,
+    generatedBodyKoLength: bodyLen,
+    generatedBodyKoParagraphs: paragraphs,
+    titleKoLength: input.titleKo.trim().length,
+    summaryKoLength: input.summaryKo.trim().length,
+  });
+
+  return {
+    ok: false,
+    reason: allReasons.join(" · "),
+    failedCheckIds: failed.map((c) => c.id),
+  };
 }

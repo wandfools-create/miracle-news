@@ -19,6 +19,11 @@ import {
   resolvePublisherKey,
 } from "./publisherExtractors/shared";
 import { extractPublisherArticleBody } from "./publisherExtractors";
+import {
+  collectApBodyCandidates,
+  logApBodyCandidates,
+  pickBestApBodyCandidate,
+} from "./publisherExtractors/apCandidates";
 import type { BodyExtractMethodCategory } from "./publisherExtractors/types";
 import { extractWithReadability } from "./extractReadability";
 
@@ -38,8 +43,8 @@ function hostKey(pageUrl: string): string {
 
 function scoreBody(text: string): number {
   if (!text) return 0;
-  const paragraphs = text.split(/\n\n+/).filter((p) => p.trim().length > 50);
-  return text.length + paragraphs.length * 80;
+  const paragraphs = countBodyParagraphs(text);
+  return text.length + paragraphs * 80;
 }
 
 function pickBest(
@@ -343,6 +348,17 @@ export function logArticleBodyExtraction(
   const extractChannel =
     pageFetchMethod === "playwright" ? "playwright" : result.methodCategory;
 
+  console.log(`${LOG_PREFIX} FINAL SELECTED EXTRACTION`, {
+    url: pageUrl,
+    method: result.method,
+    bodyLength: body.length,
+    paragraphCount: result.paragraphCount,
+    methodCategory: result.methodCategory,
+    pageFetchMethod: pageFetchMethod ?? null,
+    publisher: result.publisher,
+    success: result.success,
+  });
+
   console.log(LOG_PREFIX, {
     url: pageUrl,
     publisher: result.publisher,
@@ -383,6 +399,50 @@ export function extractArticleBodyFromHtml(
   const publisherKey = resolvePublisherKey(pageUrl);
   const steps: ExtractionStepLog[] = [];
   const jsonLd = extractJsonLdArticleFields(html);
+
+  // AP: evaluate every strategy on this HTML; never stop at first short hit.
+  if (publisherKey === "ap") {
+    const channel =
+      options?.pageFetchMethod === "playwright" ? "playwright" : "http";
+    const apCandidates = collectApBodyCandidates({
+      html,
+      pageUrl,
+      jsonLd,
+      channel,
+    });
+    for (const c of apCandidates) {
+      steps.push({
+        step: `${c.method}:p${c.paragraphCount}`,
+        ok: Boolean(c.body),
+        length: c.bodyLength,
+        detail: c.body
+          ? undefined
+          : `need >= ${MIN_USABLE_BODY_CHARS} chars`,
+      });
+    }
+    const selected = pickBestApBodyCandidate(apCandidates);
+    logApBodyCandidates(pageUrl, channel, apCandidates, selected);
+
+    const methodCategory =
+      options?.pageFetchMethod === "playwright"
+        ? "playwright"
+        : selected?.methodCategory ?? "generic";
+
+    const result: ArticleBodyExtractionResult = {
+      body: selected?.body ?? null,
+      method: selected?.body
+        ? selected.method
+        : BODY_EXTRACTION_FAILED_METHOD,
+      methodCategory,
+      steps,
+      success: Boolean(selected?.body),
+      jsonLd,
+      publisher: "ap",
+      paragraphCount: selected?.paragraphCount ?? 0,
+    };
+    logArticleBodyExtraction(pageUrl, result, options?.pageFetchMethod);
+    return result;
+  }
 
   const publisherResult = extractPublisherArticleBody({
     html,

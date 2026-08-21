@@ -15,6 +15,7 @@ type Props = {
   date: string;
 };
 
+/** Manual-only OpenAI title/summary translate. Not part of default ops flow. */
 export default function LocalizeCandidatesForm({
   status,
   source,
@@ -40,13 +41,13 @@ export default function LocalizeCandidatesForm({
         <button
           type="submit"
           disabled={pending}
-          className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {pending ? "한글화 중…" : "선택 항목 한글화"}
+          {pending ? "한글화 중…" : "선택 항목 한글화 (OpenAI)"}
         </button>
         <p className="text-xs text-gray-500">
-          체크한 후보의 제목·요약만 번역합니다. 기사 만들기는 한글화 없이 바로
-          가능합니다.
+          기본 운영에서는 쓰지 않습니다. 제목·짧은 RSS 요약만 번역하며 비용이
+          발생합니다.
         </p>
         {state && !state.ok ? (
           <p className="text-xs text-red-700">{state.error}</p>
