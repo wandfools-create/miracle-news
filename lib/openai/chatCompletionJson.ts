@@ -29,6 +29,8 @@ export async function chatCompletionJson<T extends Record<string, unknown>>(
     user: string;
     temperature?: number;
     timeoutMs?: number;
+    /** Override model. Default: OPENAI_ARTICLE_MODEL (article / from-link). */
+    model?: string;
   }
 ): Promise<ChatCompletionJsonResult<T>> {
   const env = checkOpenAiEnv();
@@ -42,8 +44,10 @@ export async function chatCompletionJson<T extends Record<string, unknown>>(
     };
   }
 
+  const model = input.model?.trim() || env.model;
+
   const payload = {
-    model: env.model,
+    model,
     temperature: input.temperature ?? 0.35,
     response_format: { type: "json_object" as const },
     messages: [
@@ -51,6 +55,8 @@ export async function chatCompletionJson<T extends Record<string, unknown>>(
       { role: "user" as const, content: input.user },
     ],
   };
+
+  console.info(`[openai/${input.step}] request`, { model });
 
   const controller = new AbortController();
   const timeout = setTimeout(

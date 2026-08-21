@@ -1,21 +1,27 @@
 import "server-only";
 
 import { chatCompletionJson } from "@/lib/openai/chatCompletionJson";
-import { checkOpenAiEnv } from "@/lib/openai/env";
+import {
+  checkOpenAiEnv,
+  getOpenAiCandidateModel,
+} from "@/lib/openai/env";
 import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/serviceRole";
 
 const MAX_LOCALIZE_BATCH = 20;
+/** Keep RSS summaries short — title + brief dek only, never article body. */
+const MAX_SUMMARY_CHARS = 400;
 
 const SYSTEM_PROMPT =
   "You are a news headline translator. Output JSON only: " +
   '{"items":[{"id":string,"title_ko":string,"summary_ko":string}]}.\n' +
   "Rules:\n" +
   "- Translate each RSS title into natural Korean. Keep names and numbers.\n" +
-  "- Translate RSS summary into 1–2 Korean sentences. If summary is empty, leave summary_ko empty string.\n" +
-  "- Do not add facts, speculation, or rewrite as a new article.\n" +
+  "- Translate the short RSS summary into 1–2 Korean sentences only. If summary is empty, leave summary_ko empty string.\n" +
+  "- Translate title and short RSS summary only. Do not write or rewrite an article body.\n" +
+  "- Do not add facts, speculation, or invent content.\n" +
   "- Do not extract article body. Do not invent images.\n" +
   "- Return one object per input id. Do not drop or invent ids.";
 
@@ -45,6 +51,12 @@ function uniqueIds(ids: string[]): string[] {
     out.push(id);
   }
   return out;
+}
+
+function truncateSummary(summary: string): string {
+  const trimmed = summary.trim();
+  if (trimmed.length <= MAX_SUMMARY_CHARS) return trimmed;
+  return `${trimmed.slice(0, MAX_SUMMARY_CHARS - 1)}…`;
 }
 
 /** Translate only explicitly selected candidates. No OpenAI if none need Korean. */
@@ -106,14 +118,19 @@ export async function localizeSelectedCollectionCandidates(
     return { ok: false, error: openAi.error, step: openAi.step, openaiCalls: 0 };
   }
 
+  const candidateModel = getOpenAiCandidateModel();
+
   const payload = needsKo.map((row) => ({
     id: String((row as { id: string }).id),
     title: String((row as { rss_title: string }).rss_title ?? "").trim(),
-    summary: String((row as { rss_summary?: string | null }).rss_summary ?? "").trim(),
+    summary: truncateSummary(
+      String((row as { rss_summary?: string | null }).rss_summary ?? "")
+    ),
   }));
 
   console.info("[collection-candidates] localize start", {
     openaiCalls: 1,
+    model: candidateModel,
     queued: payload.length,
     skippedAlreadyKo: alreadyKo.length,
   });
@@ -123,11 +140,13 @@ export async function localizeSelectedCollectionCandidates(
     system: SYSTEM_PROMPT,
     user: JSON.stringify({ items: payload }),
     temperature: 0.2,
+    model: candidateModel,
   });
 
   if (!completion.ok) {
     console.warn("[collection-candidates] localize OpenAI failed", {
       openaiCalls: 1,
+      model: candidateModel,
       queued: payload.length,
       error: completion.error,
     });
@@ -180,6 +199,7 @@ export async function localizeSelectedCollectionCandidates(
 
   console.info("[collection-candidates] localize done", {
     openaiCalls: 1,
+    model: candidateModel,
     queued: payload.length,
     updated,
     skippedAlreadyKo: alreadyKo.length,
@@ -193,7 +213,7 @@ export async function localizeSelectedCollectionCandidates(
       duplicate_count: alreadyKo.length,
       failed_count: payload.length - updated,
       status: updated > 0 ? "success" : "failed",
-      note: `candidate localize selected · openai_calls=1 queued=${payload.length} updated=${updated} skipped_already_ko=${alreadyKo.length}`,
+      note: `candidate localize selected · model=${candidateModel} openai_calls=1 queued=${payload.length} updated=${updated} skipped_already_ko=${alreadyKo.length}`,
     });
   } catch (err) {
     console.warn("[collection-candidates] localize collection_logs failed", err);

@@ -1,5 +1,6 @@
 import type { DraftCandidate } from "./types";
 import type { ExtractedPreview } from "./types";
+import { getOpenAiArticleModel } from "@/lib/openai/env";
 
 function stableId(prefix: string, index: number): string {
   return `${prefix}-${index}`;
@@ -66,7 +67,7 @@ async function proposeWithOpenAi(
   if (!apiKey) return null;
 
   const payload = {
-    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+    model: getOpenAiArticleModel(),
     temperature: 0.6,
     response_format: { type: "json_object" as const },
     messages: [

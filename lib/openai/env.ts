@@ -4,9 +4,29 @@ export type OpenAiEnvCheck =
   | { ok: true; model: string; keyPrefix: string }
   | { ok: false; step: "env_check"; error: string; hint: string };
 
+const DEFAULT_ARTICLE_MODEL = "gpt-4o-mini";
+const DEFAULT_CANDIDATE_MODEL = "gpt-5.4-nano";
+
 function maskKey(key: string): string {
   if (key.length <= 12) return "(too short)";
   return `${key.slice(0, 7)}…${key.slice(-4)}`;
+}
+
+/** Low-cost model for RSS candidate title/summary localization only. */
+export function getOpenAiCandidateModel(): string {
+  return process.env.OPENAI_CANDIDATE_MODEL?.trim() || DEFAULT_CANDIDATE_MODEL;
+}
+
+/**
+ * High-quality model for article creation / from-link enrich.
+ * Prefer OPENAI_ARTICLE_MODEL; fall back to legacy OPENAI_MODEL.
+ */
+export function getOpenAiArticleModel(): string {
+  return (
+    process.env.OPENAI_ARTICLE_MODEL?.trim() ||
+    process.env.OPENAI_MODEL?.trim() ||
+    DEFAULT_ARTICLE_MODEL
+  );
 }
 
 export function checkOpenAiEnv(): OpenAiEnvCheck {
@@ -30,6 +50,9 @@ export function checkOpenAiEnv(): OpenAiEnvCheck {
     };
   }
 
-  const model = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
-  return { ok: true, model, keyPrefix: maskKey(apiKey) };
+  return {
+    ok: true,
+    model: getOpenAiArticleModel(),
+    keyPrefix: maskKey(apiKey),
+  };
 }
