@@ -5,7 +5,7 @@ import { useActionState } from "react";
 import {
   localizePendingCandidatesAction,
   type LocalizeCandidatesActionState,
-} from "@/app/admin/(app)/collection-candidates/actions";
+} from "@/app/admin/(app)/collection-candidates/localizeCandidatesAction";
 import CandidateFilterHiddenFields from "@/components/admin/CandidateFilterHiddenFields";
 import SelectAllReviewCheckbox from "@/app/admin/(app)/review/SelectAllReviewCheckbox";
 

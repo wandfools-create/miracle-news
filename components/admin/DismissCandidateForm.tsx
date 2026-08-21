@@ -1,4 +1,4 @@
-import { dismissCollectionCandidateAction } from "@/app/admin/(app)/collection-candidates/actions";
+import { dismissCollectionCandidateAction } from "@/app/admin/(app)/collection-candidates/dismissCandidateAction";
 import CandidateFilterHiddenFields from "@/components/admin/CandidateFilterHiddenFields";
 
 type Props = {

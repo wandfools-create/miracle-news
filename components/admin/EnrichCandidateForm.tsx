@@ -5,7 +5,7 @@ import { useActionState } from "react";
 import {
   enrichCollectionCandidateAction,
   type EnrichCandidateActionState,
-} from "@/app/admin/(app)/collection-candidates/actions";
+} from "@/app/admin/(app)/collection-candidates/enrichCandidateAction";
 import CandidateFilterHiddenFields from "@/components/admin/CandidateFilterHiddenFields";
 
 type Props = {

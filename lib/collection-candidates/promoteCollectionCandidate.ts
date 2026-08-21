@@ -2,7 +2,6 @@ import "server-only";
 
 import { insertReviewQueueArticle } from "@/lib/articles/insertReviewQueueArticle";
 import type { CollectionCandidateRow } from "@/lib/collection-candidates/types";
-import { runRssFromLinkPipeline } from "@/lib/rss/runRssFromLinkPipeline";
 import {
   categorizeEnrichFailure,
   type RssEnrichFailureCategory,
@@ -132,6 +131,10 @@ export async function promoteCollectionCandidate(input: {
     originalUrl: row.original_url,
     selectedBy: input.selectedBy,
   });
+
+  const { runRssFromLinkPipeline } = await import(
+    "@/lib/rss/runRssFromLinkPipeline"
+  );
 
   const pipeline = await runRssFromLinkPipeline({
     originalUrl: row.original_url,
