@@ -4,7 +4,11 @@ import { resolvePublisherFromExtracted } from "@/lib/from-link/resolvePublisherS
 import { resolveSubmittedUrl } from "@/lib/from-link/resolveSubmittedUrl";
 import { sanitizeThumbnailUrl } from "@/lib/from-link/sanitizeThumbnail";
 import { translateArticlePair } from "@/lib/from-link/translateArticlePair";
-import { validateFromLinkDraftQuality } from "@/lib/from-link/validateArticleQuality";
+import {
+  isShortArticleRecommendedReview,
+  SHORT_ARTICLE_REVIEW_NOTE,
+  validateFromLinkDraftQuality,
+} from "@/lib/from-link/validateArticleQuality";
 import { buildFromLinkAiReviewNotes } from "@/lib/from-link/fromLinkAiNotes";
 import type {
   ArticleDraftPayload,
@@ -129,9 +133,24 @@ export async function prepareFromLinkCommitFields(input: {
   );
 
   const thumbnailUrl = sanitizeThumbnailUrl(input.extracted.thumbnailUrl);
-  const aiReviewNotes =
+  const shortArticleReview =
+    draft.shortArticleReview === true ||
+    isShortArticleRecommendedReview(bodyKo);
+  let aiReviewNotes =
     input.aiReviewNotes ??
-    buildFromLinkAiReviewNotes(c, originalUrl, draft.shortSourceDraft);
+    buildFromLinkAiReviewNotes(c, originalUrl, {
+      shortSourceDraft: draft.shortSourceDraft === true,
+      shortArticleReview,
+    });
+
+  if (
+    shortArticleReview &&
+    !aiReviewNotes.includes(SHORT_ARTICLE_REVIEW_NOTE)
+  ) {
+    aiReviewNotes = [aiReviewNotes, `[경고] ${SHORT_ARTICLE_REVIEW_NOTE}`]
+      .filter(Boolean)
+      .join("\n");
+  }
 
   return {
     ok: true,

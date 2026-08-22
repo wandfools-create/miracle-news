@@ -5,6 +5,7 @@ import { insertReviewQueueArticle } from "@/lib/articles/insertReviewQueueArticl
 import { analyzeFromLinkCore } from "@/lib/from-link/analyzeFromLinkCore";
 import { buildFromLinkAiReviewNotes } from "@/lib/from-link/fromLinkAiNotes";
 import { prepareFromLinkCommitFields } from "@/lib/from-link/prepareFromLinkCommitFields";
+import { isShortArticleRecommendedReview } from "@/lib/from-link/validateArticleQuality";
 import { resolveSubmittedUrl } from "@/lib/from-link/resolveSubmittedUrl";
 import { translateArticlePair } from "@/lib/from-link/translateArticlePair";
 import {
@@ -101,7 +102,14 @@ async function commitFromLinkDraft(input: {
     aiReviewNotes: buildFromLinkAiReviewNotes(
       input.candidate,
       input.submittedOriginalUrl.trim(),
-      input.articleDraft.shortSourceDraft
+      {
+        shortSourceDraft: input.articleDraft.shortSourceDraft === true,
+        shortArticleReview:
+          input.articleDraft.shortArticleReview === true ||
+          isShortArticleRecommendedReview(
+            input.articleDraft.synthesizedBodyKo
+          ),
+      }
     ),
   });
 

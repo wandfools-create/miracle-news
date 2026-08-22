@@ -7,6 +7,7 @@ import {
   parseRssEnrichFailureFromNotes,
   type ParsedRssEnrichFailure,
 } from "@/lib/rss/enrichFailure";
+import { SHORT_ARTICLE_REVIEW_NOTE } from "@/lib/from-link/validateArticleQuality";
 
 export type ReviewQueueArticleRow = {
   id: string;
@@ -56,6 +57,7 @@ export type ReviewArticleDisplay = {
   isRssStub: boolean;
   isRssEnriched: boolean;
   enrichFailure: ParsedRssEnrichFailure | null;
+  shortArticleReviewRecommended: boolean;
 };
 
 const categoryLabelMap: Record<string, string> = {
@@ -203,6 +205,8 @@ export function buildReviewArticleDisplay(
   const isRssStub =
     isRssStubArticle(article.source_section) || Boolean(enrichFailure);
   const isRssEnriched = isRssEnrichedArticle(article.source_section);
+  const notes = safeTrimmed(article.ai_review_notes);
+  const shortArticleReviewRecommended = notes.includes(SHORT_ARTICLE_REVIEW_NOTE);
 
   return {
     id: article.id,
@@ -230,6 +234,7 @@ export function buildReviewArticleDisplay(
     isRssStub,
     isRssEnriched,
     enrichFailure,
+    shortArticleReviewRecommended,
   };
 }
 

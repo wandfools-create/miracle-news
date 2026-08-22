@@ -199,7 +199,22 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
             <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
               {display.imageStatusLabel}
             </span>
+            {display.shortArticleReviewRecommended ? (
+              <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900">
+                짧은 기사 · 최종 검토 권장
+              </span>
+            ) : null}
           </div>
+
+          {display.shortArticleReviewRecommended ? (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              <p className="font-semibold">짧은 기사 · 최종 검토 권장</p>
+              <p className="mt-1 leading-6 text-amber-900/90">
+                본문이 최소 길이(500자)와 내용 품질 기준은 충족했지만 권장
+                목표(900~1,200자)보다 짧습니다. 승인 전 본문을 확인해 주세요.
+              </p>
+            </div>
+          ) : null}
 
           <p className="mt-5 text-sm font-semibold text-gray-500">원문 링크</p>
           {display.originalUrl ? (

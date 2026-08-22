@@ -210,9 +210,10 @@ export default function FromLinkWizard({ initialUrl = "" }: FromLinkWizardProps)
             <span>
               <span className="font-medium">짧은 원문 기반 초안 허용</span>
               <span className="mt-1 block text-xs text-amber-900/90">
-                추출 원문이 400자 이상인데 AI 생성 본문이 900자·5문단 기준을
-                못 맞출 때도 초안을 만들고, 저장 시 「짧은 원문 기반 초안」
-                경고를 남깁니다.
+                추출 원문이 400자 이상인데 생성 본문이 최소 길이(500자)나 내용
+                품질 기준을 못 맞출 때도 초안을 만들고, 저장 시 「짧은 원문 기반
+                초안」 경고를 남깁니다. (권장 목표는 900~1,200자이며, 글자 수만으로
+                실패시키지 않습니다.)
               </span>
             </span>
           </label>
@@ -416,7 +417,7 @@ export default function FromLinkWizard({ initialUrl = "" }: FromLinkWizardProps)
               <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                 <h2 className="text-lg font-semibold">4. 핵심 요약 · 본문 초안</h2>
                 <p className="mt-2 text-sm text-gray-600">
-                  핵심 요약(1~2문장)과 본문(5문단 이상)은 구분되어 저장됩니다. 검토 후
+                  핵심 요약(1~2문장)과 본문은 구분되어 저장됩니다. 검토 후
                   편집해 주세요.
                 </p>
                 {successRun.articleDraft.shortSourceDraft ? (
@@ -426,9 +427,21 @@ export default function FromLinkWizard({ initialUrl = "" }: FromLinkWizardProps)
                   >
                     <p className="font-semibold">짧은 원문 기반 초안</p>
                     <p className="mt-1 text-amber-900/90">
-                      원문은 확보됐지만 생성 본문이 일반 품질 기준(900자·5문단)을
-                      충족하지 못해 완화 모드로 생성했습니다. 저장 시 검토 메모에
-                      경고가 기록됩니다.
+                      원문은 확보됐지만 생성 본문이 최소 길이(500자) 또는 내용
+                      품질 기준을 충족하지 못해 완화 모드로 생성했습니다. 저장 시
+                      검토 메모에 경고가 기록됩니다.
+                    </p>
+                  </div>
+                ) : successRun.articleDraft.shortArticleReview ? (
+                  <div
+                    className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+                    role="status"
+                  >
+                    <p className="font-semibold">짧은 기사 · 최종 검토 권장</p>
+                    <p className="mt-1 text-amber-900/90">
+                      본문이 최소 길이(500자)와 내용 품질 기준은 충족했지만 권장
+                      목표(900~1,200자)보다 짧습니다. 검토 대기로 저장되며 최종
+                      검토를 권장합니다.
                     </p>
                   </div>
                 ) : null}

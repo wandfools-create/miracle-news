@@ -72,7 +72,9 @@ export default function FromLinkDiagnosticsPanel({
           <dd className="mt-1 font-medium text-slate-900">
             {diagnostics.generatedBodyKoChars.toLocaleString("ko-KR")}자
             <span className="ml-2 text-xs font-normal text-slate-500">
-              (기준 {FROM_LINK_QUALITY_LIMITS.minGeneratedBodyKoChars}자)
+              (최소 {FROM_LINK_QUALITY_LIMITS.minGeneratedBodyKoChars}자 · 권장
+              목표 {FROM_LINK_QUALITY_LIMITS.targetGeneratedBodyKoCharsMin}–
+              {FROM_LINK_QUALITY_LIMITS.targetGeneratedBodyKoCharsMax}자)
             </span>
           </dd>
         </div>
@@ -104,12 +106,19 @@ export default function FromLinkDiagnosticsPanel({
                 className={`flex flex-wrap items-baseline justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${
                   check.passed
                     ? "border-green-200 bg-green-50/80 text-green-950"
-                    : "border-red-200 bg-red-50/80 text-red-950"
+                    : check.severity === "warn"
+                      ? "border-amber-200 bg-amber-50/80 text-amber-950"
+                      : "border-red-200 bg-red-50/80 text-red-950"
                 }`}
               >
                 <span className="font-medium">{check.label}</span>
                 <span className="text-xs">
-                  {check.passed ? "통과" : "미통과"} · {check.detail}
+                  {check.passed
+                    ? "통과"
+                    : check.severity === "warn"
+                      ? "경고"
+                      : "미통과"}{" "}
+                  · {check.detail}
                 </span>
               </li>
             ))}
@@ -120,9 +129,10 @@ export default function FromLinkDiagnosticsPanel({
       {showShortSourceHint && diagnostics.canAllowShortSourceDraft ? (
         <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
           원문은 {FROM_LINK_QUALITY_LIMITS.minSourceBodyChars}자 이상이지만 생성
-          본문이 {FROM_LINK_QUALITY_LIMITS.minGeneratedBodyKoChars}자·문단 기준을
-          충족하지 못했습니다. 아래 옵션을 켜고 다시 「분석」하면 짧은 원문 기반
-          초안으로 진행할 수 있습니다.
+          본문이 최소 길이(
+          {FROM_LINK_QUALITY_LIMITS.minGeneratedBodyKoChars}자) 또는 내용 품질
+          기준을 충족하지 못했습니다. 아래 옵션을 켜고 다시 「분석」하면 짧은 원문
+          기반 초안으로 진행할 수 있습니다.
         </p>
       ) : null}
     </section>

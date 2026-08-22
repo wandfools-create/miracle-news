@@ -79,8 +79,19 @@ export default function ReviewArticleCard({ display }: Props) {
                 RSS 자동 보강 완료
               </span>
             ) : null}
+            {display.shortArticleReviewRecommended ? (
+              <span className="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-900 sm:text-xs">
+                짧은 기사 · 최종 검토 권장
+              </span>
+            ) : null}
           </div>
 
+          {display.shortArticleReviewRecommended && !display.enrichFailure ? (
+            <p className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950 sm:text-sm">
+              본문이 권장 목표(900~1,200자)보다 짧습니다. 검토 대기로 저장됐으니
+              최종 검토를 권장합니다.
+            </p>
+          ) : null}
           {display.enrichFailure ? (
             <p className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs leading-5 text-red-900 sm:text-sm">
               <span className="font-semibold">자동 보강 실패</span>

@@ -20,7 +20,11 @@ import { normalizeSupplementalText } from "@/lib/from-link/supplementalText";
 import { countSubstantiveParagraphs } from "@/lib/from-link/sanitizeArticleText";
 import { countBodyParagraphs } from "@/lib/from-link/server/publisherExtractors/shared";
 import type { FromLinkQualityCheckItem } from "@/lib/from-link/fromLinkDiagnostics";
-import { validateFromLinkDraftQuality } from "@/lib/from-link/validateArticleQuality";
+import {
+  MIN_BODY_CHARS,
+  isShortArticleRecommendedReview,
+  validateFromLinkDraftQuality,
+} from "@/lib/from-link/validateArticleQuality";
 import type { AnalyzeFromLinkOptions, AnalyzeFromLinkResult } from "@/lib/from-link/actionTypes";
 import type { ArticleDraftPayload, ExtractedPreview } from "@/lib/from-link/types";
 
@@ -204,8 +208,11 @@ export async function analyzeFromLinkCore(
       materialChars: summary.materialChars,
       generatedBodyKoLength: summary.bodyKo.trim().length,
       generatedBodyKoParagraphs: countSubstantiveParagraphs(summary.bodyKo),
-      under900Chars: summary.bodyKo.trim().length < 900,
-      under5Paragraphs: countSubstantiveParagraphs(summary.bodyKo) < 5,
+      under500Chars: summary.bodyKo.trim().length < MIN_BODY_CHARS,
+      under3Paragraphs: countSubstantiveParagraphs(summary.bodyKo) < 3,
+      shortArticleReviewRecommended: isShortArticleRecommendedReview(
+        summary.bodyKo
+      ),
       extractMethod: extracted.articleBodyExtractMethod,
       pageFetchMethod: extracted.pageFetchMethod,
     });
@@ -261,6 +268,7 @@ export async function analyzeFromLinkCore(
     bodyOriginal: summary.bodyOriginal,
     summaryOriginal: summary.summaryOriginal,
     contentLanguage: summary.contentLanguage,
+    shortArticleReview: isShortArticleRecommendedReview(summary.bodyKo),
   };
 
   return {

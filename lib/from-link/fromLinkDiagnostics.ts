@@ -5,6 +5,7 @@ export type FromLinkQualityCheckItem = {
   label: string;
   passed: boolean;
   detail: string;
+  severity?: "fail" | "warn";
 };
 
 export type FromLinkExtractionStats = {
@@ -27,15 +28,19 @@ export type FromLinkAnalyzeDiagnostics = {
   /** Generated Korean body length (0 if summarize did not complete). */
   generatedBodyKoChars: number;
   qualityChecks: FromLinkQualityCheckItem[];
-  /** User may opt in to save despite soft quality failures (e.g. body &lt; 900 chars). */
+  /** User may opt in to save despite generated-body content failures when source is adequate. */
   canAllowShortSourceDraft: boolean;
 };
 
 export const FROM_LINK_QUALITY_LIMITS = {
   minSourceBodyChars: 400,
   minMaterialChars: 400,
-  minGeneratedBodyKoChars: 900,
-  minGeneratedBodyParagraphs: 5,
+  /** Hard fail only below this. 900 is a recommended target, not a fail gate. */
+  minGeneratedBodyKoChars: 500,
+  targetGeneratedBodyKoCharsMin: 900,
+  targetGeneratedBodyKoCharsMax: 1200,
+  /** Warning only — never a hard fail. */
+  warnGeneratedBodyParagraphs: 3,
   minSummaryChars: 30,
   maxSummaryChars: 500,
   maxSummaryBodySimilarity: 0.62,

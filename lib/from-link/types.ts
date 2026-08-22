@@ -54,8 +54,10 @@ export type ArticleDraftPayload = {
   titleEn?: string | null;
   summaryEn?: string | null;
   bodyEn?: string | null;
-  /** Quality gates relaxed: short source / generated body under 900 chars. */
+  /** Quality gates relaxed: short source / generated body failed hard content checks. */
   shortSourceDraft?: boolean;
+  /** Body passed hard gates but is under recommended target (500–899 chars). */
+  shortArticleReview?: boolean;
 };
 
 export type LinkTypeLabelKey = LinkType;

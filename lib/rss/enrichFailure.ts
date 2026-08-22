@@ -31,6 +31,8 @@ export function categorizeEnrichFailure(
   if (
     stepNorm === "quality_check" ||
     err.includes("품질") ||
+    err.includes("500자") ||
+    err.includes("700자") ||
     err.includes("900자") ||
     err.includes("5문단") ||
     err.includes("paragraph")

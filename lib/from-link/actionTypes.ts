@@ -13,7 +13,7 @@ export const DUPLICATE_LINK_MESSAGE =
 export { INSUFFICIENT_MATERIAL_MESSAGE } from "./validateArticleQuality";
 
 export type AnalyzeFromLinkOptions = {
-  /** Allow saving when source ≥400 chars but generated body fails 900-char gate. */
+  /** Allow saving when source ≥400 chars but generated body fails content/length hard gates. */
   allowShortSourceDraft?: boolean;
 };
 

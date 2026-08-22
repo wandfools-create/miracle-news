@@ -1,10 +1,7 @@
 import "server-only";
 
 import { fetchPagePlainText } from "@/lib/from-link/fetchPlainText";
-import {
-  countSubstantiveParagraphs,
-  stripUrlsFromArticleText,
-} from "@/lib/from-link/sanitizeArticleText";
+import { stripUrlsFromArticleText } from "@/lib/from-link/sanitizeArticleText";
 import {
   INSUFFICIENT_MATERIAL_MESSAGE,
   validateFromLinkDraftQuality,
@@ -315,15 +312,6 @@ export async function reviseArticleWithFeedback(
       step: "quality_check",
       error: quality.reason,
       uiMessage: `[quality_check] ${quality.reason}`,
-    };
-  }
-
-  if (countSubstantiveParagraphs(parsed.article_body_ko) < 5) {
-    return {
-      ok: false,
-      step: "quality_paragraphs",
-      error: INSUFFICIENT_MATERIAL_MESSAGE,
-      uiMessage: `[quality_paragraphs] ${INSUFFICIENT_MATERIAL_MESSAGE}`,
     };
   }
 

@@ -18,17 +18,93 @@ export type ApBodyCandidate = {
 const RICH_TEXT_ROOT =
   "div.RichTextStoryBody, div[class*='RichTextStoryBody']";
 
-const CHROME_SELECTOR =
-  "script, style, nav, aside, footer, header, [role='navigation'], [class*='Related'], [class*='Newsletter'], [class*='Promo'], [data-key='related']";
+/** Remove chrome before querying — do not remove Page-storyBody itself. */
+const CHROME_SELECTOR = [
+  "script",
+  "style",
+  "nav",
+  "aside",
+  "footer",
+  "header",
+  "[role='navigation']",
+  ".Carousel",
+  ".Author-bio",
+  ".PageList",
+  ".PageListStandardB",
+  ".Comments",
+  ".CommentCount",
+  ".VideoPlayer",
+  ".EmbeddedVideo",
+  ".SocialShare",
+  ".Page-actions",
+  ".fs-feed-ad",
+  "[class*='Newsletter']",
+  "[class*='Related']",
+  "[class*='Promo']",
+  "[class*='Advert']",
+  "[data-key='related']",
+].join(", ");
 
-function paragraphsFromNodes(nodes: Element[]): string[] {
+/** Elements whose descendants are not story prose. */
+const STORY_EXCLUDE_CLOSEST = CHROME_SELECTOR;
+
+function cleanText(node: Element): string {
+  return (node.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
+function paragraphsFromNodes(nodes: Element[], minLen = 25): string[] {
   const out: string[] = [];
   for (const node of nodes) {
-    const text = node.textContent?.replace(/\s+/g, " ").trim() ?? "";
-    if (text.length < 25) continue;
+    const text = cleanText(node);
+    if (text.length < minLen) continue;
     out.push(text);
   }
   return out;
+}
+
+function dedupePreserveOrder(items: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of items) {
+    const key = item.replace(/\s+/g, " ").trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(key);
+  }
+  return out;
+}
+
+/**
+ * Full AP story: Page-storyBody from lead through later h2 sections.
+ * Includes every RichTextStoryBody + following h2/h3 + p, skips ads/related/chrome.
+ */
+export function extractApFullStoryBlocks(doc: Document): string[] {
+  const root =
+    doc.querySelector(".Page-storyBody") ||
+    doc.querySelector("div[class*='Page-storyBody']") ||
+    doc.querySelector("article") ||
+    doc.querySelector("main");
+  if (!root) return [];
+
+  const blocks: string[] = [];
+  for (const el of root.querySelectorAll("h2, h3, p")) {
+    if (el.closest(STORY_EXCLUDE_CLOSEST)) continue;
+    const tag = el.tagName.toLowerCase();
+    const text = cleanText(el);
+    const minLen = tag === "h2" || tag === "h3" ? 12 : 25;
+    if (text.length < minLen) continue;
+    // Drop short photo credit-only captions
+    if (
+      tag === "p" &&
+      text.length < 120 &&
+      /\(AP Photo\//i.test(text)
+    ) {
+      continue;
+    }
+    blocks.push(text);
+  }
+
+  return dedupePreserveOrder(blocks);
 }
 
 function candidateFromParagraphs(
@@ -36,7 +112,8 @@ function candidateFromParagraphs(
   paragraphs: string[],
   methodCategory: BodyExtractMethodCategory
 ): ApBodyCandidate {
-  if (paragraphs.length === 0) {
+  const unique = dedupePreserveOrder(paragraphs);
+  if (unique.length === 0) {
     return {
       method,
       body: null,
@@ -45,7 +122,7 @@ function candidateFromParagraphs(
       methodCategory,
     };
   }
-  const body = normalizeBody(paragraphs.join("\n\n"), ARTICLE_BODY_MAX_CHARS);
+  const body = normalizeBody(unique.join("\n\n"), ARTICLE_BODY_MAX_CHARS);
   const paragraphCount = splitBodyParagraphs(body).filter(
     (p) => p.length >= 40
   ).length;
@@ -89,14 +166,15 @@ function candidateFromRawText(
 
 /**
  * Score AP body candidates: prefer enough paragraphs, then longest body.
- * Ads/menu/footer should already be excluded by selector scope / Readability.
  */
 export function scoreApBodyCandidate(c: ApBodyCandidate): number {
   if (!c.body || c.bodyLength < 80) return 0;
   const paras = c.paragraphCount;
   const sufficientBonus =
     paras >= 5 ? 8_000 : paras >= 3 ? 3_000 : paras >= 2 ? 800 : 0;
-  return c.bodyLength + Math.min(paras, 20) * 150 + sufficientBonus;
+  // Strongly prefer fuller story extracts over truncated first-block only.
+  const lengthBonus = Math.min(c.bodyLength, 20_000);
+  return lengthBonus + Math.min(paras, 40) * 200 + sufficientBonus;
 }
 
 export function pickBestApBodyCandidate(
@@ -139,6 +217,13 @@ export function logApBodyCandidates(
       paragraphCount: selected.paragraphCount,
       methodCategory: selected.methodCategory,
     });
+    console.info("[from-link/extract] AP FINAL bodyLength/paragraphCount", {
+      url: pageUrl,
+      channel,
+      method: selected.method,
+      bodyLength: selected.bodyLength,
+      paragraphCount: selected.paragraphCount,
+    });
   } else {
     console.warn("[from-link/extract] AP selected none", {
       url: pageUrl,
@@ -150,7 +235,6 @@ export function logApBodyCandidates(
 
 /**
  * Run all AP extraction strategies on one HTML document (no early exit).
- * Channel prefix distinguishes HTTP vs Playwright HTML.
  */
 export function collectApBodyCandidates(input: {
   html: string;
@@ -165,14 +249,13 @@ export function collectApBodyCandidates(input: {
     node.remove();
   }
 
-  const richRoots = [...doc.querySelectorAll(RICH_TEXT_ROOT)];
+  const fullStoryBlocks = extractApFullStoryBlocks(doc);
 
+  const richRoots = [...doc.querySelectorAll(RICH_TEXT_ROOT)];
   const richPs: string[] = [];
   for (const root of richRoots) {
     richPs.push(...paragraphsFromNodes([...root.querySelectorAll("p")]));
   }
-  // Dedupe while preserving order
-  const richUnique = [...new Set(richPs)];
 
   const testIdParas: string[] = [];
   for (const root of richRoots.length ? richRoots : [doc.body].filter(Boolean)) {
@@ -183,7 +266,6 @@ export function collectApBodyCandidates(input: {
       ])
     );
   }
-  const testIdUnique = [...new Set(testIdParas)];
 
   const articleEl = doc.querySelector("article") ?? doc.querySelector("main");
   const articleParas = articleEl
@@ -192,13 +274,18 @@ export function collectApBodyCandidates(input: {
 
   const candidates: ApBodyCandidate[] = [
     candidateFromParagraphs(
+      `${prefix}Page-storyBody-full`,
+      fullStoryBlocks,
+      "article"
+    ),
+    candidateFromParagraphs(
       `${prefix}RichTextStoryBody-p`,
-      richUnique,
+      richPs,
       "article"
     ),
     candidateFromParagraphs(
       `${prefix}data-testid-paragraph`,
-      testIdUnique,
+      testIdParas,
       "article"
     ),
     candidateFromParagraphs(
