@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test lib/from-link/validateArticleQuality.test.ts",
+    "test": "tsx --test lib/from-link/validateArticleQuality.test.ts lib/home/pickTrendingIssues.test.ts lib/articles/articleTaxonomy.test.ts",
     "preview:iphone14pro": "playwright open http://localhost:3000 --device 'iPhone 14 Pro'"
   },
   "dependencies": {

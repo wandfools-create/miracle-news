@@ -65,6 +65,8 @@ export async function applyFromLinkEnrichmentToArticle(input: {
     language_original: f.languageOriginal,
     language_translated: f.languageTranslated,
     category: f.category,
+    topic_key: f.topicKey,
+    topic_label: f.topicLabel,
     thumbnail_url: thumbnailUrl,
     published_at: f.publishedAt,
     ai_review_status: "pending",

@@ -16,6 +16,7 @@ import {
   normalizeSupplementalText,
 } from "./supplementalText";
 import { KOREAN_EDITOR_JSON_SYSTEM_PROMPT } from "@/lib/articles/ai/editorPrompt";
+import { parseEditorTaxonomy } from "@/lib/articles/articleTaxonomy";
 import { chatCompletionJson } from "@/lib/openai/chatCompletionJson";
 import { checkOpenAiEnv } from "@/lib/openai/env";
 
@@ -36,6 +37,9 @@ export type SummarizeForArticleResult =
       bodyOriginal: string | null;
       summaryOriginal: string | null;
       contentLanguage: ContentLanguage;
+      category: string;
+      topicKey: string | null;
+      topicLabel: string | null;
     }
   | {
       ok: false;
@@ -163,6 +167,9 @@ async function summarizeWithOpenAi(input: {
     article_body_ko: string;
     article_body_original: string;
     contentLanguage: ContentLanguage;
+    category: string;
+    topicKey: string | null;
+    topicLabel: string | null;
   };
 
   const parseCompletion = (
@@ -207,6 +214,8 @@ async function summarizeWithOpenAi(input: {
         ? langRaw
         : detectContentLanguage(materialForLang);
 
+    const taxonomy = parseEditorTaxonomy(data);
+
     return {
       usable: o.usable === true,
       reason_ko:
@@ -218,6 +227,9 @@ async function summarizeWithOpenAi(input: {
       article_body_ko,
       article_body_original,
       contentLanguage,
+      category: taxonomy.category,
+      topicKey: taxonomy.topicKey,
+      topicLabel: taxonomy.topicLabel,
     };
   };
 
@@ -254,6 +266,9 @@ async function summarizeWithOpenAi(input: {
         ? draft.article_body_original?.slice(0, 500) || null
         : null,
     contentLanguage: draft.contentLanguage,
+    category: draft.category,
+    topicKey: draft.topicKey,
+    topicLabel: draft.topicLabel,
   });
 
   const fail = (

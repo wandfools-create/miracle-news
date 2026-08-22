@@ -1,8 +1,7 @@
 import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
+import { categoryOrder } from "@/lib/koreanArticleDisplay";
 import { getArticleRegion, type ArticleRegion } from "./articleRegion";
 import type { HomeArticleCard, TrendingIssue } from "./types";
-
-const FOCUS_CATEGORIES = ["politics", "society", "economy"] as const;
 
 function publishedTimestamp(article: HomeArticleCard): number {
   const raw = article.published_at ?? article.created_at;
@@ -43,30 +42,28 @@ type IssueBucket = {
   items: HomeArticleCard[];
 };
 
+function categorySortIndex(category: string): number {
+  const index = categoryOrder.indexOf(
+    category as (typeof categoryOrder)[number]
+  );
+  return index === -1 ? categoryOrder.length : index;
+}
+
 function pickForRegion(
   articles: HomeArticleCard[],
   region: ArticleRegion,
   max: number
 ): TrendingIssue[] {
-  const pool = articles.filter(
-    (a) =>
-      getArticleRegion(a) === region &&
-      FOCUS_CATEGORIES.includes(
-        (a.category ?? "other") as (typeof FOCUS_CATEGORIES)[number]
-      )
-  );
+  const pool = articles.filter((a) => getArticleRegion(a) === region);
 
   const topicBuckets = new Map<string, IssueBucket>();
   const byCategory = new Map<string, HomeArticleCard[]>();
 
   for (const article of pool) {
     const category = article.category ?? "other";
-    if (!FOCUS_CATEGORIES.includes(category as (typeof FOCUS_CATEGORIES)[number])) {
-      continue;
-    }
-
     const topicKey = article.topic_key?.trim();
     const topicLabel = article.topic_label?.trim();
+
     if (topicKey && topicLabel) {
       const id = `topic:${topicKey}`;
       const existing = topicBuckets.get(id) ?? {
@@ -115,11 +112,8 @@ function pickForRegion(
     newestTs: number;
   }> = [];
 
-  for (const category of FOCUS_CATEGORIES) {
-    if (usedCategories.has(category)) continue;
-
-    const items = byCategory.get(category);
-    if (!items?.length) continue;
+  for (const [category, items] of byCategory) {
+    if (usedCategories.has(category) || !items.length) continue;
 
     const sorted = [...items].sort(
       (a, b) => publishedTimestamp(b) - publishedTimestamp(a)
@@ -134,7 +128,10 @@ function pickForRegion(
     });
   }
 
-  categoryCandidates.sort((a, b) => b.newestTs - a.newestTs);
+  categoryCandidates.sort((a, b) => {
+    if (b.newestTs !== a.newestTs) return b.newestTs - a.newestTs;
+    return categorySortIndex(a.category) - categorySortIndex(b.category);
+  });
 
   for (const candidate of categoryCandidates) {
     if (issues.length >= max) break;

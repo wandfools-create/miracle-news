@@ -58,6 +58,9 @@ export type ArticleDraftPayload = {
   shortSourceDraft?: boolean;
   /** Body passed hard gates but is under recommended target (500–899 chars). */
   shortArticleReview?: boolean;
+  category?: string;
+  topicKey?: string | null;
+  topicLabel?: string | null;
 };
 
 export type LinkTypeLabelKey = LinkType;

@@ -10,6 +10,7 @@ import {
   validateFromLinkDraftQuality,
 } from "@/lib/from-link/validateArticleQuality";
 import { buildFromLinkAiReviewNotes } from "@/lib/from-link/fromLinkAiNotes";
+import { normalizeArticleCategory } from "@/lib/articles/articleTaxonomy";
 import type {
   ArticleDraftPayload,
   DraftCandidate,
@@ -34,6 +35,8 @@ export type FromLinkCommitFields = {
   languageTranslated: "en" | "ko";
   aiReviewNotes: string;
   category: string;
+  topicKey: string | null;
+  topicLabel: string | null;
 };
 
 export type PrepareFromLinkCommitResult =
@@ -170,7 +173,9 @@ export async function prepareFromLinkCommitFields(input: {
       languageOriginal: isEnglish ? "en" : "ko",
       languageTranslated: isEnglish ? "ko" : "en",
       aiReviewNotes,
-      category: "other",
+      category: normalizeArticleCategory(draft.category),
+      topicKey: draft.topicKey ?? null,
+      topicLabel: draft.topicLabel ?? null,
     },
   };
 }

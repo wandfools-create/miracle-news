@@ -48,7 +48,8 @@ async function publishSingleArticle(articleId: string) {
     throw new Error(fetchError?.message || "기사를 찾을 수 없습니다.");
   }
 
-  const publishedAt = new Date().toISOString();
+  const existingPublishedAt = article.published_at?.trim() || null;
+  const publishedAt = existingPublishedAt ?? new Date().toISOString();
 
   const { error: updateError } = await supabase
     .from("articles")
@@ -56,7 +57,7 @@ async function publishSingleArticle(articleId: string) {
       status: "published",
       review_status: "approved",
       is_published: true,
-      published_at: publishedAt,
+      ...(existingPublishedAt ? {} : { published_at: publishedAt }),
     })
     .eq("id", articleId);
 

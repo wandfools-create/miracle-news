@@ -231,6 +231,9 @@ export async function analyzeFromLinkCore(
         bodyOriginal: summary.bodyOriginal,
         summaryOriginal: summary.summaryOriginal,
         contentLanguage: summary.contentLanguage,
+        category: summary.category,
+        topicKey: summary.topicKey,
+        topicLabel: summary.topicLabel,
         shortSourceDraft: true,
       };
 
@@ -268,6 +271,9 @@ export async function analyzeFromLinkCore(
     bodyOriginal: summary.bodyOriginal,
     summaryOriginal: summary.summaryOriginal,
     contentLanguage: summary.contentLanguage,
+    category: summary.category,
+    topicKey: summary.topicKey,
+    topicLabel: summary.topicLabel,
     shortArticleReview: isShortArticleRecommendedReview(summary.bodyKo),
   };
 
