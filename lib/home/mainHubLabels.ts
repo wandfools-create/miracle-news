@@ -12,7 +12,7 @@ export const mainHubLabels: HomeNewsLabels = {
   latestDesc:
     "미국·한국 기사를 균형 있게 배치합니다 (발행일 최신순, 약 50:50).",
   sidebarTitle: "지금 주목",
-  sidebarDesc: "다른 섹션에 올라온 최근 헤드라인입니다.",
+  sidebarDesc: "공개 기사 발행일 최신순입니다.",
   navLatest: "주요 기사",
   navHome: "한국어",
   alternateLang: "English",

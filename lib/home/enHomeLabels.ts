@@ -27,7 +27,7 @@ export const enHomeLabels: HomeNewsLabels = {
   sourceLeadsTitle: "Lead stories by source",
   sidebarEyebrow: "More",
   sidebarTitle: "More headlines",
-  sidebarDesc: "Other recent stories from the newsroom.",
+  sidebarDesc: "Latest published stories by date.",
   navHome: "Hannoon home",
   empty: "There are no published English articles yet.",
   errorPrefix: "Error loading data:",

@@ -90,8 +90,7 @@ function pickForRegion(
   const topicSorted = [...topicBuckets.values()].sort((a, b) => {
     const newestA = Math.max(...a.items.map(publishedTimestamp));
     const newestB = Math.max(...b.items.map(publishedTimestamp));
-    if (newestB !== newestA) return newestB - newestA;
-    return b.items.length - a.items.length;
+    return newestB - newestA;
   });
 
   for (const bucket of topicSorted) {
@@ -100,6 +99,7 @@ function pickForRegion(
       (a, b) => publishedTimestamp(b) - publishedTimestamp(a)
     );
     const lead = sorted[0];
+    if (!lead) continue;
     issues.push({
       id: bucket.id,
       title: bucket.title,
@@ -109,8 +109,13 @@ function pickForRegion(
     usedCategories.add(bucket.category);
   }
 
+  const categoryCandidates: Array<{
+    category: string;
+    lead: HomeArticleCard;
+    newestTs: number;
+  }> = [];
+
   for (const category of FOCUS_CATEGORIES) {
-    if (issues.length >= max) break;
     if (usedCategories.has(category)) continue;
 
     const items = byCategory.get(category);
@@ -120,14 +125,26 @@ function pickForRegion(
       (a, b) => publishedTimestamp(b) - publishedTimestamp(a)
     );
     const lead = sorted[0];
+    if (!lead) continue;
+
+    categoryCandidates.push({
+      category,
+      lead,
+      newestTs: publishedTimestamp(lead),
+    });
+  }
+
+  categoryCandidates.sort((a, b) => b.newestTs - a.newestTs);
+
+  for (const candidate of categoryCandidates) {
+    if (issues.length >= max) break;
 
     issues.push({
-      id: `cat:${category}:${region}`,
-      title: issueTitleFromArticle(lead),
-      description: issueDescriptionFromArticle(lead),
+      id: `cat:${candidate.category}:${region}`,
+      title: issueTitleFromArticle(candidate.lead),
+      description: issueDescriptionFromArticle(candidate.lead),
       region,
     });
-    usedCategories.add(category);
   }
 
   return issues;

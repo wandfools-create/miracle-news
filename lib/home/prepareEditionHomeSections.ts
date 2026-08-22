@@ -9,6 +9,7 @@ import {
   sortHomeArticlesForDisplay,
 } from "./featuredSelection";
 import { pickTrendingIssues } from "./pickTrendingIssues";
+import { pickSidebarLatestArticles } from "./pickSidebarLatest";
 import type { HomeArticleCard, HomePageSections } from "./types";
 
 const TOP_STORIES_PER_COLUMN = 6;
@@ -71,17 +72,7 @@ export function prepareEditionHomeSections(
     pageLocale
   );
 
-  const excludedIds = new Set(
-    sourceLeadCards.map((item) => item.article.article_id ?? item.article.id)
-  );
-  if (featuredKey) excludedIds.add(featuredKey);
-  if (featured?.id) excludedIds.add(featured.id);
-
-  const sidebarBase = sorted.filter(
-    (a) => !excludedIds.has(a.article_id ?? a.id) && !excludedIds.has(a.id)
-  );
-  const sidebar =
-    sidebarBase.length > 0 ? sidebarBase.slice(0, 5) : sorted.slice(0, 5);
+  const sidebar = pickSidebarLatestArticles(sorted, 5);
 
   const groupedByCategory: Record<string, HomeArticleCard[]> = {};
   for (const article of sorted) {

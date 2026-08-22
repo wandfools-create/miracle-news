@@ -27,7 +27,7 @@ export const koHomeLabels: HomeNewsLabels = {
   sourceLeadsTitle: "언론사별 대표 기사",
   sidebarEyebrow: "More",
   sidebarTitle: "지금 주목",
-  sidebarDesc: "다른 섹션에 올라온 최근 헤드라인입니다.",
+  sidebarDesc: "공개 기사 발행일 최신순입니다.",
   navHome: "한눈 홈",
   empty: "현재 공개된 한국어 기사가 없습니다.",
   errorPrefix: "데이터를 불러오는 중 오류가 발생했습니다:",
