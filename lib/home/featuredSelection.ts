@@ -1,33 +1,43 @@
 import { getSourceFeaturedSortBias } from "@/lib/article/sourcePolicy";
 import { normalizeSource } from "@/lib/article/normalizeSource";
+import {
+  compareArticlesByFreshness,
+  getSourceFreshnessTimestamp,
+  getSitePublishedTimestamp,
+  sortArticlesByFreshness,
+} from "./articleFreshness";
 import type { HomeArticleCard } from "./types";
 
-/** Featured hero only considers articles published within this many days. */
+/** Featured hero only considers articles with source freshness within this many days. */
 export const FEATURED_RECENT_DAYS = 7;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+/** @deprecated Prefer getSourceFreshnessTimestamp — kept for call sites expecting site/legacy clock. */
 export function getPublishedTimestamp(article: HomeArticleCard): number {
-  if (!article.published_at) return 0;
-  const time = new Date(article.published_at).getTime();
-  return Number.isNaN(time) ? 0 : time;
+  return getSourceFreshnessTimestamp(article);
 }
 
 export function isFeaturedCandidate(
   article: HomeArticleCard,
   nowMs: number = Date.now()
 ): boolean {
-  const publishedMs = getPublishedTimestamp(article);
-  if (publishedMs <= 0) return false;
+  const freshnessMs = getSourceFreshnessTimestamp(article);
+  if (freshnessMs <= 0) return false;
   const cutoff = nowMs - FEATURED_RECENT_DAYS * MS_PER_DAY;
-  return publishedMs >= cutoff;
+  return freshnessMs >= cutoff;
 }
 
-/** Newest published_at first (7-day featured / top list pool). */
-function effectiveFeaturedTimestamp(article: HomeArticleCard): number {
-  const published = getPublishedTimestamp(article);
-  if (published <= 0) return 0;
-  return published - getSourceFeaturedSortBias(normalizeSource(article.source));
+function effectiveFeaturedTimestamp(
+  article: HomeArticleCard,
+  nowMs: number
+): number {
+  const freshness = getSourceFreshnessTimestamp(article);
+  if (freshness <= 0) return 0;
+  // Reuse compareArticlesByFreshness ordering via a synthetic score:
+  // editorial boost is applied in compareFeaturedCandidates directly.
+  void nowMs;
+  return freshness - getSourceFeaturedSortBias(normalizeSource(article.source));
 }
 
 function isManualTopStory(article: HomeArticleCard): boolean {
@@ -42,18 +52,24 @@ function compareManualTopStories(
   const orderB = b.top_story_order ?? 0;
   if (orderA !== orderB) return orderA - orderB;
 
-  const publishedDiff = getPublishedTimestamp(b) - getPublishedTimestamp(a);
-  if (publishedDiff !== 0) return publishedDiff;
+  const freshnessDiff =
+    getSourceFreshnessTimestamp(b) - getSourceFreshnessTimestamp(a);
+  if (freshnessDiff !== 0) return freshnessDiff;
 
-  return getFallbackSortTimestamp(b) - getFallbackSortTimestamp(a);
+  return getSitePublishedTimestamp(b) - getSitePublishedTimestamp(a);
 }
 
 export function compareFeaturedCandidates(
   a: HomeArticleCard,
-  b: HomeArticleCard
+  b: HomeArticleCard,
+  nowMs: number = Date.now()
 ): number {
-  // TODO: when articles.view_count exists, sort by view_count desc, then published_at.
-  return effectiveFeaturedTimestamp(b) - effectiveFeaturedTimestamp(a);
+  const freshnessCmp = compareArticlesByFreshness(a, b, nowMs);
+  if (freshnessCmp !== 0) return freshnessCmp;
+
+  return (
+    effectiveFeaturedTimestamp(b, nowMs) - effectiveFeaturedTimestamp(a, nowMs)
+  );
 }
 
 export function pickFeaturedArticle(
@@ -67,40 +83,17 @@ export function pickFeaturedArticle(
 
   const candidates = articles.filter((a) => isFeaturedCandidate(a, nowMs));
   if (candidates.length === 0) return null;
-  return [...candidates].sort(compareFeaturedCandidates)[0] ?? null;
-}
-
-function getFallbackSortTimestamp(article: HomeArticleCard): number {
-  const published = getPublishedTimestamp(article);
-  if (published > 0) return published;
-  const created = new Date(article.created_at).getTime();
-  return Number.isNaN(created) ? 0 : created;
+  return [...candidates].sort((a, b) =>
+    compareFeaturedCandidates(a, b, nowMs)
+  )[0] ?? null;
 }
 
 /**
- * Site-wide home ordering: published_at (newest first), then articles without
- * published_at at the bottom (by localization created_at).
+ * Site-wide home ordering: editorial boost (rolling 24h) then source freshness.
  */
 export function sortHomeArticlesForDisplay(
-  articles: HomeArticleCard[]
+  articles: HomeArticleCard[],
+  nowMs: number = Date.now()
 ): HomeArticleCard[] {
-  const withPublished: HomeArticleCard[] = [];
-  const withoutPublished: HomeArticleCard[] = [];
-
-  for (const article of articles) {
-    if (getPublishedTimestamp(article) > 0) {
-      withPublished.push(article);
-    } else {
-      withoutPublished.push(article);
-    }
-  }
-
-  withPublished.sort(
-    (a, b) => getPublishedTimestamp(b) - getPublishedTimestamp(a)
-  );
-  withoutPublished.sort(
-    (a, b) => getFallbackSortTimestamp(b) - getFallbackSortTimestamp(a)
-  );
-
-  return [...withPublished, ...withoutPublished];
+  return sortArticlesByFreshness(articles, nowMs);
 }

@@ -30,7 +30,8 @@ export type FromLinkCommitFields = {
   bodyOriginal: string | null;
   bodyKo: string;
   thumbnailUrl: string | null;
-  publishedAt: string | null;
+  /** Original source/RSS publish time (not Hannoon site publish time). */
+  sourcePublishedAt: string | null;
   languageOriginal: "en" | "ko";
   languageTranslated: "en" | "ko";
   aiReviewNotes: string;
@@ -169,7 +170,7 @@ export async function prepareFromLinkCommitFields(input: {
       bodyOriginal: bodyEn || null,
       bodyKo,
       thumbnailUrl,
-      publishedAt: input.extracted.publishedAt,
+      sourcePublishedAt: input.extracted.publishedAt,
       languageOriginal: isEnglish ? "en" : "ko",
       languageTranslated: isEnglish ? "ko" : "en",
       aiReviewNotes,

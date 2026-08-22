@@ -17,7 +17,12 @@ export type HomeArticleCard = {
   /** articles.source_country — US, KR, etc. */
   source_country?: string | null;
   category: string | null;
+  /** 한눈 사이트 공개 시각 */
   published_at: string | null;
+  /** 원문/RSS 발행 시각 — 홈 신선도 정렬 우선 */
+  source_published_at?: string | null;
+  /** normal | issue | special | breaking — 24h 이내만 자동 부스트 */
+  editorial_priority?: string | null;
   thumbnail_url: string | null;
   title_original: string;
   /** articles.original_url — used on main hub for YouTube/SNS grouping. */

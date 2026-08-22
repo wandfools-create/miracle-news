@@ -21,6 +21,8 @@ type ArticleMeta = ArticlesContentFields & {
   source_country: string | null;
   category: string | null;
   published_at: string | null;
+  source_published_at?: string | null;
+  editorial_priority?: string | null;
   thumbnail_url: string | null;
   original_url: string | null;
   topic_key: string | null;
@@ -113,6 +115,8 @@ export async function fetchEnglishPublishedArticles() {
       source_country: meta.source_country,
       category: meta.category,
       published_at: meta.published_at,
+      source_published_at: meta.source_published_at ?? null,
+      editorial_priority: meta.editorial_priority ?? "normal",
       thumbnail_url: meta.thumbnail_url,
       title_original: meta.title_original,
       original_url: meta.original_url,
@@ -124,14 +128,20 @@ export async function fetchEnglishPublishedArticles() {
       summary_translated: meta.summary_translated,
       topic_key: meta.topic_key,
       topic_label: meta.topic_label,
-      listDateKo: formatServerListDate(meta.published_at ?? row.created_at, "ko"),
-      listDateEn: formatServerListDate(meta.published_at ?? row.created_at, "en"),
+      listDateKo: formatServerListDate(
+        meta.source_published_at ?? meta.published_at ?? row.created_at,
+        "ko"
+      ),
+      listDateEn: formatServerListDate(
+        meta.source_published_at ?? meta.published_at ?? row.created_at,
+        "en"
+      ),
       publishedFullKo: formatServerPublishedFull(
-        meta.published_at ?? row.created_at,
+        meta.source_published_at ?? meta.published_at ?? row.created_at,
         "ko"
       ),
       publishedFullEn: formatServerPublishedFull(
-        meta.published_at ?? row.created_at,
+        meta.source_published_at ?? meta.published_at ?? row.created_at,
         "en"
       ),
       searchHaystack: buildArticleSearchHaystack(

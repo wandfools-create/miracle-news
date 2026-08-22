@@ -163,7 +163,7 @@ export async function promoteCollectionCandidate(input: {
   }
 
   const f = pipeline.fields;
-  const publishedAt = f.publishedAt ?? row.rss_published_at ?? null;
+  const sourcePublishedAt = f.sourcePublishedAt ?? row.rss_published_at ?? null;
   const customUniqueId =
     row.custom_unique_id?.trim() ||
     (row.rss_guid ? `rss:${row.source}:${row.rss_guid}` : `rss:${row.source}:${row.original_url}`);
@@ -182,12 +182,14 @@ export async function promoteCollectionCandidate(input: {
     languageTranslated: f.languageTranslated,
     sourceCountry: f.sourceCountry,
     sourceSection: f.sourceSection,
-    publishedAt,
+    sourcePublishedAt,
     thumbnailUrl: f.thumbnailUrl,
     customUniqueId,
     aiReviewNotes: f.aiReviewNotes,
     autoGenerateAiThumbnail: false,
     category: f.category,
+    topicKey: f.topicKey,
+    topicLabel: f.topicLabel,
   });
 
   if (!inserted.ok) {

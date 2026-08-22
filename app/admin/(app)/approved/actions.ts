@@ -49,7 +49,8 @@ async function publishSingleArticle(articleId: string) {
   }
 
   const existingPublishedAt = article.published_at?.trim() || null;
-  const publishedAt = existingPublishedAt ?? new Date().toISOString();
+  // published_at = Hannoon site publish time (first publish only).
+  const sitePublishedAt = existingPublishedAt ?? new Date().toISOString();
 
   const { error: updateError } = await supabase
     .from("articles")
@@ -57,7 +58,7 @@ async function publishSingleArticle(articleId: string) {
       status: "published",
       review_status: "approved",
       is_published: true,
-      ...(existingPublishedAt ? {} : { published_at: publishedAt }),
+      ...(existingPublishedAt ? {} : { published_at: sitePublishedAt }),
     })
     .eq("id", articleId);
 

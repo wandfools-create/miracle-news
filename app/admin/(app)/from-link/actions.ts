@@ -134,7 +134,7 @@ async function commitFromLinkDraft(input: {
     summaryKo: f.summaryKo,
     bodyOriginal: f.bodyOriginal,
     bodyKo: f.bodyKo,
-    publishedAt: f.publishedAt,
+    sourcePublishedAt: f.sourcePublishedAt,
     aiReviewNotes: f.aiReviewNotes,
     category: f.category,
     topicKey: f.topicKey,

@@ -48,7 +48,12 @@ export type InsertReviewQueueArticleInput = {
   sourceCountry?: string | null;
   languageOriginal?: string;
   languageTranslated?: string;
-  /** Source article publish time (ISO), not site publish time. */
+  /**
+   * Original source/RSS publish time (ISO).
+   * Stored as source_published_at — not the Hannoon site publish time.
+   */
+  sourcePublishedAt?: string | null;
+  /** @deprecated Prefer sourcePublishedAt. Treated as source time on insert. */
   publishedAt?: string | null;
   aiReviewNotes?: string | null;
   skipOriginalUrlDuplicateCheck?: boolean;
@@ -268,7 +273,12 @@ export async function insertReviewQueueArticle(
     revision_status: "none",
     status: "ready_for_human_review",
     is_published: false,
-    published_at: input.publishedAt?.trim() || null,
+    // Site publish time is set on first admin publish only.
+    published_at: null,
+    source_published_at:
+      input.sourcePublishedAt?.trim() ||
+      input.publishedAt?.trim() ||
+      null,
     collected_at: new Date().toISOString(),
   };
 

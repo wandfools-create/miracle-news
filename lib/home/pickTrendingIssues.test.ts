@@ -15,6 +15,7 @@ function card(
     source: "AP",
     category: "other",
     published_at: "2026-01-01T00:00:00.000Z",
+    source_published_at: "2026-01-01T00:00:00.000Z",
     thumbnail_url: null,
     title_original: "Article title",
     source_country: "US",
@@ -32,6 +33,7 @@ describe("pickTrendingIssues", () => {
         topic_key: "us-election",
         topic_label: "미국 대선",
         published_at: "2026-08-20T00:00:00.000Z",
+        source_published_at: "2026-08-20T00:00:00.000Z",
       }),
       card({
         id: "a2",
@@ -40,6 +42,7 @@ describe("pickTrendingIssues", () => {
         topic_key: "us-election",
         topic_label: "미국 대선",
         published_at: "2026-08-21T00:00:00.000Z",
+        source_published_at: "2026-08-21T00:00:00.000Z",
       }),
       card({
         id: "a3",
@@ -47,6 +50,7 @@ describe("pickTrendingIssues", () => {
         category: "economy",
         title: "최신 경제 기사",
         published_at: "2026-08-22T00:00:00.000Z",
+        source_published_at: "2026-08-22T00:00:00.000Z",
       }),
     ];
 
@@ -66,6 +70,7 @@ describe("pickTrendingIssues", () => {
         category: "other",
         title: "오래된 기사",
         published_at: "2026-01-01T00:00:00.000Z",
+        source_published_at: "2026-01-01T00:00:00.000Z",
       }),
       card({
         id: "new",
@@ -75,6 +80,7 @@ describe("pickTrendingIssues", () => {
         category: "other",
         title: "최신 기사",
         published_at: "2026-08-22T00:00:00.000Z",
+        source_published_at: "2026-08-22T00:00:00.000Z",
       }),
     ];
 
@@ -94,6 +100,7 @@ describe("pickTrendingIssues", () => {
         category,
         title: `${category} ${index}`,
         published_at: `2026-08-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
+        source_published_at: `2026-08-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
       })
     );
 

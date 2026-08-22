@@ -22,6 +22,8 @@ type EditionMergeEntry = {
     source_country: string | null;
     category: string | null;
     published_at: string | null;
+    source_published_at: string | null;
+    editorial_priority: string | null;
     listDateKo?: string;
     listDateEn?: string;
     publishedFullKo?: string;
@@ -66,6 +68,8 @@ function buildCard(
     source_country: primary.source_country,
     category: primary.category,
     published_at: primary.published_at,
+    source_published_at: primary.source_published_at,
+    editorial_priority: primary.editorial_priority,
     listDateKo: primary.listDateKo,
     listDateEn: primary.listDateEn,
     publishedFullKo: primary.publishedFullKo,
@@ -122,6 +126,8 @@ export async function fetchEditionHomeArticles(
         source_country: row.source_country ?? null,
         category: row.category,
         published_at: row.published_at,
+        source_published_at: row.source_published_at ?? null,
+        editorial_priority: row.editorial_priority ?? "normal",
         listDateKo: row.listDateKo,
         listDateEn: row.listDateEn,
         publishedFullKo: row.publishedFullKo,
@@ -165,6 +171,8 @@ export async function fetchEditionHomeArticles(
         source_country: row.source_country ?? null,
         category: row.category,
         published_at: row.published_at,
+        source_published_at: row.source_published_at ?? null,
+        editorial_priority: row.editorial_priority ?? "normal",
         listDateKo: row.listDateKo,
         listDateEn: row.listDateEn,
         publishedFullKo: row.publishedFullKo,

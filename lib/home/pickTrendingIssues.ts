@@ -1,13 +1,8 @@
 import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
 import { categoryOrder } from "@/lib/koreanArticleDisplay";
+import { compareArticlesByFreshness } from "./articleFreshness";
 import { getArticleRegion, type ArticleRegion } from "./articleRegion";
 import type { HomeArticleCard, TrendingIssue } from "./types";
-
-function publishedTimestamp(article: HomeArticleCard): number {
-  const raw = article.published_at ?? article.created_at;
-  const t = new Date(raw).getTime();
-  return Number.isNaN(t) ? 0 : t;
-}
 
 function truncateText(text: string, max: number): string {
   const oneLine = text.replace(/\s+/g, " ").trim();
@@ -49,10 +44,19 @@ function categorySortIndex(category: string): number {
   return index === -1 ? categoryOrder.length : index;
 }
 
+function leadByFreshness(
+  items: HomeArticleCard[],
+  nowMs: number
+): HomeArticleCard | null {
+  if (!items.length) return null;
+  return [...items].sort((a, b) => compareArticlesByFreshness(a, b, nowMs))[0] ?? null;
+}
+
 function pickForRegion(
   articles: HomeArticleCard[],
   region: ArticleRegion,
-  max: number
+  max: number,
+  nowMs: number
 ): TrendingIssue[] {
   const pool = articles.filter((a) => getArticleRegion(a) === region);
 
@@ -85,17 +89,15 @@ function pickForRegion(
   const usedCategories = new Set<string>();
 
   const topicSorted = [...topicBuckets.values()].sort((a, b) => {
-    const newestA = Math.max(...a.items.map(publishedTimestamp));
-    const newestB = Math.max(...b.items.map(publishedTimestamp));
-    return newestB - newestA;
+    const leadA = leadByFreshness(a.items, nowMs);
+    const leadB = leadByFreshness(b.items, nowMs);
+    if (!leadA || !leadB) return 0;
+    return compareArticlesByFreshness(leadA, leadB, nowMs);
   });
 
   for (const bucket of topicSorted) {
     if (issues.length >= max) break;
-    const sorted = [...bucket.items].sort(
-      (a, b) => publishedTimestamp(b) - publishedTimestamp(a)
-    );
-    const lead = sorted[0];
+    const lead = leadByFreshness(bucket.items, nowMs);
     if (!lead) continue;
     issues.push({
       id: bucket.id,
@@ -109,27 +111,18 @@ function pickForRegion(
   const categoryCandidates: Array<{
     category: string;
     lead: HomeArticleCard;
-    newestTs: number;
   }> = [];
 
   for (const [category, items] of byCategory) {
     if (usedCategories.has(category) || !items.length) continue;
-
-    const sorted = [...items].sort(
-      (a, b) => publishedTimestamp(b) - publishedTimestamp(a)
-    );
-    const lead = sorted[0];
+    const lead = leadByFreshness(items, nowMs);
     if (!lead) continue;
-
-    categoryCandidates.push({
-      category,
-      lead,
-      newestTs: publishedTimestamp(lead),
-    });
+    categoryCandidates.push({ category, lead });
   }
 
   categoryCandidates.sort((a, b) => {
-    if (b.newestTs !== a.newestTs) return b.newestTs - a.newestTs;
+    const cmp = compareArticlesByFreshness(a.lead, b.lead, nowMs);
+    if (cmp !== 0) return cmp;
     return categorySortIndex(a.category) - categorySortIndex(b.category);
   });
 
@@ -150,10 +143,11 @@ function pickForRegion(
 export function pickTrendingIssues(
   articles: HomeArticleCard[],
   _pageLocale: ArticleLocale,
-  maxPerRegion = 3
+  maxPerRegion = 3,
+  nowMs: number = Date.now()
 ): { us: TrendingIssue[]; kr: TrendingIssue[] } {
   return {
-    us: pickForRegion(articles, "us", maxPerRegion),
-    kr: pickForRegion(articles, "kr", maxPerRegion),
+    us: pickForRegion(articles, "us", maxPerRegion, nowMs),
+    kr: pickForRegion(articles, "kr", maxPerRegion, nowMs),
   };
 }

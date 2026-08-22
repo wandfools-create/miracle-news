@@ -68,7 +68,8 @@ export async function applyFromLinkEnrichmentToArticle(input: {
     topic_key: f.topicKey,
     topic_label: f.topicLabel,
     thumbnail_url: thumbnailUrl,
-    published_at: f.publishedAt,
+    // Keep site published_at untouched here; store source clock separately.
+    source_published_at: f.sourcePublishedAt,
     ai_review_status: "pending",
     ai_review_notes: f.aiReviewNotes,
     review_status: "pending",

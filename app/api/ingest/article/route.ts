@@ -182,7 +182,8 @@ export async function POST(request: NextRequest) {
     revision_status: "none",
     status: "ready_for_human_review",
     is_published: false,
-    published_at: body.published_at || null,
+    published_at: null,
+    source_published_at: body.source_published_at || body.published_at || null,
     collected_at: new Date().toISOString(),
   };
 

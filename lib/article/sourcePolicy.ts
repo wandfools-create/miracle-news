@@ -3,6 +3,7 @@ import {
   EXCLUDED_RECOMMENDATION_SOURCE_KEYS,
   PRIMARY_FOREIGN_SOURCE_KEYS,
 } from "@/lib/article/sourceConstants";
+import { getSourceFreshnessTimestamp } from "@/lib/home/articleFreshness";
 import type { HomeArticleCard } from "@/lib/home/types";
 
 export {
@@ -28,12 +29,6 @@ const WORLD_RELIGION_SOURCE_RANK: Record<string, number> = {
 
 const CATEGORY_SOURCE_PRIORITY = new Set(["world", "religion"]);
 
-function getPublishedTimestamp(article: HomeArticleCard): number {
-  if (!article.published_at) return 0;
-  const time = new Date(article.published_at).getTime();
-  return Number.isNaN(time) ? 0 : time;
-}
-
 export function isExcludedFromRecommendations(sourceKey: string): boolean {
   return EXCLUDED_RECOMMENDATION_SOURCE_KEYS.has(sourceKey);
 }
@@ -58,7 +53,7 @@ export function getCategorySourceRank(
 
 /**
  * Within 국제/종교 sections, prefer CSM and other primary foreign outlets,
- * then recency. Other categories keep input order (already date-sorted).
+ * then source freshness.
  */
 export function sortArticlesForCategorySection(
   articles: HomeArticleCard[],
@@ -75,6 +70,6 @@ export function sortArticlesForCategorySection(
     const rankB = getCategorySourceRank(keyB, category);
     if (rankA !== rankB) return rankA - rankB;
 
-    return getPublishedTimestamp(b) - getPublishedTimestamp(a);
+    return getSourceFreshnessTimestamp(b) - getSourceFreshnessTimestamp(a);
   });
 }
