@@ -3,6 +3,12 @@ import type { HomeArticleCard } from "./types";
 /** Rolling window for breaking/special/issue boost (not calendar day). */
 export const EDITORIAL_PRIORITY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+/** Primary window for sidebar / trending surfaces. */
+export const HOME_SURFACE_PRIMARY_MS = 72 * 60 * 60 * 1000;
+
+/** Fallback window when primary pool is thin — never go beyond this for those surfaces. */
+export const HOME_SURFACE_FALLBACK_MS = 7 * 24 * 60 * 60 * 1000;
+
 export const EDITORIAL_PRIORITIES = [
   "normal",
   "issue",
@@ -92,4 +98,49 @@ export function sortArticlesByFreshness(
   nowMs: number = Date.now()
 ): HomeArticleCard[] {
   return [...articles].sort((a, b) => compareArticlesByFreshness(a, b, nowMs));
+}
+
+function isWithinWindow(
+  article: HomeArticleCard,
+  nowMs: number,
+  windowMs: number
+): boolean {
+  const freshness = getSourceFreshnessTimestamp(article);
+  if (freshness <= 0) return false;
+  return nowMs - freshness <= windowMs;
+}
+
+/**
+ * Prefer articles within the primary window; if fewer than `minCount`,
+ * expand to the fallback window. Never includes older than fallback
+ * unless `allowManualTopStory` and the article is a manual top story.
+ */
+export function filterArticlesForHomeSurface(
+  articles: HomeArticleCard[],
+  options?: {
+    nowMs?: number;
+    primaryMs?: number;
+    fallbackMs?: number;
+    minCount?: number;
+    allowManualTopStory?: boolean;
+  }
+): HomeArticleCard[] {
+  const nowMs = options?.nowMs ?? Date.now();
+  const primaryMs = options?.primaryMs ?? HOME_SURFACE_PRIMARY_MS;
+  const fallbackMs = options?.fallbackMs ?? HOME_SURFACE_FALLBACK_MS;
+  const minCount = options?.minCount ?? 1;
+  const allowManualTopStory = options?.allowManualTopStory === true;
+
+  const primary = articles.filter((a) => isWithinWindow(a, nowMs, primaryMs));
+  const pool =
+    primary.length >= minCount
+      ? primary
+      : articles.filter((a) => isWithinWindow(a, nowMs, fallbackMs));
+
+  if (!allowManualTopStory) return pool;
+
+  const extras = articles.filter(
+    (a) => a.is_top_story === true && !pool.some((p) => p.id === a.id)
+  );
+  return extras.length ? [...pool, ...extras] : pool;
 }

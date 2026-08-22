@@ -4,6 +4,12 @@ import { describe, it } from "node:test";
 import { pickTrendingIssues } from "./pickTrendingIssues";
 import type { HomeArticleCard } from "./types";
 
+const NOW = Date.parse("2026-08-22T18:00:00.000Z");
+
+function hoursAgo(hours: number): string {
+  return new Date(NOW - hours * 60 * 60 * 1000).toISOString();
+}
+
 function card(
   overrides: Partial<HomeArticleCard> & Pick<HomeArticleCard, "id">
 ): HomeArticleCard {
@@ -11,11 +17,11 @@ function card(
     title: "기사 제목",
     summary: "요약",
     slug: overrides.id,
-    created_at: "2026-01-01T00:00:00.000Z",
+    created_at: hoursAgo(48),
     source: "AP",
     category: "other",
-    published_at: "2026-01-01T00:00:00.000Z",
-    source_published_at: "2026-01-01T00:00:00.000Z",
+    published_at: hoursAgo(48),
+    source_published_at: hoursAgo(48),
     thumbnail_url: null,
     title_original: "Article title",
     source_country: "US",
@@ -32,8 +38,7 @@ describe("pickTrendingIssues", () => {
         category: "politics",
         topic_key: "us-election",
         topic_label: "미국 대선",
-        published_at: "2026-08-20T00:00:00.000Z",
-        source_published_at: "2026-08-20T00:00:00.000Z",
+        source_published_at: hoursAgo(40),
       }),
       card({
         id: "a2",
@@ -41,20 +46,18 @@ describe("pickTrendingIssues", () => {
         category: "politics",
         topic_key: "us-election",
         topic_label: "미국 대선",
-        published_at: "2026-08-21T00:00:00.000Z",
-        source_published_at: "2026-08-21T00:00:00.000Z",
+        source_published_at: hoursAgo(20),
       }),
       card({
         id: "a3",
         source_country: "US",
         category: "economy",
         title: "최신 경제 기사",
-        published_at: "2026-08-22T00:00:00.000Z",
-        source_published_at: "2026-08-22T00:00:00.000Z",
+        source_published_at: hoursAgo(2),
       }),
     ];
 
-    const { us } = pickTrendingIssues(articles, "ko", 3);
+    const { us } = pickTrendingIssues(articles, "ko", 3, NOW);
     assert.equal(us[0]?.title, "미국 대선");
     assert.equal(us[0]?.id, "topic:us-election");
     assert.ok(us.some((issue) => issue.id.startsWith("cat:economy:")));
@@ -69,8 +72,7 @@ describe("pickTrendingIssues", () => {
         original_url: "https://www.yna.co.kr/old",
         category: "other",
         title: "오래된 기사",
-        published_at: "2026-01-01T00:00:00.000Z",
-        source_published_at: "2026-01-01T00:00:00.000Z",
+        source_published_at: hoursAgo(20 * 24),
       }),
       card({
         id: "new",
@@ -79,15 +81,30 @@ describe("pickTrendingIssues", () => {
         original_url: "https://www.yna.co.kr/new",
         category: "other",
         title: "최신 기사",
-        published_at: "2026-08-22T00:00:00.000Z",
-        source_published_at: "2026-08-22T00:00:00.000Z",
+        source_published_at: hoursAgo(3),
       }),
     ];
 
-    const { kr } = pickTrendingIssues(articles, "ko", 3);
+    const { kr } = pickTrendingIssues(articles, "ko", 3, NOW);
     assert.equal(kr.length, 1);
     assert.match(kr[0]?.title ?? "", /최신 기사/);
     assert.equal(kr[0]?.id, "cat:other:kr");
+  });
+
+  it("excludes articles older than 7 days from trending", () => {
+    const articles = [
+      card({
+        id: "ancient",
+        source: "연합뉴스",
+        source_country: "KR",
+        original_url: "https://www.yna.co.kr/ancient",
+        category: "politics",
+        title: "5월 기사",
+        source_published_at: hoursAgo(30 * 24),
+      }),
+    ];
+    const { kr } = pickTrendingIssues(articles, "ko", 3, NOW);
+    assert.equal(kr.length, 0);
   });
 
   it("caps at three issues per region across categories", () => {
@@ -99,12 +116,11 @@ describe("pickTrendingIssues", () => {
         original_url: `https://apnews.com/article/${index}`,
         category,
         title: `${category} ${index}`,
-        published_at: `2026-08-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
-        source_published_at: `2026-08-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
+        source_published_at: hoursAgo(index + 1),
       })
     );
 
-    const { us } = pickTrendingIssues(articles, "ko", 3);
+    const { us } = pickTrendingIssues(articles, "ko", 3, NOW);
     assert.equal(us.length, 3);
   });
 });

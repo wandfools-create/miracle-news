@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   compareArticlesByFreshness,
+  filterArticlesForHomeSurface,
   sortArticlesByFreshness,
 } from "./articleFreshness";
 import { pickFeaturedArticle, sortHomeArticlesForDisplay } from "./featuredSelection";
@@ -119,6 +120,28 @@ describe("home freshness priority", () => {
     assert.equal(
       sortHomeArticlesForDisplay([withSource, siteOnly], NOW)[0]?.id,
       "site"
+    );
+  });
+
+  it("home surface prefers 72h then 7d and excludes older", () => {
+    const h24 = card({ id: "h24", title: "h24", source_published_at: hoursAgo(24) });
+    const h80 = card({ id: "h80", title: "h80", source_published_at: hoursAgo(80) });
+    const d10 = card({ id: "d10", title: "d10", source_published_at: hoursAgo(10 * 24) });
+    const primary = filterArticlesForHomeSurface([h24, h80, d10], {
+      nowMs: NOW,
+      minCount: 1,
+    });
+    assert.deepEqual(
+      primary.map((a) => a.id),
+      ["h24"]
+    );
+    const fallback = filterArticlesForHomeSurface([h80, d10], {
+      nowMs: NOW,
+      minCount: 2,
+    });
+    assert.deepEqual(
+      fallback.map((a) => a.id),
+      ["h80"]
     );
   });
 });

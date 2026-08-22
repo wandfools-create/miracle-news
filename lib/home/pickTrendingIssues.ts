@@ -1,6 +1,9 @@
 import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
 import { categoryOrder } from "@/lib/koreanArticleDisplay";
-import { compareArticlesByFreshness } from "./articleFreshness";
+import {
+  compareArticlesByFreshness,
+  filterArticlesForHomeSurface,
+} from "./articleFreshness";
 import { getArticleRegion, type ArticleRegion } from "./articleRegion";
 import type { HomeArticleCard, TrendingIssue } from "./types";
 
@@ -58,7 +61,12 @@ function pickForRegion(
   max: number,
   nowMs: number
 ): TrendingIssue[] {
-  const pool = articles.filter((a) => getArticleRegion(a) === region);
+  const regionArticles = articles.filter((a) => getArticleRegion(a) === region);
+  const pool = filterArticlesForHomeSurface(regionArticles, {
+    nowMs,
+    minCount: max,
+    allowManualTopStory: false,
+  });
 
   const topicBuckets = new Map<string, IssueBucket>();
   const byCategory = new Map<string, HomeArticleCard[]>();
