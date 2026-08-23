@@ -27,6 +27,11 @@ const HOST_SUFFIX_TO_SOURCE_KEY: Array<{ suffix: string; key: string }> = [
   { suffix: "cnn.com", key: "cnn" },
   { suffix: "csmonitor.com", key: "csm" },
   { suffix: "reuters.com", key: "reuters" },
+  { suffix: "yna.co.kr", key: "yonhap" },
+  { suffix: "koreaherald.com", key: "korea-herald" },
+  { suffix: "bbc.co.uk", key: "bbc" },
+  { suffix: "bbc.com", key: "bbc" },
+  { suffix: "sciencedaily.com", key: "sciencedaily" },
 ];
 
 const US_HOST_HINTS = [
@@ -36,6 +41,9 @@ const US_HOST_HINTS = [
   "cnn.com",
   "csmonitor.com",
   "reuters.com",
+  "bbc.co.uk",
+  "bbc.com",
+  "sciencedaily.com",
 ];
 
 function regionFromSourceKey(key: string): ArticleRegion | null {

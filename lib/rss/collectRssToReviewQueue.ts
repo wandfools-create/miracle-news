@@ -21,6 +21,11 @@ import {
   type RssCollectCostStats,
 } from "@/lib/rss/rssCollectConfig";
 import { RSS_FEED_SOURCES, type RssFeedSource } from "@/lib/rss/feedSources";
+import {
+  evaluateRssItemAge,
+  RSS_MAX_INSERTS_PER_FEED,
+  RSS_MAX_ITEMS_PER_FEED,
+} from "@/lib/rss/rssItemFreshness";
 import { parseRssFeed, type ParsedRssItem } from "@/lib/rss/parseRssFeed";
 import {
   checkSupabaseServiceEnvWithDns,
@@ -36,6 +41,7 @@ export type FeedCollectStats = {
   wouldInsert?: number;
   duplicates: number;
   skipped: number;
+  skippedOld: number;
   failed: number;
   error?: string;
 };
@@ -55,11 +61,10 @@ export type CollectRssResult = {
     wouldInsert: number;
     duplicates: number;
     skipped: number;
+    skippedOld: number;
     failed: number;
   };
 };
-
-const MAX_ITEMS_PER_FEED = 25;
 
 type CollectRunContext = {
   options: CollectRssOptions;
@@ -136,8 +141,17 @@ async function logFeedCollection(
       failed_count: stats.failed,
       status,
       note: stats.error
-        ? `rss collect v4 candidates: ${stats.error} · ${costNote}`
-        : `rss collect v4 candidates · added ${stats.inserted} · would_add ${stats.wouldInsert ?? 0} · skipped ${stats.skipped} · ${costNote}`,
+        ? `rss collect v5 candidates: ${stats.error} · ${costNote}`
+        : [
+            "rss collect v5 candidates",
+            `inserted=${stats.inserted}`,
+            `would_add=${stats.wouldInsert ?? 0}`,
+            `duplicate=${stats.duplicates}`,
+            `skipped_old=${stats.skippedOld}`,
+            `skipped=${stats.skipped}`,
+            `failed=${stats.failed}`,
+            costNote,
+          ].join(" · "),
     });
     ctx.recordDbWrite();
   } catch (err) {
@@ -168,7 +182,14 @@ async function logRunCollection(
       duplicate_count: totals.duplicates,
       failed_count: totals.failed,
       status: totals.failed > 0 ? "partial" : "success",
-      note: `rss collect v4 candidates run · ${costNote}`,
+      note: [
+        "rss collect v5 candidates run",
+        `inserted=${totals.inserted}`,
+        `duplicate=${totals.duplicates}`,
+        `skipped_old=${totals.skippedOld}`,
+        `skipped=${totals.skipped}`,
+        costNote,
+      ].join(" · "),
     });
     ctx.recordDbWrite();
   } catch (err) {
@@ -179,6 +200,7 @@ async function logRunCollection(
 type ProcessOutcome =
   | "duplicate"
   | "skipped"
+  | "skipped_old"
   | { kind: "prefilter_skipped"; reason: string }
   | { kind: "would_insert" }
   | "insert_failed"
@@ -194,6 +216,24 @@ async function processRssItem(
   if (!resolved.ok) return "skipped";
 
   const link = resolved.href;
+
+  const age = evaluateRssItemAge(item.publishedAt);
+  if (age.action === "skip_old") {
+    console.info("[collectRss] skip old item", {
+      source: feed.sourceKey,
+      link,
+      publishedAt: item.publishedAt,
+      ageMs: age.ageMs,
+    });
+    return "skipped_old";
+  }
+  if (age.reason === "unknown_published_at") {
+    console.info("[collectRss] unknown publishedAt — allowing", {
+      source: feed.sourceKey,
+      link,
+      title: item.title.slice(0, 120),
+    });
+  }
 
   if (seenUrls.has(link)) return "duplicate";
   seenUrls.add(link);
@@ -281,7 +321,7 @@ async function fetchFeedItems(
   if (feed.fetchKind === "ap-graphql") {
     const ap = await fetchApNewsFeedItems({
       categoryPath: feed.apCategoryPath ?? "/",
-      limit: MAX_ITEMS_PER_FEED,
+      limit: RSS_MAX_ITEMS_PER_FEED,
     });
     if (!ap.ok) {
       return { ok: false, error: ap.error };
@@ -347,6 +387,7 @@ async function collectSingleFeed(
     wouldInsert: 0,
     duplicates: 0,
     skipped: 0,
+    skippedOld: 0,
     failed: 0,
   };
 
@@ -357,7 +398,7 @@ async function collectSingleFeed(
     return stats;
   }
 
-  const items = fetched.items.slice(0, MAX_ITEMS_PER_FEED);
+  const items = fetched.items.slice(0, RSS_MAX_ITEMS_PER_FEED);
   stats.checked = items.length;
 
   const { toProcess, skipped: prefilterSkipped } = await prefilterRssFeedItems(
@@ -367,13 +408,20 @@ async function collectSingleFeed(
   );
   stats.skipped += prefilterSkipped;
 
+  let feedInsertBudget = RSS_MAX_INSERTS_PER_FEED;
+
   for (const item of toProcess) {
     if (ctx.options.save && ctx.remainingCandidateBudget.value <= 0) break;
+    if (feedInsertBudget <= 0) break;
 
     const outcome = await processRssItem(feed, item, seenUrls, ctx);
 
     if (outcome === "duplicate") {
       stats.duplicates += 1;
+      continue;
+    }
+    if (outcome === "skipped_old") {
+      stats.skippedOld += 1;
       continue;
     }
     if (
@@ -389,10 +437,12 @@ async function collectSingleFeed(
     }
     if (typeof outcome === "object" && outcome.kind === "would_insert") {
       stats.wouldInsert = (stats.wouldInsert ?? 0) + 1;
+      feedInsertBudget -= 1;
       continue;
     }
 
     stats.inserted += 1;
+    feedInsertBudget -= 1;
     ctx.remainingCandidateBudget.value -= 1;
   }
 
@@ -433,11 +483,13 @@ export async function collectRssToReviewQueue(
     console.info("[collectRss] test mode — no DB writes");
   }
 
-  console.info("[collectRss] run start (v4 candidates, no OpenAI)", {
+  console.info("[collectRss] run start (v5 candidates, no OpenAI)", {
     mode: options.mode,
     save: options.save,
     maxCandidatesPerRun: options.maxCandidatesPerRun,
+    maxInsertsPerFeed: RSS_MAX_INSERTS_PER_FEED,
     openaiCalls: 0,
+    feedCount: RSS_FEED_SOURCES.length,
   });
 
   for (const feed of RSS_FEED_SOURCES) {
@@ -452,6 +504,7 @@ export async function collectRssToReviewQueue(
       wouldInsert: acc.wouldInsert + (f.wouldInsert ?? 0),
       duplicates: acc.duplicates + f.duplicates,
       skipped: acc.skipped + f.skipped,
+      skippedOld: acc.skippedOld + f.skippedOld,
       failed: acc.failed + f.failed,
     }),
     {
@@ -460,6 +513,7 @@ export async function collectRssToReviewQueue(
       wouldInsert: 0,
       duplicates: 0,
       skipped: 0,
+      skippedOld: 0,
       failed: 0,
     }
   );

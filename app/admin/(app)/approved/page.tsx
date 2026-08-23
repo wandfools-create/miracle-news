@@ -1,10 +1,16 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import AdminListPager from "@/components/admin/AdminListPager";
 import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
 import EditorialPriorityBadge from "@/components/admin/EditorialPriorityBadge";
 import EditorialPriorityForm from "@/components/admin/EditorialPriorityForm";
 import { normalizeEditorialPriority } from "@/lib/admin/editorialPriority";
+import {
+  ADMIN_LIST_PAGE_SIZE,
+  adminListRange,
+  parseAdminListPage,
+} from "@/lib/admin/listPagination";
 import { setEditorialPriorityFromForm } from "@/lib/admin/setEditorialPriority";
 import { supabase } from "../../../../lib/supabase";
 import { bulkPublishArticles, publishArticle } from "./actions";
@@ -15,10 +21,19 @@ import {
   getCategoryLabel,
 } from "../../../../lib/articleWorkflow";
 
-export default async function AdminApprovedPage() {
-  const { data: articles, error } = await supabase
+type PageProps = {
+  searchParams: Promise<{ page?: string }>;
+};
+
+export default async function AdminApprovedPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const page = parseAdminListPage(params.page);
+  const { from, to } = adminListRange(page);
+
+  const { data: articles, error, count } = await supabase
     .from("articles")
-    .select(`
+    .select(
+      `
       id,
       source,
       original_url,
@@ -37,10 +52,17 @@ export default async function AdminApprovedPage() {
       approved_by,
       is_published,
       editorial_priority
-    `)
+    `,
+      { count: "exact" }
+    )
     .eq("review_status", ARTICLE_WORKFLOW.approved.review_status)
+    .eq("status", ARTICLE_WORKFLOW.approved.status)
     .eq("is_published", ARTICLE_WORKFLOW.approved.is_published)
-    .order("approved_at", { ascending: false });
+    .order("approved_at", { ascending: false })
+    .range(from, to);
+
+  const totalCount = count ?? 0;
+  const rows = articles ?? [];
 
   return (
     <main className="min-h-screen bg-white text-black">
@@ -54,7 +76,8 @@ export default async function AdminApprovedPage() {
         </h1>
 
         <p className="mt-4 text-gray-600">
-          검토가 끝났고, 아직 공개 전인 기사 목록입니다.
+          검토가 끝났고, 아직 공개 전인 기사 목록입니다. 기본{" "}
+          {ADMIN_LIST_PAGE_SIZE}건씩 불러옵니다.
         </p>
 
         {error ? (
@@ -63,13 +86,13 @@ export default async function AdminApprovedPage() {
           </div>
         ) : null}
 
-        {!error && (!articles || articles.length === 0) ? (
+        {!error && rows.length === 0 ? (
           <div className="mt-8 rounded-2xl border p-6 text-gray-600">
             현재 승인 완료 기사가 없습니다.
           </div>
         ) : null}
 
-        {!error && articles && articles.length > 0 ? (
+        {!error && rows.length > 0 ? (
           <>
             <form id="bulk-publish-form" className="mt-8 mb-6">
               <div className="flex flex-wrap items-center gap-3 rounded-2xl border bg-gray-50 p-4">
@@ -86,7 +109,7 @@ export default async function AdminApprovedPage() {
             </form>
 
             <div className="grid gap-4">
-              {articles.map((article) => (
+              {rows.map((article) => (
                 <article
                   key={article.id}
                   className="rounded-2xl border p-6 shadow-sm"
@@ -200,6 +223,13 @@ export default async function AdminApprovedPage() {
                 </article>
               ))}
             </div>
+
+            <AdminListPager
+              pathname="/admin/approved"
+              page={page}
+              totalCount={totalCount}
+              fetchedCount={rows.length}
+            />
           </>
         ) : null}
       </section>

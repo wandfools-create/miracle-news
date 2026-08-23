@@ -1,11 +1,13 @@
-/** Primary US outlets — RSS v1 collection targets. */
+/** Primary RSS collection targets (ops v1 expansion). */
+export type RssFeedSourceCountry = "US" | "KR" | "GB";
+
 export type RssFeedSource = {
-  /** articles.source key (see sourceConfigs). */
+  /** articles.source / collection_candidates.source key. */
   sourceKey: string;
   label: string;
   /** Human-readable source URL (RSS or API docs). */
   feedUrl: string;
-  sourceCountry: "US";
+  sourceCountry: RssFeedSourceCountry;
   /** Default: standard RSS via `feedUrl`. AP uses GraphQL (feeds.apnews.com is defunct). */
   fetchKind?: "rss" | "ap-graphql";
   apCategoryPath?: string;
@@ -37,6 +39,30 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     sourceKey: "csm",
     label: "The Christian Science Monitor",
     feedUrl: "https://rss.csmonitor.com/feeds/world",
+    sourceCountry: "US",
+  },
+  {
+    sourceKey: "yonhap",
+    label: "Yonhap News Agency",
+    feedUrl: "https://en.yna.co.kr/RSS/news.xml",
+    sourceCountry: "KR",
+  },
+  {
+    sourceKey: "korea-herald",
+    label: "The Korea Herald",
+    feedUrl: "https://www.koreaherald.com/rss",
+    sourceCountry: "KR",
+  },
+  {
+    sourceKey: "bbc",
+    label: "BBC World",
+    feedUrl: "https://feeds.bbci.co.uk/news/world/rss.xml",
+    sourceCountry: "GB",
+  },
+  {
+    sourceKey: "sciencedaily",
+    label: "ScienceDaily",
+    feedUrl: "https://www.sciencedaily.com/rss/all.xml",
     sourceCountry: "US",
   },
 ];

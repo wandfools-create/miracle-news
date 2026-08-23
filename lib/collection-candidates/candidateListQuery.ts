@@ -4,6 +4,10 @@ export const CANDIDATE_SOURCE_FILTERS = [
   { key: "fox-news", label: "Fox" },
   { key: "pbs-newshour", label: "PBS" },
   { key: "csm", label: "CSM" },
+  { key: "yonhap", label: "Yonhap" },
+  { key: "korea-herald", label: "Korea Herald" },
+  { key: "bbc", label: "BBC" },
+  { key: "sciencedaily", label: "ScienceDaily" },
 ] as const;
 
 export const CANDIDATE_DATE_FILTERS = [

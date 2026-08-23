@@ -48,8 +48,8 @@ function isTruthy(value: string | null | undefined): boolean {
 
 export function getRssMaxCandidatesPerRun(): number {
   const raw = process.env.RSS_MAX_CANDIDATES_PER_RUN?.trim();
-  const parsed = raw ? Number.parseInt(raw, 10) : 20;
-  if (!Number.isFinite(parsed) || parsed <= 0) return 20;
+  const parsed = raw ? Number.parseInt(raw, 10) : 30;
+  if (!Number.isFinite(parsed) || parsed <= 0) return 30;
   return Math.min(parsed, 200);
 }
 

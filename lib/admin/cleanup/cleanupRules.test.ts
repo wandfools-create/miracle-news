@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   CLEANUP_RETENTION_DAYS,
   cleanupCutoffIso,
+  isArchiveableRejectedArticle,
   isArchiveableReviewArticle,
   isExpireableCollectionCandidate,
 } from "./cleanupRules";
@@ -179,6 +180,36 @@ describe("admin stale cleanup rules (fixture only)", () => {
           is_published: false,
           is_top_story: false,
           collected_at: "2026-08-20T00:00:00.000Z",
+          created_at: "2026-08-20T00:00:00.000Z",
+        },
+        cutoff
+      ),
+      false
+    );
+  });
+
+  it("archives rejected over 60d but never hold/revision/approved/published", () => {
+    assert.equal(
+      isArchiveableRejectedArticle(
+        {
+          status: "rejected",
+          review_status: "rejected",
+          is_published: false,
+          is_top_story: false,
+          updated_at: "2026-05-01T00:00:00.000Z",
+          created_at: "2026-05-01T00:00:00.000Z",
+        },
+        cutoff
+      ),
+      true
+    );
+    assert.equal(
+      isArchiveableRejectedArticle(
+        {
+          status: "rejected",
+          review_status: "rejected",
+          is_published: false,
+          updated_at: "2026-08-20T00:00:00.000Z",
           created_at: "2026-08-20T00:00:00.000Z",
         },
         cutoff

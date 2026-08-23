@@ -45,6 +45,17 @@ export function articleAgeReferenceIso(row: {
   return collected || row.created_at;
 }
 
+/** Rejected age: updated_at preferred, else collected_at / created_at. */
+export function rejectedAgeReferenceIso(row: {
+  created_at: string;
+  collected_at?: string | null;
+  updated_at?: string | null;
+}): string {
+  const updated = row.updated_at?.trim() || null;
+  if (updated) return updated;
+  return articleAgeReferenceIso(row);
+}
+
 export function isOlderThanCutoff(
   referenceIso: string,
   cutoffIso: string
@@ -105,4 +116,27 @@ export function isArchiveableReviewArticle(
   ]);
   if (protectedStatus.has(row.status)) return false;
   return isOlderThanCutoff(articleAgeReferenceIso(row), cutoffIso);
+}
+
+/**
+ * Rejected drafts older than retention → soft-archive.
+ * Never touches hold / revision / approved / published / top story.
+ */
+export function isArchiveableRejectedArticle(
+  row: {
+    status: string;
+    review_status: string | null;
+    is_published: boolean | null;
+    is_top_story?: boolean | null;
+    created_at: string;
+    collected_at?: string | null;
+    updated_at?: string | null;
+  },
+  cutoffIso: string
+): boolean {
+  if (row.is_published === true) return false;
+  if (row.is_top_story === true) return false;
+  if (row.status !== "rejected") return false;
+  if (row.review_status !== "rejected") return false;
+  return isOlderThanCutoff(rejectedAgeReferenceIso(row), cutoffIso);
 }

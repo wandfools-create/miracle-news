@@ -12,12 +12,17 @@ const HOST_SUFFIX_TO_SOURCE_KEY: Array<{ suffix: string; key: string }> = [
   { suffix: "joongang.co.kr", key: "joongang" },
   { suffix: "tvchosun.com", key: "tvchosun" },
   { suffix: "insight.co.kr", key: "insight" },
+  { suffix: "yna.co.kr", key: "yonhap" },
+  { suffix: "koreaherald.com", key: "korea-herald" },
   { suffix: "apnews.com", key: "ap" },
   { suffix: "foxnews.com", key: "fox-news" },
   { suffix: "pbs.org", key: "pbs-newshour" },
   { suffix: "cnn.com", key: "cnn" },
   { suffix: "csmonitor.com", key: "csm" },
   { suffix: "reuters.com", key: "reuters" },
+  { suffix: "bbc.co.uk", key: "bbc" },
+  { suffix: "bbc.com", key: "bbc" },
+  { suffix: "sciencedaily.com", key: "sciencedaily" },
 ];
 
 const INTERNAL_SOURCE_NORMALIZED = new Set([

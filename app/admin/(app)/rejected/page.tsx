@@ -1,5 +1,11 @@
 import Link from "next/link";
+import AdminListPager from "@/components/admin/AdminListPager";
 import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
+import {
+  ADMIN_LIST_PAGE_SIZE,
+  adminListRange,
+  parseAdminListPage,
+} from "@/lib/admin/listPagination";
 import { supabase } from "../../../../lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -19,10 +25,19 @@ function formatDateTimeKo(value: string | null | undefined) {
   }).format(date);
 }
 
-export default async function AdminRejectedPage() {
-  const { data: articles, error } = await supabase
+export default async function AdminRejectedPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const params = await searchParams;
+  const page = parseAdminListPage(params.page);
+  const { from, to } = adminListRange(page);
+
+  const { data: articles, error, count } = await supabase
     .from("articles")
-    .select(`
+    .select(
+      `
       id,
       source,
       original_url,
@@ -37,10 +52,16 @@ export default async function AdminRejectedPage() {
       status,
       review_status,
       updated_at
-    `)
+    `,
+      { count: "exact" }
+    )
     .eq("status", "rejected")
     .eq("review_status", "rejected")
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    .range(from, to);
+
+  const rows = articles ?? [];
+  const totalCount = count ?? 0;
 
   return (
     <main className="min-h-screen bg-white text-black">
@@ -63,15 +84,15 @@ export default async function AdminRejectedPage() {
           </div>
         ) : null}
 
-        {!error && (!articles || articles.length === 0) ? (
+        {!error && rows.length === 0 ? (
           <div className="mt-6 rounded-2xl border p-5 text-sm text-gray-600 sm:mt-8 sm:p-6 sm:text-base">
             현재 반려된 기사가 없습니다.
           </div>
         ) : null}
 
-        {!error && articles && articles.length > 0 ? (
+        {!error && rows.length > 0 ? (
           <div className="mt-6 grid gap-3 sm:mt-8 sm:gap-4">
-            {articles.map((article) => (
+            {rows.map((article) => (
               <article
                 key={article.id}
                 className="rounded-2xl border p-4 shadow-sm sm:p-6"

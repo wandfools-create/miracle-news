@@ -5,6 +5,8 @@ export const PRIMARY_FOREIGN_SOURCE_KEYS = [
   "fox-news",
   "cnn",
   "csm",
+  "bbc",
+  "sciencedaily",
 ] as const;
 
 export type PrimaryForeignSourceKey = (typeof PRIMARY_FOREIGN_SOURCE_KEYS)[number];
@@ -15,6 +17,8 @@ export const PRIMARY_KOREAN_SOURCE_KEYS = [
   "joongang",
   "tvchosun",
   "insight",
+  "yonhap",
+  "korea-herald",
 ] as const;
 
 export type PrimaryKoreanSourceKey = (typeof PRIMARY_KOREAN_SOURCE_KEYS)[number];

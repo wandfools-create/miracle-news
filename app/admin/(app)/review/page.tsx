@@ -1,11 +1,17 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import {
   bulkApproveArticles,
   bulkHoldArticles,
 } from "./[id]/actions";
 import SelectAllReviewCheckbox from "./SelectAllReviewCheckbox";
+import AdminListPager from "@/components/admin/AdminListPager";
 import ReviewArticleCard from "@/components/admin/ReviewArticleCard";
-import { fetchReviewQueueArticles } from "@/lib/admin/fetchReviewQueueArticles";
+import {
+  fetchReviewQueueArticles,
+  parseReviewQueueListQuery,
+} from "@/lib/admin/fetchReviewQueueArticles";
+import { ADMIN_LIST_PAGE_SIZE } from "@/lib/admin/listPagination";
 import {
   normalizeReviewListRow,
   type ReviewQueueArticleRow,
@@ -14,9 +20,13 @@ import {
 export const revalidate = 0;
 export const dynamic = "force-dynamic";
 
+type PageProps = {
+  searchParams: Promise<{ page?: string; q?: string }>;
+};
+
 function ReviewPageContent(props: {
   queryError: { code?: string; message: string } | null;
-  limitApplied: number | null;
+  debugLimitApplied: number | null;
   failedArticles: Array<{
     id: string;
     error: string;
@@ -24,8 +34,18 @@ function ReviewPageContent(props: {
   }>;
   cards: ReactNode;
   isEmpty: boolean;
+  pager: ReactNode;
+  searchForm: ReactNode;
 }) {
-  const { queryError, limitApplied, failedArticles, cards, isEmpty } = props;
+  const {
+    queryError,
+    debugLimitApplied,
+    failedArticles,
+    cards,
+    isEmpty,
+    pager,
+    searchForm,
+  } = props;
 
   return (
     <main className="min-h-screen bg-white text-black">
@@ -39,15 +59,17 @@ function ReviewPageContent(props: {
         </h1>
 
         <p className="mt-3 text-sm leading-6 text-gray-600 sm:mt-4 sm:text-base">
-          사람 검토가 필요한 기사 목록입니다. RSS는 수집 후보 → 관리자 보강 → 검토
-          대기 순으로 들어옵니다.
+          사람 검토가 필요한 기사 목록입니다. 기본 {ADMIN_LIST_PAGE_SIZE}건씩
+          불러오며, 검색은 전체 검토 대기 대상입니다. archived는 제외됩니다.
         </p>
 
-        {limitApplied ? (
+        {debugLimitApplied ? (
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            디버그: REVIEW_DEBUG_LIMIT={limitApplied} (최근 {limitApplied}건만 조회)
+            디버그: REVIEW_DEBUG_LIMIT={debugLimitApplied} (페이지 크기 상한)
           </p>
         ) : null}
+
+        {searchForm}
 
         {queryError ? (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:mt-8">
@@ -59,7 +81,9 @@ function ReviewPageContent(props: {
             {queryError.code === "42703" ? (
               <p className="mt-2 text-xs">
                 존재하지 않는 컬럼을 select 했을 때 발생합니다. 서버 로그의{" "}
-                <code className="rounded bg-red-100 px-1">[admin/review] supabase query failed</code>
+                <code className="rounded bg-red-100 px-1">
+                  [admin/review] supabase query failed
+                </code>
                 를 확인하세요.
               </p>
             ) : null}
@@ -75,7 +99,8 @@ function ReviewPageContent(props: {
               {failedArticles.map((row) => (
                 <li key={row.id}>
                   기사 ID {row.id}
-                  {row.failedField ? ` · 필드: ${row.failedField}` : ""}: {row.error}
+                  {row.failedField ? ` · 필드: ${row.failedField}` : ""}:{" "}
+                  {row.error}
                 </li>
               ))}
             </ul>
@@ -89,17 +114,26 @@ function ReviewPageContent(props: {
         ) : null}
 
         {!queryError && !isEmpty ? cards : null}
+        {!queryError ? pager : null}
       </section>
     </main>
   );
 }
 
-export default async function AdminReviewPage() {
+export default async function AdminReviewPage({ searchParams }: PageProps) {
   console.info("[admin/review] page render start");
 
   try {
-    const { articles, error: queryError, limitApplied } =
-      await fetchReviewQueueArticles();
+    const params = await searchParams;
+    const listQuery = parseReviewQueueListQuery(params);
+    const {
+      articles,
+      error: queryError,
+      pageSize,
+      page,
+      totalCount,
+      debugLimitApplied,
+    } = await fetchReviewQueueArticles(listQuery);
 
     const normalized = articles.map((row) =>
       normalizeReviewListRow(row as ReviewQueueArticleRow)
@@ -121,12 +155,53 @@ export default async function AdminReviewPage() {
       console.error("[admin/review] skipped rows summary", failedArticles);
     }
 
+    const searchForm = (
+      <form
+        method="get"
+        action="/admin/review"
+        className="mt-6 rounded-2xl border bg-gray-50 p-4 sm:p-5"
+      >
+        <label className="text-sm font-medium text-gray-700">
+          검색 (전체 검토 대기)
+          <input
+            name="q"
+            defaultValue={listQuery.q}
+            placeholder="제목 · 출처 · 카테고리 · 원문 URL"
+            className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black"
+          />
+        </label>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="submit"
+            className="rounded-full border border-black bg-black px-3 py-1.5 text-xs font-semibold text-white"
+          >
+            적용
+          </button>
+          {listQuery.q ? (
+            <Link
+              href="/admin/review"
+              className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700"
+            >
+              검색 초기화
+            </Link>
+          ) : null}
+        </div>
+        <p className="mt-3 text-xs text-gray-600">
+          이 페이지 {articles.length}건 · 일치 {totalCount}건 · {page}페이지
+          (페이지당 {pageSize}건)
+        </p>
+      </form>
+    );
+
     const cards =
       displayArticles.length > 0 ? (
         <>
           <form id="bulk-review-form" className="mt-6 sm:mt-8">
             <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border bg-gray-50 p-4">
-              <SelectAllReviewCheckbox targetName="articleIds" label="전체 선택" />
+              <SelectAllReviewCheckbox
+                targetName="articleIds"
+                label="현재 페이지 전체 선택"
+              />
 
               <button
                 type="submit"
@@ -154,13 +229,27 @@ export default async function AdminReviewPage() {
         </>
       ) : null;
 
+    const pager =
+      totalCount > 0 ? (
+        <AdminListPager
+          pathname="/admin/review"
+          page={page}
+          totalCount={totalCount}
+          fetchedCount={articles.length}
+          pageSize={pageSize}
+          filterParams={{ q: listQuery.q || undefined }}
+        />
+      ) : null;
+
     return (
       <ReviewPageContent
         queryError={queryError}
-        limitApplied={limitApplied}
+        debugLimitApplied={debugLimitApplied}
         failedArticles={failedArticles}
         cards={cards}
         isEmpty={displayArticles.length === 0}
+        pager={pager}
+        searchForm={searchForm}
       />
     );
   } catch (err) {
@@ -175,7 +264,9 @@ export default async function AdminReviewPage() {
           <h1 className="text-2xl font-bold text-red-800">검토 대기 페이지 오류</h1>
           <p className="mt-4 text-sm text-gray-700">
             예기치 않은 오류가 발생했습니다. 터미널에서{" "}
-            <code className="rounded bg-gray-100 px-1">[admin/review] page render threw</code>
+            <code className="rounded bg-gray-100 px-1">
+              [admin/review] page render threw
+            </code>
             로그를 확인하세요.
           </p>
           <pre className="mt-4 overflow-x-auto rounded-xl border bg-red-50 p-4 text-xs text-red-900">

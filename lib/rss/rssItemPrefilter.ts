@@ -22,6 +22,10 @@ export const RSS_PREFILTER_SOURCE_KEYS = [
   "fox-news",
   "pbs-newshour",
   "csm",
+  "yonhap",
+  "korea-herald",
+  "bbc",
+  "sciencedaily",
 ] as const;
 
 export type RssPrefilterSourceKey = (typeof RSS_PREFILTER_SOURCE_KEYS)[number];

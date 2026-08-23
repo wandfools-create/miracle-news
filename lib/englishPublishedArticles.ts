@@ -6,6 +6,10 @@ import {
 } from "@/lib/article/resolveLocaleContent";
 import { buildArticleSearchHaystack } from "@/lib/home/articleSearch";
 import {
+  HOME_PUBLISHED_FETCH_LIMIT,
+  type PublishedArticlesFetchOptions,
+} from "@/lib/home/publishedFetchLimits";
+import {
   formatServerListDate,
   formatServerPublishedFull,
 } from "@/lib/home/serverDateLabels";
@@ -44,7 +48,7 @@ type EnglishArticleRow = {
   article_id: string;
   title: string;
   summary: string | null;
-  body: string | null;
+  body?: string | null;
   slug: string;
   created_at: string;
   articles: ArticleMeta | ArticleMeta[] | null;
@@ -57,25 +61,55 @@ function getArticleMeta(row: EnglishArticleRow): ArticleMeta | null {
 }
 
 // TODO: select articles.view_count when the column is added to the DB.
-export async function fetchEnglishPublishedArticles() {
+export async function fetchEnglishPublishedArticles(
+  options?: PublishedArticlesFetchOptions
+) {
+  const limit = options?.limit ?? HOME_PUBLISHED_FETCH_LIMIT;
+  const includeBody = options?.includeBody !== false;
+  const localizationFields = includeBody
+    ? `id, article_id, title, summary, body, slug, created_at`
+    : `id, article_id, title, summary, slug, created_at`;
+
   const { data, error } = await supabase
     .from("article_localizations")
     .select(
       `
-      id,
-      article_id,
-      title,
-      summary,
-      body,
-      slug,
-      created_at,
-      articles!inner (*)
+      ${localizationFields},
+      articles!inner (
+        ${ARTICLE_CONTENT_FIELDS}
+        is_top_story,
+        is_featured,
+        top_story_order,
+        source,
+        source_country,
+        category,
+        published_at,
+        source_published_at,
+        editorial_priority,
+        thumbnail_url,
+        original_url,
+        topic_key,
+        topic_label,
+        body_original,
+        body_translated
+      )
     `
     )
     .eq("locale", "en")
     .eq("articles.review_status", "approved")
     .eq("articles.is_published", true)
-    .eq("articles.status", "published");
+    .eq("articles.status", "published")
+    .order("source_published_at", {
+      referencedTable: "articles",
+      ascending: false,
+      nullsFirst: false,
+    })
+    .order("published_at", {
+      referencedTable: "articles",
+      ascending: false,
+      nullsFirst: false,
+    })
+    .limit(limit);
 
   const rawArticles = (data ?? []) as unknown as EnglishArticleRow[];
   const articles: HomeArticleCard[] = [];
@@ -100,7 +134,11 @@ export async function fetchEnglishPublishedArticles() {
     const summary = resolveSummaryForLocale("en", contentFields, {
       summary: row.summary,
     });
-    const body = resolveBodyForLocale("en", contentFields, { body: row.body });
+    const body = includeBody
+      ? resolveBodyForLocale("en", contentFields, {
+          body: row.body ?? null,
+        })
+      : "";
 
     articles.push({
       id: row.id,

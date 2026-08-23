@@ -94,8 +94,8 @@ export async function fetchEditionHomeArticles(
   error: { message: string } | null;
 }> {
   const [koResult, enResult] = await Promise.all([
-    fetchKoreanPublishedArticles(),
-    fetchEnglishPublishedArticles(),
+    fetchKoreanPublishedArticles({ includeBody: false }),
+    fetchEnglishPublishedArticles({ includeBody: false }),
   ]);
 
   const byArticleId = new Map<string, EditionMergeEntry>();

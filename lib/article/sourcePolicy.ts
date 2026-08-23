@@ -17,14 +17,17 @@ export {
 const WORLD_RELIGION_SOURCE_RANK: Record<string, number> = {
   csm: 0,
   ap: 1,
-  "pbs-newshour": 2,
-  cnn: 3,
-  "fox-news": 4,
+  bbc: 2,
+  "pbs-newshour": 3,
+  cnn: 4,
+  "fox-news": 5,
   reuters: 90,
   chosun: 40,
   joongang: 40,
   tvchosun: 40,
   insight: 40,
+  yonhap: 35,
+  "korea-herald": 36,
 };
 
 const CATEGORY_SOURCE_PRIORITY = new Set(["world", "religion"]);

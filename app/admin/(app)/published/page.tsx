@@ -1,9 +1,13 @@
 export const dynamic = "force-dynamic";
 
+import AdminListPager from "@/components/admin/AdminListPager";
 import PublishedArticlesManager from "./PublishedArticlesManager";
 import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
-import { supabase } from "../../../../lib/supabase";
-import { getCategoryLabel } from "../../../../lib/articleWorkflow";
+import {
+  fetchPublishedAdminList,
+  parsePublishedAdminListQuery,
+} from "@/lib/admin/fetchPublishedAdminList";
+import { getCategoryLabel } from "@/lib/articleWorkflow";
 
 function toDateKey(value: string): string {
   const d = new Date(value);
@@ -14,57 +18,20 @@ function toDateKey(value: string): string {
   return `${year}-${month}-${day}`;
 }
 
-export default async function AdminPublishedPage() {
-  const baseSelect = `
-      id,
-      source,
-      original_url,
-      title_original,
-      title_translated,
-      title_ko,
-      summary_original,
-      summary_translated,
-      summary_ko,
-      category,
-      status,
-      review_status,
-      thumbnail_url,
-      published_at,
-      created_at,
-      is_published
-    `;
+type PageProps = {
+  searchParams: Promise<{
+    page?: string;
+    q?: string;
+    date?: string;
+    range?: string;
+  }>;
+};
 
-  const withTopStory = await supabase
-    .from("articles")
-    .select(
-      `
-      ${baseSelect},
-      is_top_story,
-      top_story_order,
-      editorial_priority
-    `
-    )
-    .eq("is_published", true)
-    .eq("status", "published")
-    .order("published_at", { ascending: false });
-
-  let articles = withTopStory.data;
-  let error = withTopStory.error;
-  if (withTopStory.error) {
-    const fallback = await supabase
-      .from("articles")
-      .select(baseSelect)
-      .eq("is_published", true)
-      .eq("status", "published")
-      .order("published_at", { ascending: false });
-    error = fallback.error;
-    articles = (fallback.data ?? []).map((row) => ({
-      ...row,
-      is_top_story: false,
-      top_story_order: 0,
-      editorial_priority: "normal",
-    }));
-  }
+export default async function AdminPublishedPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const query = parsePublishedAdminListQuery(params);
+  const { articles, totalCount, error, pageSize } =
+    await fetchPublishedAdminList(query);
 
   return (
     <main className="min-h-screen bg-white text-black">
@@ -78,22 +45,17 @@ export default async function AdminPublishedPage() {
         </h1>
 
         <p className="mt-3 text-sm leading-6 text-gray-600 sm:mt-4 sm:text-base">
-          현재 사이트에 공개된 기사 목록입니다.
+          DB에는 영구 보존됩니다. 목록은 기본 {pageSize}건씩 불러오며, 검색·날짜
+          필터는 전체 공개 기사를 대상으로 조회합니다.
         </p>
 
         {error ? (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:mt-8">
-            데이터를 불러오는 중 오류가 발생했습니다: {error.message}
+            데이터를 불러오는 중 오류가 발생했습니다: {error}
           </div>
         ) : null}
 
-        {!error && (!articles || articles.length === 0) ? (
-          <div className="mt-6 rounded-2xl border p-5 text-sm text-gray-600 sm:mt-8 sm:p-6 sm:text-base">
-            현재 공개된 기사가 없습니다.
-          </div>
-        ) : null}
-
-        {!error && articles && articles.length > 0 ? (
+        {!error ? (
           <PublishedArticlesManager
             articles={articles.map((article) => {
               const effectiveRaw = article.published_at || article.created_at;
@@ -116,6 +78,27 @@ export default async function AdminPublishedPage() {
                 effectiveDate: toDateKey(effectiveRaw),
               };
             })}
+            totalMatched={totalCount}
+            page={query.page}
+            pageSize={pageSize}
+            initialQ={query.q}
+            initialDate={query.date}
+            initialRange={query.range}
+          />
+        ) : null}
+
+        {!error && totalCount > 0 ? (
+          <AdminListPager
+            pathname="/admin/published"
+            page={query.page}
+            totalCount={totalCount}
+            fetchedCount={articles.length}
+            pageSize={pageSize}
+            filterParams={{
+              q: query.q || undefined,
+              date: query.date || undefined,
+              range: query.range !== "all" ? query.range : undefined,
+            }}
           />
         ) : null}
       </section>

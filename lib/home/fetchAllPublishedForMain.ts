@@ -7,8 +7,8 @@ export async function fetchAllPublishedForMainHub(): Promise<{
   error: { message: string } | null;
 }> {
   const [koResult, enResult] = await Promise.all([
-    fetchKoreanPublishedArticles(),
-    fetchEnglishPublishedArticles(),
+    fetchKoreanPublishedArticles({ includeBody: false }),
+    fetchEnglishPublishedArticles({ includeBody: false }),
   ]);
 
   const articles: HomeArticleCard[] = [

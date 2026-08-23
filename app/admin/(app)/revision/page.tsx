@@ -1,5 +1,11 @@
 import RevisionArticleActions from "@/components/admin/RevisionArticleActions";
+import AdminListPager from "@/components/admin/AdminListPager";
 import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
+import {
+  ADMIN_LIST_PAGE_SIZE,
+  adminListRange,
+  parseAdminListPage,
+} from "@/lib/admin/listPagination";
 import { supabase } from "../../../../lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -37,14 +43,19 @@ function formatRequestedAt(value: string | null | undefined) {
 }
 
 type PageProps = {
-  searchParams: Promise<{ aiError?: string }>;
+  searchParams: Promise<{ aiError?: string; page?: string }>;
 };
 
 export default async function AdminRevisionPage({ searchParams }: PageProps) {
-  const { aiError } = await searchParams;
-  const { data: articles, error } = await supabase
+  const params = await searchParams;
+  const { aiError } = params;
+  const page = parseAdminListPage(params.page);
+  const { from, to } = adminListRange(page);
+
+  const { data: articles, error, count } = await supabase
     .from("articles")
-    .select(`
+    .select(
+      `
       id,
       source,
       original_url,
@@ -64,13 +75,19 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
         feedback_note,
         requested_at
       )
-    `)
+    `,
+      { count: "exact" }
+    )
     .eq("review_status", "needs_revision")
     .eq("revision_status", "requested")
     .order("requested_at", {
       referencedTable: "article_revision_logs",
       ascending: false,
-    });
+    })
+    .range(from, to);
+
+  const rows = articles ?? [];
+  const totalCount = count ?? 0;
 
   return (
     <main className="min-h-screen bg-white text-black">
@@ -84,9 +101,8 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
         </h1>
 
         <p className="mt-3 text-sm leading-6 text-gray-600 sm:mt-4 sm:text-base">
-          수정 요청이 들어간 기사입니다. 목록에 들어오면 from-link와 동일한 OpenAI
-          로직으로 본문을 자동 수정합니다. 실패 시 아래에서 에러를 확인하고「AI
-          수정 다시 실행」을 눌러 주세요.
+          수정 요청이 들어간 기사입니다. 기본 {ADMIN_LIST_PAGE_SIZE}건씩 불러옵니다.
+          목록에 들어오면 from-link와 동일한 OpenAI 로직으로 본문을 자동 수정합니다.
         </p>
 
         {aiError ? (
@@ -101,15 +117,15 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
           </div>
         ) : null}
 
-        {!error && (!articles || articles.length === 0) ? (
+        {!error && rows.length === 0 ? (
           <div className="mt-6 rounded-2xl border p-5 text-sm text-gray-600 sm:mt-8 sm:p-6 sm:text-base">
             현재 수정 대기 기사가 없습니다.
           </div>
         ) : null}
 
-        {!error && articles && articles.length > 0 ? (
+        {!error && rows.length > 0 ? (
           <div className="mt-6 grid gap-3 sm:mt-8 sm:gap-4">
-            {articles.map((article) => {
+            {rows.map((article) => {
               const latestLog = article.article_revision_logs?.[0] ?? null;
 
               return (

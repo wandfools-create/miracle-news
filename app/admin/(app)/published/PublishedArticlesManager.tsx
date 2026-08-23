@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import EditorialPriorityBadge from "@/components/admin/EditorialPriorityBadge";
 import EditorialPriorityForm from "@/components/admin/EditorialPriorityForm";
 import { setEditorialPriorityFromForm } from "@/lib/admin/setEditorialPriority";
+import type { PublishedQuickRange } from "@/lib/admin/fetchPublishedAdminList";
 import {
   bulkSendToRevisionFromPublished,
   bulkUnpublishArticles,
@@ -38,19 +39,15 @@ type ArticleRow = {
   effectiveDate: string;
 };
 
-type QuickRange = "all" | "today" | "yesterday" | "last7";
-
 type Props = {
   articles: ArticleRow[];
+  totalMatched: number;
+  page: number;
+  pageSize: number;
+  initialQ: string;
+  initialDate: string;
+  initialRange: PublishedQuickRange;
 };
-
-function pad2(n: number): string {
-  return n.toString().padStart(2, "0");
-}
-
-function toDateKey(date: Date): string {
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
-}
 
 function formatGroupDate(dateKey: string): string {
   const d = new Date(`${dateKey}T00:00:00`);
@@ -75,71 +72,31 @@ function formatDateTime(value: string): string {
   }).format(d);
 }
 
-function matchesQuickRange(dateKey: string, range: QuickRange): boolean {
-  if (range === "all") return true;
-
-  const now = new Date();
-  const today = toDateKey(now);
-  if (range === "today") return dateKey === today;
-
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  const yesterdayKey = toDateKey(yesterday);
-  if (range === "yesterday") return dateKey === yesterdayKey;
-
-  const parsed = new Date(`${dateKey}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return false;
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - 6);
-  return parsed.getTime() >= start.getTime();
-}
-
-export default function PublishedArticlesManager({ articles }: Props) {
-  const [query, setQuery] = useState("");
-  const [pickedDate, setPickedDate] = useState("");
-  const [quickRange, setQuickRange] = useState<QuickRange>("all");
+export default function PublishedArticlesManager({
+  articles,
+  totalMatched,
+  page,
+  pageSize,
+  initialQ,
+  initialDate,
+  initialRange,
+}: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return articles.filter((article) => {
-      if (pickedDate && article.effectiveDate !== pickedDate) return false;
-      if (!matchesQuickRange(article.effectiveDate, quickRange)) return false;
-      if (!q) return true;
-
-      const haystack = [
-        article.title_ko,
-        article.title_translated,
-        article.title_original,
-        article.source,
-        article.sourceLabel,
-        article.category,
-        article.categoryLabel,
-        article.original_url,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(q);
-    });
-  }, [articles, pickedDate, query, quickRange]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, ArticleRow[]>();
-    for (const article of filtered) {
+    for (const article of articles) {
       const key = article.effectiveDate;
       const list = map.get(key) ?? [];
       list.push(article);
       map.set(key, list);
     }
     return [...map.entries()].sort(([a], [b]) => (a < b ? 1 : -1));
-  }, [filtered]);
+  }, [articles]);
 
-  const filteredIds = useMemo(() => filtered.map((a) => a.id), [filtered]);
-  const allFilteredChecked =
-    filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
+  const pageIds = useMemo(() => articles.map((a) => a.id), [articles]);
+  const allPageChecked =
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
 
   function toggleOne(id: string, checked: boolean) {
     setSelectedIds((prev) => {
@@ -150,10 +107,10 @@ export default function PublishedArticlesManager({ articles }: Props) {
     });
   }
 
-  function toggleAllFiltered(checked: boolean) {
+  function toggleAllPage(checked: boolean) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      for (const id of filteredIds) {
+      for (const id of pageIds) {
         if (checked) next.add(id);
         else next.delete(id);
       }
@@ -163,13 +120,17 @@ export default function PublishedArticlesManager({ articles }: Props) {
 
   return (
     <div className="mt-6 sm:mt-8">
-      <section className="rounded-2xl border bg-gray-50 p-4 sm:p-5">
+      <form
+        method="get"
+        action="/admin/published"
+        className="rounded-2xl border bg-gray-50 p-4 sm:p-5"
+      >
         <div className="grid gap-3 md:grid-cols-2">
           <label className="text-sm font-medium text-gray-700">
-            검색
+            검색 (전체 공개 기사)
             <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              name="q"
+              defaultValue={initialQ}
               placeholder="제목 · 출처 · 카테고리 · 원문 URL"
               className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black"
             />
@@ -178,8 +139,8 @@ export default function PublishedArticlesManager({ articles }: Props) {
             날짜 필터
             <input
               type="date"
-              value={pickedDate}
-              onChange={(e) => setPickedDate(e.target.value)}
+              name="date"
+              defaultValue={initialDate}
               className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black"
             />
           </label>
@@ -192,49 +153,56 @@ export default function PublishedArticlesManager({ articles }: Props) {
             ["last7", "최근 7일"],
             ["all", "전체"],
           ] as const).map(([id, label]) => (
-            <button
+            <Link
               key={id}
-              type="button"
-              onClick={() => setQuickRange(id)}
+              href={
+                id === "all"
+                  ? `/admin/published${initialQ ? `?q=${encodeURIComponent(initialQ)}` : ""}`
+                  : `/admin/published?range=${id}${
+                      initialQ ? `&q=${encodeURIComponent(initialQ)}` : ""
+                    }`
+              }
               className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
-                quickRange === id
+                initialRange === id && !initialDate
                   ? "border-black bg-black text-white"
                   : "border-gray-300 bg-white text-gray-700"
               }`}
             >
               {label}
-            </button>
+            </Link>
           ))}
-          {(pickedDate || query) && (
-            <button
-              type="button"
-              onClick={() => {
-                setPickedDate("");
-                setQuery("");
-                setQuickRange("all");
-              }}
+          <button
+            type="submit"
+            className="rounded-full border border-black bg-black px-3 py-1.5 text-xs font-semibold text-white"
+          >
+            적용
+          </button>
+          {(initialDate || initialQ || initialRange !== "all") && (
+            <Link
+              href="/admin/published"
               className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700"
             >
               필터 초기화
-            </button>
+            </Link>
           )}
         </div>
 
         <p className="mt-3 text-xs text-gray-600">
-          표시 {filtered.length}건 / 전체 {articles.length}건
+          이 페이지 {articles.length}건 · 일치 {totalMatched}건 · {page}페이지
+          (페이지당 {pageSize}건)
         </p>
-      </section>
+      </form>
 
-      {filtered.length > 0 && (
+      {articles.length > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border bg-gray-50 p-4">
           <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
             <input
               type="checkbox"
-              checked={allFilteredChecked}
-              onChange={(e) => toggleAllFiltered(e.target.checked)}
+              checked={allPageChecked}
+              onChange={(e) => toggleAllPage(e.target.checked)}
               className="h-4 w-4 rounded border-gray-300"
             />
-            현재 필터 결과 전체 선택
+            현재 페이지 전체 선택
           </label>
           <span className="text-sm text-gray-600">
             선택 {selectedIds.size}건
@@ -268,7 +236,7 @@ export default function PublishedArticlesManager({ articles }: Props) {
         </div>
       )}
 
-      {filtered.length === 0 ? (
+      {articles.length === 0 ? (
         <div className="mt-6 rounded-2xl border p-5 text-sm text-gray-600 sm:p-6 sm:text-base">
           조건에 맞는 공개 기사가 없습니다.
         </div>
@@ -434,3 +402,4 @@ export default function PublishedArticlesManager({ articles }: Props) {
     </div>
   );
 }
+

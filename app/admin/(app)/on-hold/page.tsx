@@ -1,5 +1,11 @@
 import Link from "next/link";
+import AdminListPager from "@/components/admin/AdminListPager";
 import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
+import {
+  ADMIN_LIST_PAGE_SIZE,
+  adminListRange,
+  parseAdminListPage,
+} from "@/lib/admin/listPagination";
 import { supabase } from "../../../../lib/supabase";
 import SelectAllReviewCheckbox from "../review/SelectAllReviewCheckbox";
 import { bulkResumeToReview, resumeToReview } from "./actions";
@@ -43,10 +49,19 @@ function formatAdminDateTime(value: string | null | undefined) {
   }).format(date);
 }
 
-export default async function AdminOnHoldPage() {
-  const { data: articles, error } = await supabase
+export default async function AdminOnHoldPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const params = await searchParams;
+  const page = parseAdminListPage(params.page);
+  const { from, to } = adminListRange(page);
+
+  const { data: articles, error, count } = await supabase
     .from("articles")
-    .select(`
+    .select(
+      `
       id,
       source,
       original_url,
@@ -64,9 +79,15 @@ export default async function AdminOnHoldPage() {
       published_at,
       collected_at,
       updated_at
-    `)
+    `,
+      { count: "exact" }
+    )
     .eq("review_status", "on_hold")
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    .range(from, to);
+
+  const rows = articles ?? [];
+  const totalCount = count ?? 0;
 
   return (
     <main className="min-h-screen bg-white text-black">
@@ -80,8 +101,8 @@ export default async function AdminOnHoldPage() {
         </h1>
 
         <p className="mt-3 text-sm leading-6 text-gray-600 sm:mt-4 sm:text-base">
-          검토를 보류해 둔 기사 목록입니다. 다시 검토할 준비가 되면 검토 대기로
-          보낼 수 있습니다.
+          검토를 보류해 둔 기사 목록입니다. 기본 {ADMIN_LIST_PAGE_SIZE}건씩 불러옵니다.
+          다시 검토할 준비가 되면 검토 대기로 보낼 수 있습니다.
         </p>
 
         {error ? (
@@ -90,13 +111,13 @@ export default async function AdminOnHoldPage() {
           </div>
         ) : null}
 
-        {!error && (!articles || articles.length === 0) ? (
+        {!error && rows.length === 0 ? (
           <div className="mt-6 rounded-2xl border p-5 text-sm text-gray-600 sm:mt-8 sm:p-6 sm:text-base">
             현재 보류 중인 기사가 없습니다.
           </div>
         ) : null}
 
-        {!error && articles && articles.length > 0 ? (
+        {!error && rows.length > 0 ? (
           <>
             <form id="bulk-on-hold-form" className="mt-6 sm:mt-8">
               <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border bg-gray-50 p-4">
@@ -116,7 +137,7 @@ export default async function AdminOnHoldPage() {
             </form>
 
             <div className="grid gap-3 sm:gap-4">
-              {articles.map((article) => (
+              {rows.map((article) => (
                 <article
                   key={article.id}
                   className="rounded-2xl border p-4 shadow-sm sm:p-6"
@@ -219,6 +240,13 @@ export default async function AdminOnHoldPage() {
                 </article>
               ))}
             </div>
+
+            <AdminListPager
+              pathname="/admin/on-hold"
+              page={page}
+              totalCount={totalCount}
+              fetchedCount={rows.length}
+            />
           </>
         ) : null}
       </section>

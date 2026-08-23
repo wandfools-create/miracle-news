@@ -42,6 +42,18 @@ export const primaryForeignSourceConfigs: SourceConfig[] = [
     ],
     description: "국제 · 종교 · 글로벌 · 심층 분석",
   },
+  {
+    key: "bbc",
+    label: "BBC World",
+    aliases: ["BBC", "BBC News", "BBC World"],
+    description: "국제 · 세계 뉴스",
+  },
+  {
+    key: "sciencedaily",
+    label: "ScienceDaily",
+    aliases: ["ScienceDaily", "Science Daily"],
+    description: "과학 · 기술 · 연구",
+  },
 ];
 
 export const koreanSourceConfigs: SourceConfig[] = [
@@ -68,6 +80,18 @@ export const koreanSourceConfigs: SourceConfig[] = [
     label: "인사이트",
     aliases: ["인사이트", "Insight", "Insight.co.kr"],
     description: "대중 이슈 · 트렌드 · 사회",
+  },
+  {
+    key: "yonhap",
+    label: "Yonhap News Agency",
+    aliases: ["Yonhap", "Yonhap News", "연합뉴스"],
+    description: "한국 · 국제 · 영문 통신",
+  },
+  {
+    key: "korea-herald",
+    label: "The Korea Herald",
+    aliases: ["Korea Herald", "The Korea Herald", "코리아헤럴드"],
+    description: "한국 · 영문 종합",
   },
 ];
 
