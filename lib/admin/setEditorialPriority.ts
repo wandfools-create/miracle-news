@@ -25,7 +25,10 @@ export async function setEditorialPriority(
   const editorialPriority = normalizeEditorialPriority(priorityRaw);
   const { error } = await supabase
     .from("articles")
-    .update({ editorial_priority: editorialPriority })
+    .update({
+      editorial_priority: editorialPriority,
+      editorial_priority_manual: true,
+    })
     .eq("id", articleId);
 
   if (error) {

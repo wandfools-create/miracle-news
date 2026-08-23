@@ -61,6 +61,7 @@ export type ArticleDraftPayload = {
   category?: string;
   topicKey?: string | null;
   topicLabel?: string | null;
+  editorialPriority?: string;
 };
 
 export type LinkTypeLabelKey = LinkType;

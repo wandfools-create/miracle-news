@@ -9,6 +9,7 @@ import {
   SOURCE_ADMIN_LINK_DRAFT,
   resolveSourceForStorage,
 } from "@/lib/article/sourceResolution";
+import { normalizeEditorialPriority } from "@/lib/home/articleFreshness";
 import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
@@ -44,6 +45,7 @@ export type InsertReviewQueueArticleInput = {
   customUniqueId?: string | null;
   topicKey?: string | null;
   topicLabel?: string | null;
+  editorialPriority?: string | null;
   sourceSection?: string | null;
   sourceCountry?: string | null;
   languageOriginal?: string;
@@ -265,6 +267,8 @@ export async function insertReviewQueueArticle(
     category: input.category || "other",
     topic_key: input.topicKey || null,
     topic_label: input.topicLabel || null,
+    editorial_priority: normalizeEditorialPriority(input.editorialPriority),
+    editorial_priority_manual: false,
     thumbnail_url: thumbnailUrlForInsert,
     custom_unique_id: customUniqueId,
     ai_review_status: "pending",

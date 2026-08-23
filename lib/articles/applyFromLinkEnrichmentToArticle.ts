@@ -48,6 +48,14 @@ export async function applyFromLinkEnrichmentToArticle(input: {
     ? "extracted"
     : "none";
 
+  const { data: existingMeta } = await client
+    .from("articles")
+    .select("editorial_priority_manual")
+    .eq("id", articleId)
+    .maybeSingle();
+
+  const priorityLocked = existingMeta?.editorial_priority_manual === true;
+
   const updatePayload: Record<string, unknown> = {
     source: f.source,
     source_country: f.sourceCountry,
@@ -77,6 +85,11 @@ export async function applyFromLinkEnrichmentToArticle(input: {
     status: "ready_for_human_review",
     is_published: false,
   };
+
+  if (!priorityLocked) {
+    updatePayload.editorial_priority = f.editorialPriority;
+    updatePayload.editorial_priority_manual = false;
+  }
 
   const { error: updateError } = await client
     .from("articles")

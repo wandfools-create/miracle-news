@@ -1,4 +1,8 @@
 import { categoryOrder } from "@/lib/koreanArticleDisplay";
+import {
+  normalizeEditorialPriority,
+  type EditorialPriority,
+} from "@/lib/home/articleFreshness";
 
 export const ARTICLE_CATEGORIES = categoryOrder;
 
@@ -43,6 +47,7 @@ export function parseEditorTaxonomy(data: Record<string, unknown>): {
   category: string;
   topicKey: string | null;
   topicLabel: string | null;
+  editorialPriority: EditorialPriority;
 } {
   const topicLabelRaw =
     data.topic_label_ko ?? data.topic_label ?? data.topicLabel;
@@ -50,5 +55,8 @@ export function parseEditorTaxonomy(data: Record<string, unknown>): {
     category: normalizeArticleCategory(data.category),
     topicKey: normalizeTopicKey(data.topic_key ?? data.topicKey),
     topicLabel: normalizeTopicLabel(topicLabelRaw),
+    editorialPriority: normalizeEditorialPriority(
+      data.editorial_priority ?? data.editorialPriority
+    ),
   };
 }

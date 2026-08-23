@@ -139,6 +139,7 @@ async function commitFromLinkDraft(input: {
     category: f.category,
     topicKey: f.topicKey,
     topicLabel: f.topicLabel,
+    editorialPriority: f.editorialPriority,
     thumbnailUrl: f.thumbnailUrl,
     sourceSection: f.sourceSection,
     sourceCountry: f.sourceCountry,

@@ -40,6 +40,7 @@ export type SummarizeForArticleResult =
       category: string;
       topicKey: string | null;
       topicLabel: string | null;
+      editorialPriority: string;
     }
   | {
       ok: false;
@@ -170,6 +171,7 @@ async function summarizeWithOpenAi(input: {
     category: string;
     topicKey: string | null;
     topicLabel: string | null;
+    editorialPriority: string;
   };
 
   const parseCompletion = (
@@ -230,6 +232,7 @@ async function summarizeWithOpenAi(input: {
       category: taxonomy.category,
       topicKey: taxonomy.topicKey,
       topicLabel: taxonomy.topicLabel,
+      editorialPriority: taxonomy.editorialPriority,
     };
   };
 
@@ -269,6 +272,7 @@ async function summarizeWithOpenAi(input: {
     category: draft.category,
     topicKey: draft.topicKey,
     topicLabel: draft.topicLabel,
+    editorialPriority: draft.editorialPriority,
   });
 
   const fail = (

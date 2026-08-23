@@ -11,6 +11,7 @@ import {
 } from "@/lib/from-link/validateArticleQuality";
 import { buildFromLinkAiReviewNotes } from "@/lib/from-link/fromLinkAiNotes";
 import { normalizeArticleCategory } from "@/lib/articles/articleTaxonomy";
+import { normalizeEditorialPriority } from "@/lib/home/articleFreshness";
 import type {
   ArticleDraftPayload,
   DraftCandidate,
@@ -38,6 +39,7 @@ export type FromLinkCommitFields = {
   category: string;
   topicKey: string | null;
   topicLabel: string | null;
+  editorialPriority: string;
 };
 
 export type PrepareFromLinkCommitResult =
@@ -177,6 +179,7 @@ export async function prepareFromLinkCommitFields(input: {
       category: normalizeArticleCategory(draft.category),
       topicKey: draft.topicKey ?? null,
       topicLabel: draft.topicLabel ?? null,
+      editorialPriority: normalizeEditorialPriority(draft.editorialPriority),
     },
   };
 }

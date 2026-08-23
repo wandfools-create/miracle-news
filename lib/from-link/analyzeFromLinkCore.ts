@@ -234,6 +234,7 @@ export async function analyzeFromLinkCore(
         category: summary.category,
         topicKey: summary.topicKey,
         topicLabel: summary.topicLabel,
+        editorialPriority: summary.editorialPriority,
         shortSourceDraft: true,
       };
 
@@ -274,6 +275,7 @@ export async function analyzeFromLinkCore(
     category: summary.category,
     topicKey: summary.topicKey,
     topicLabel: summary.topicLabel,
+    editorialPriority: summary.editorialPriority,
     shortArticleReview: isShortArticleRecommendedReview(summary.bodyKo),
   };
 
