@@ -1,5 +1,7 @@
 import Link from "next/link";
 import ReviewRevisionForm from "@/components/admin/ReviewRevisionForm";
+import EditorialPriorityBadge from "@/components/admin/EditorialPriorityBadge";
+import EditorialPriorityForm from "@/components/admin/EditorialPriorityForm";
 import {
   buildReviewArticleDisplay,
   getReviewKoBody,
@@ -7,6 +9,8 @@ import {
   safeTrimmed,
   type ReviewQueueArticleRow,
 } from "@/lib/admin/reviewArticleDisplay";
+import { normalizeEditorialPriority } from "@/lib/admin/editorialPriority";
+import { setEditorialPriorityFromForm } from "@/lib/admin/setEditorialPriority";
 import { supabase } from "../../../../../lib/supabase";
 import {
   approveArticleDetailFromForm,
@@ -54,6 +58,7 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
   let error: { message?: string } | null = null;
   let isTopStory = false;
   let topStoryOrder = 0;
+  let editorialPriority = "normal";
 
   const withTopStory = await supabase
     .from("articles")
@@ -61,7 +66,8 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
       `
       ${baseSelect},
       is_top_story,
-      top_story_order
+      top_story_order,
+      editorial_priority
     `
     )
     .eq("id", id)
@@ -71,10 +77,12 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
     const row = withTopStory.data as ReviewQueueArticleRow & {
       is_top_story?: boolean;
       top_story_order?: number;
+      editorial_priority?: string | null;
     };
     article = row;
     isTopStory = Boolean(row.is_top_story);
     topStoryOrder = row.top_story_order ?? 0;
+    editorialPriority = normalizeEditorialPriority(row.editorial_priority);
   } else {
     const fallback = await supabase
       .from("articles")
@@ -185,6 +193,7 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
               메인 톱:{" "}
               {isTopStory ? `지정됨 (우선순위 ${topStoryOrder})` : "미지정"}
             </span>
+            <EditorialPriorityBadge value={editorialPriority} />
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -390,6 +399,23 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
                 승인 완료로 이동
               </button>
             </form>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 sm:mt-8 sm:p-5">
+            <h4 className="text-base font-semibold text-orange-950">
+              기사 중요도
+            </h4>
+            <p className="mt-2 text-sm text-orange-950/90">
+              특보·특집·이슈는 원문 발행 시각 기준 24시간 동안 홈 자동 정렬에서
+              우선합니다. 메인 톱 지정과는 별개입니다.
+            </p>
+            <div className="mt-4">
+              <EditorialPriorityForm
+                articleId={article.id}
+                current={editorialPriority}
+                action={setEditorialPriorityFromForm}
+              />
+            </div>
           </div>
 
           <div className="mt-6 rounded-2xl border border-indigo-200 bg-indigo-50 p-4 sm:mt-8 sm:p-5">

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReviewArticleDisplay } from "@/lib/admin/reviewArticleDisplay";
 import { truncateText } from "@/lib/admin/reviewArticleDisplay";
+import EditorialPriorityBadge from "@/components/admin/EditorialPriorityBadge";
 import {
   approveArticleFromForm,
   holdArticleFromForm,
@@ -56,6 +57,7 @@ export default function ReviewArticleCard({ display }: Props) {
             <span>AI 검토: {display.aiReviewLabel}</span>
             <span>·</span>
             <span>상태: {display.reviewStatusLabel}</span>
+            <EditorialPriorityBadge value={display.editorialPriority} />
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">

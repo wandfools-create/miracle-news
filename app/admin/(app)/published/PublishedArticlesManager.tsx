@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import EditorialPriorityBadge from "@/components/admin/EditorialPriorityBadge";
+import EditorialPriorityForm from "@/components/admin/EditorialPriorityForm";
+import { setEditorialPriorityFromForm } from "@/lib/admin/setEditorialPriority";
 import {
   bulkSendToRevisionFromPublished,
   bulkUnpublishArticles,
@@ -31,6 +34,7 @@ type ArticleRow = {
   created_at: string;
   is_top_story: boolean;
   top_story_order: number;
+  editorial_priority: string;
   effectiveDate: string;
 };
 
@@ -325,6 +329,9 @@ export default function PublishedArticlesManager({ articles }: Props) {
                               </span>
                             </>
                           ) : null}
+                          <EditorialPriorityBadge
+                            value={article.editorial_priority}
+                          />
                         </div>
 
                         <h3 className="mt-3 break-words text-lg font-semibold leading-7 sm:text-xl">
@@ -365,6 +372,13 @@ export default function PublishedArticlesManager({ articles }: Props) {
                           >
                             기사 상세 이동
                           </Link>
+
+                          <EditorialPriorityForm
+                            articleId={article.id}
+                            current={article.editorial_priority}
+                            action={setEditorialPriorityFromForm}
+                            compact
+                          />
 
                           <form action={unpublishArticle}>
                             <input type="hidden" name="articleId" value={article.id} />

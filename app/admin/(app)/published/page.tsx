@@ -40,7 +40,8 @@ export default async function AdminPublishedPage() {
       `
       ${baseSelect},
       is_top_story,
-      top_story_order
+      top_story_order,
+      editorial_priority
     `
     )
     .eq("is_published", true)
@@ -61,6 +62,7 @@ export default async function AdminPublishedPage() {
       ...row,
       is_top_story: false,
       top_story_order: 0,
+      editorial_priority: "normal",
     }));
   }
 
@@ -107,6 +109,10 @@ export default async function AdminPublishedPage() {
                   typeof article.top_story_order === "number"
                     ? article.top_story_order
                     : 0,
+                editorial_priority:
+                  typeof article.editorial_priority === "string"
+                    ? article.editorial_priority
+                    : "normal",
                 effectiveDate: toDateKey(effectiveRaw),
               };
             })}

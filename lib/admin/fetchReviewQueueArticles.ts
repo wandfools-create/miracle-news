@@ -23,7 +23,8 @@ export const REVIEW_QUEUE_ARTICLE_SELECT = `
   thumbnail_url,
   published_at,
   collected_at,
-  ai_review_notes
+  ai_review_notes,
+  editorial_priority
 `;
 
 export type ReviewQueueFetchRow = {
@@ -47,6 +48,7 @@ export type ReviewQueueFetchRow = {
   published_at: string | null;
   collected_at: string | null;
   ai_review_notes?: string | null;
+  editorial_priority?: string | null;
 };
 
 export type FetchReviewQueueResult = {

@@ -8,6 +8,7 @@ import {
   type ParsedRssEnrichFailure,
 } from "@/lib/rss/enrichFailure";
 import { SHORT_ARTICLE_REVIEW_NOTE } from "@/lib/from-link/validateArticleQuality";
+import { normalizeEditorialPriority } from "@/lib/admin/editorialPriority";
 
 export type ReviewQueueArticleRow = {
   id: string;
@@ -31,6 +32,7 @@ export type ReviewQueueArticleRow = {
   published_at: string | null;
   collected_at: string | null;
   ai_review_notes?: string | null;
+  editorial_priority?: string | null;
 };
 
 export type ReviewArticleDisplay = {
@@ -58,6 +60,7 @@ export type ReviewArticleDisplay = {
   isRssEnriched: boolean;
   enrichFailure: ParsedRssEnrichFailure | null;
   shortArticleReviewRecommended: boolean;
+  editorialPriority: string;
 };
 
 const categoryLabelMap: Record<string, string> = {
@@ -235,6 +238,7 @@ export function buildReviewArticleDisplay(
     isRssEnriched,
     enrichFailure,
     shortArticleReviewRecommended,
+    editorialPriority: normalizeEditorialPriority(article.editorial_priority),
   };
 }
 

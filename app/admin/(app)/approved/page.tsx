@@ -2,6 +2,10 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
+import EditorialPriorityBadge from "@/components/admin/EditorialPriorityBadge";
+import EditorialPriorityForm from "@/components/admin/EditorialPriorityForm";
+import { normalizeEditorialPriority } from "@/lib/admin/editorialPriority";
+import { setEditorialPriorityFromForm } from "@/lib/admin/setEditorialPriority";
 import { supabase } from "../../../../lib/supabase";
 import { bulkPublishArticles, publishArticle } from "./actions";
 import SelectAllReviewCheckbox from "../review/SelectAllReviewCheckbox";
@@ -31,7 +35,8 @@ export default async function AdminApprovedPage() {
       thumbnail_url,
       approved_at,
       approved_by,
-      is_published
+      is_published,
+      editorial_priority
     `)
     .eq("review_status", ARTICLE_WORKFLOW.approved.review_status)
     .eq("is_published", ARTICLE_WORKFLOW.approved.is_published)
@@ -127,6 +132,9 @@ export default async function AdminApprovedPage() {
                         <span>{getCategoryLabel(article.category)}</span>
                         <span>·</span>
                         <span>승인자: {article.approved_by || "미상"}</span>
+                        <EditorialPriorityBadge
+                          value={article.editorial_priority}
+                        />
                       </div>
 
                       <h2 className="mt-3 break-words text-lg font-semibold leading-7 sm:text-xl">
@@ -163,6 +171,15 @@ export default async function AdminApprovedPage() {
                         >
                           기사 상세 다시 보기
                         </Link>
+
+                        <EditorialPriorityForm
+                          articleId={article.id}
+                          current={normalizeEditorialPriority(
+                            article.editorial_priority
+                          )}
+                          action={setEditorialPriorityFromForm}
+                          compact
+                        />
 
                         <form
                           action={async () => {
