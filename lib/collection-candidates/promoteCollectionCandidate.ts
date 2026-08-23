@@ -138,6 +138,7 @@ export async function promoteCollectionCandidate(input: {
 
   const pipeline = await runRssFromLinkPipeline({
     originalUrl: row.original_url,
+    adminArticleCreate: true,
     aiReviewNotes: [
       RSS_AI_REVIEW_NOTE_CANDIDATE,
       `[후보 ID] ${candidateId}`,

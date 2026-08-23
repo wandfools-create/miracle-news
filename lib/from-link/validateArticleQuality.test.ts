@@ -6,7 +6,9 @@ import { describe, it } from "node:test";
 import {
   MIN_BODY_CHARS,
   SHORT_ARTICLE_REVIEW_NOTE,
+  THIN_SOURCE_MATERIAL_NOTE,
   TARGET_BODY_CHARS_MIN,
+  canAllowAdminShortArticleSave,
   isShortArticleRecommendedReview,
   validateFromLinkDraftQuality,
 } from "./validateArticleQuality";
@@ -105,6 +107,47 @@ describe("from-link article quality gates (fixture only, no OpenAI)", () => {
     assert.ok(result.failedCheckIds?.includes("body_ko_length"));
     assert.match(result.reason, /500자 미달/);
     assert.doesNotMatch(result.reason, /900자/);
+  });
+
+  it("admin soft-save allows 300–400 char normal articles (length only)", () => {
+    for (const n of [300, 400]) {
+      const bodyKo = fitToLength(n);
+      const result = validateFromLinkDraftQuality(qualityInput(bodyKo));
+      assert.equal(result.ok, false);
+      if (result.ok) continue;
+      assert.equal(
+        canAllowAdminShortArticleSave(result, bodyKo),
+        true,
+        `${n}자 should soft-save for admin`
+      );
+      assert.equal(isShortArticleRecommendedReview(bodyKo), true);
+    }
+  });
+
+  it("admin soft-save rejects empty / promotional even when short", () => {
+    const empty = validateFromLinkDraftQuality(qualityInput(""));
+    assert.equal(empty.ok, false);
+    if (!empty.ok) {
+      assert.equal(canAllowAdminShortArticleSave(empty, ""), false);
+    }
+
+    const chunk = [
+      "지금 특가로 구매하세요. 쿠폰 코드 NEWS20을 입력하면 추가 할인을 받을 수 있습니다.",
+      "한정 수량 최저가 이벤트가 진행 중입니다. 무료 체험 후 구독하고 혜택을 받으세요.",
+      "클릭하세요. 지금 구매하시면 사은품이 지급됩니다. Shop now for a limited-time offer.",
+    ].join(" ");
+    const promo = Array.from({ length: 2 }, () => chunk).join("\n\n");
+    const promoResult = validateFromLinkDraftQuality(qualityInput(promo));
+    assert.equal(promoResult.ok, false);
+    if (!promoResult.ok) {
+      assert.equal(canAllowAdminShortArticleSave(promoResult, promo), false);
+    }
+  });
+
+  it("short-article note strings match admin review badge copy", () => {
+    assert.ok(SHORT_ARTICLE_REVIEW_NOTE.includes("짧은 기사"));
+    assert.match(SHORT_ARTICLE_REVIEW_NOTE, /최종 검토 필요/);
+    assert.equal(THIN_SOURCE_MATERIAL_NOTE, "원문 정보량 적음");
   });
 
   it("promotional article → FAIL even when longer than 500 chars", () => {

@@ -7,6 +7,7 @@ import { translateArticlePair } from "@/lib/from-link/translateArticlePair";
 import {
   isShortArticleRecommendedReview,
   SHORT_ARTICLE_REVIEW_NOTE,
+  THIN_SOURCE_MATERIAL_NOTE,
   validateFromLinkDraftQuality,
 } from "@/lib/from-link/validateArticleQuality";
 import { buildFromLinkAiReviewNotes } from "@/lib/from-link/fromLinkAiNotes";
@@ -139,14 +140,17 @@ export async function prepareFromLinkCommitFields(input: {
   );
 
   const thumbnailUrl = sanitizeThumbnailUrl(input.extracted.thumbnailUrl);
+  const shortSourceDraft = draft.shortSourceDraft === true;
   const shortArticleReview =
     draft.shortArticleReview === true ||
+    shortSourceDraft ||
     isShortArticleRecommendedReview(bodyKo);
   let aiReviewNotes =
     input.aiReviewNotes ??
     buildFromLinkAiReviewNotes(c, originalUrl, {
-      shortSourceDraft: draft.shortSourceDraft === true,
+      shortSourceDraft,
       shortArticleReview,
+      thinSourceMaterial: shortSourceDraft,
     });
 
   if (
@@ -154,6 +158,15 @@ export async function prepareFromLinkCommitFields(input: {
     !aiReviewNotes.includes(SHORT_ARTICLE_REVIEW_NOTE)
   ) {
     aiReviewNotes = [aiReviewNotes, `[경고] ${SHORT_ARTICLE_REVIEW_NOTE}`]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  if (
+    shortSourceDraft &&
+    !aiReviewNotes.includes(THIN_SOURCE_MATERIAL_NOTE)
+  ) {
+    aiReviewNotes = [aiReviewNotes, `[경고] ${THIN_SOURCE_MATERIAL_NOTE}`]
       .filter(Boolean)
       .join("\n");
   }

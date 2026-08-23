@@ -1,6 +1,6 @@
 import "server-only";
 
-import { isSuccessfulBodyExtraction } from "./articleBodyValidation";
+import { isSuccessfulBodyExtraction, isAdminUsableBodyExtraction } from "./articleBodyValidation";
 import { MIN_USABLE_BODY_CHARS } from "./constants";
 import type { ContentLanguage, ExtractedPreview, LinkType } from "./types";
 import { detectContentLanguage } from "./detectContentLanguage";
@@ -343,6 +343,11 @@ async function summarizeWithOpenAi(input: {
 
 export type SummarizeForArticleOptions = {
   supplementalTextRaw?: string | null;
+  /**
+   * Admin promote: skip the 400-char source floor (still require MIN_MATERIAL_WITH_AI).
+   * Does not invent content or length-expand.
+   */
+  allowShortSourceMaterial?: boolean;
 };
 
 export async function measureFromLinkSourceMaterial(
@@ -371,6 +376,7 @@ export async function summarizeForArticle(
   const supplementalText = normalizeSupplementalText(
     options?.supplementalTextRaw
   );
+  const allowShortSourceMaterial = options?.allowShortSourceMaterial === true;
   if (linkType === "video") {
     return {
       ok: false,
@@ -387,10 +393,11 @@ export async function summarizeForArticle(
     linkType === "x" ||
     linkType === "instagram"
   ) {
-    if (
-      !isSuccessfulBodyExtraction(extracted) &&
-      (supplementalText?.length ?? 0) < MIN_USABLE_BODY_CHARS
-    ) {
+    const extractionOk =
+      isSuccessfulBodyExtraction(extracted) ||
+      (supplementalText?.length ?? 0) >= MIN_USABLE_BODY_CHARS ||
+      (allowShortSourceMaterial && isAdminUsableBodyExtraction(extracted));
+    if (!extractionOk) {
       console.warn("[from-link/summarize] blocked — body extraction failed", {
         url: extracted.submittedOriginalUrl,
         step: "body-extraction-gate",
@@ -398,6 +405,7 @@ export async function summarizeForArticle(
         extractMethod: extracted.articleBodyExtractMethod,
         extractSuccess: extracted.articleBodyExtractSuccess,
         supplementalLength: supplementalText?.length ?? 0,
+        allowShortSourceMaterial,
       });
       return {
         ok: false,
@@ -480,7 +488,8 @@ export async function summarizeForArticle(
   if (
     material.length < MIN_SOURCE_MATERIAL_CHARS &&
     linkType !== "youtube" &&
-    (supplementalText?.length ?? 0) < MIN_SOURCE_MATERIAL_CHARS
+    (supplementalText?.length ?? 0) < MIN_SOURCE_MATERIAL_CHARS &&
+    !allowShortSourceMaterial
   ) {
     console.warn("[from-link/summarize] 원문 자료 부족 판정 (source min)", {
       url: extracted.submittedOriginalUrl,

@@ -15,6 +15,11 @@ export { INSUFFICIENT_MATERIAL_MESSAGE } from "./validateArticleQuality";
 export type AnalyzeFromLinkOptions = {
   /** Allow saving when source ≥400 chars but generated body fails content/length hard gates. */
   allowShortSourceDraft?: boolean;
+  /**
+   * Admin collection-candidate 「기사 만들기」:
+   * soft-fail length/thin density → review queue with warnings (RSS auto stays strict).
+   */
+  adminArticleCreate?: boolean;
 };
 
 export type AnalyzeFromLinkResult =

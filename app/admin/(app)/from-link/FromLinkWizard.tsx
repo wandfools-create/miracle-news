@@ -437,7 +437,7 @@ export default function FromLinkWizard({ initialUrl = "" }: FromLinkWizardProps)
                     className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
                     role="status"
                   >
-                    <p className="font-semibold">짧은 기사 · 최종 검토 권장</p>
+                    <p className="font-semibold">짧은 기사 · 최종 검토 필요</p>
                     <p className="mt-1 text-amber-900/90">
                       본문이 최소 길이(500자)와 내용 품질 기준은 충족했지만 권장
                       목표(900~1,200자)보다 짧습니다. 검토 대기로 저장되며 최종

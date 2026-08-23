@@ -14,7 +14,7 @@ import {
   buildTranscriptDiagnostic,
   validateYouTubeTranscriptForCandidates,
 } from "@/lib/from-link/transcriptDiagnostic";
-import { isSuccessfulBodyExtraction } from "@/lib/from-link/articleBodyValidation";
+import { isSuccessfulBodyExtraction, isAdminUsableBodyExtraction } from "@/lib/from-link/articleBodyValidation";
 import { MIN_USABLE_BODY_CHARS } from "@/lib/from-link/constants";
 import { normalizeSupplementalText } from "@/lib/from-link/supplementalText";
 import { countSubstantiveParagraphs } from "@/lib/from-link/sanitizeArticleText";
@@ -22,6 +22,7 @@ import { countBodyParagraphs } from "@/lib/from-link/server/publisherExtractors/
 import type { FromLinkQualityCheckItem } from "@/lib/from-link/fromLinkDiagnostics";
 import {
   MIN_BODY_CHARS,
+  canAllowAdminShortArticleSave,
   isShortArticleRecommendedReview,
   validateFromLinkDraftQuality,
 } from "@/lib/from-link/validateArticleQuality";
@@ -30,12 +31,14 @@ import type { ArticleDraftPayload, ExtractedPreview } from "@/lib/from-link/type
 
 function bodyExtractionGateCheck(
   extracted: ExtractedPreview,
-  supplementalChars: number
+  supplementalChars: number,
+  adminArticleCreate: boolean
 ): FromLinkQualityCheckItem {
   const bodyLen = extracted.articleBodyPlain?.length ?? 0;
   const passed =
     isSuccessfulBodyExtraction(extracted) ||
-    supplementalChars >= MIN_USABLE_BODY_CHARS;
+    supplementalChars >= MIN_USABLE_BODY_CHARS ||
+    (adminArticleCreate && isAdminUsableBodyExtraction(extracted));
   return {
     id: "body_extraction",
     label: `기사 본문 추출 (최소 ${MIN_USABLE_BODY_CHARS}자 또는 보강)`,
@@ -58,6 +61,7 @@ export async function analyzeFromLinkCore(
   const supplementalText = normalizeSupplementalText(supplementalTextRaw);
   const supplementalChars = supplementalText?.length ?? 0;
   const allowShortSourceDraft = options?.allowShortSourceDraft === true;
+  const adminArticleCreate = options?.adminArticleCreate === true;
   const resolved = resolveSubmittedUrl(urlRaw);
   if (!resolved.ok) {
     return { ok: false, error: resolved.error };
@@ -115,7 +119,7 @@ export async function analyzeFromLinkCore(
         supplementalChars,
         finalMaterialChars: materialChars,
         extraChecks: [
-          bodyExtractionGateCheck(extracted, supplementalChars),
+          bodyExtractionGateCheck(extracted, supplementalChars, adminArticleCreate),
           {
             id: "cnn_body_access",
             label: "CNN 본문 추출 성공 필수",
@@ -131,7 +135,8 @@ export async function analyzeFromLinkCore(
   if (
     needsArticleBody &&
     !isSuccessfulBodyExtraction(extracted) &&
-    supplementalChars < MIN_USABLE_BODY_CHARS
+    supplementalChars < MIN_USABLE_BODY_CHARS &&
+    !(adminArticleCreate && isAdminUsableBodyExtraction(extracted))
   ) {
     const materialChars = await measureFromLinkSourceMaterial(
       linkType,
@@ -151,7 +156,9 @@ export async function analyzeFromLinkCore(
         extracted,
         supplementalChars,
         finalMaterialChars: materialChars,
-        extraChecks: [bodyExtractionGateCheck(extracted, supplementalChars)],
+        extraChecks: [
+          bodyExtractionGateCheck(extracted, supplementalChars, adminArticleCreate),
+        ],
       }),
     };
   }
@@ -161,7 +168,10 @@ export async function analyzeFromLinkCore(
     submittedOriginalUrl,
     extracted,
     label,
-    { supplementalTextRaw: supplementalText }
+    {
+      supplementalTextRaw: supplementalText,
+      allowShortSourceMaterial: adminArticleCreate,
+    }
   );
   if (!summary.ok) {
     return {
@@ -236,6 +246,48 @@ export async function analyzeFromLinkCore(
         topicLabel: summary.topicLabel,
         editorialPriority: summary.editorialPriority,
         shortSourceDraft: true,
+        shortArticleReview: true,
+      };
+
+      return {
+        ok: true,
+        linkType,
+        linkTypeLabel: label,
+        extracted,
+        transcript,
+        articleDraft,
+        candidates,
+        diagnostics,
+      };
+    }
+
+    if (adminArticleCreate && canAllowAdminShortArticleSave(quality, summary.bodyKo)) {
+      console.info("[from-link/analyze] admin short article soft-save", {
+        url: submittedOriginalUrl,
+        generatedBodyKoLength: summary.bodyKo.trim().length,
+        failedCheckIds: quality.failedCheckIds ?? [],
+        materialChars: summary.materialChars,
+      });
+      const candidates = await proposeCandidates(
+        extracted,
+        label,
+        summary.bodyKo,
+        supplementalText
+      );
+
+      const articleDraft: ArticleDraftPayload = {
+        synthesizedBodyKo: summary.bodyKo,
+        titleKo: summary.titleKo,
+        summaryKo: summary.summaryKo,
+        bodyOriginal: summary.bodyOriginal,
+        summaryOriginal: summary.summaryOriginal,
+        contentLanguage: summary.contentLanguage,
+        category: summary.category,
+        topicKey: summary.topicKey,
+        topicLabel: summary.topicLabel,
+        editorialPriority: summary.editorialPriority,
+        shortSourceDraft: true,
+        shortArticleReview: true,
       };
 
       return {

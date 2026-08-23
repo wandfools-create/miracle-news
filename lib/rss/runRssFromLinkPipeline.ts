@@ -55,11 +55,18 @@ export async function runRssFromLinkPipeline(input: {
   originalUrl: string;
   /** Override default RSS auto-collect review notes. */
   aiReviewNotes?: string;
+  /**
+   * Admin collection-candidate 「기사 만들기」.
+   * Soft-fails length-only quality; RSS auto must leave this false.
+   */
+  adminArticleCreate?: boolean;
 }): Promise<RssFromLinkPipelineResult> {
   const originalUrl = input.originalUrl.trim();
+  const adminArticleCreate = input.adminArticleCreate === true;
 
   const analyzed = await analyzeFromLinkCore(originalUrl, null, {
     allowShortSourceDraft: false,
+    adminArticleCreate,
   });
 
   if (!analyzed.ok) {

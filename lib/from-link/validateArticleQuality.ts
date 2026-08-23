@@ -17,7 +17,11 @@ const MIN_SUMMARY_CHARS = 30;
 const MAX_SUMMARY_CHARS = 500;
 const MAX_SUMMARY_BODY_SIMILARITY = 0.62;
 
-export const SHORT_ARTICLE_REVIEW_NOTE = "짧은 기사 · 최종 검토 권장";
+export const SHORT_ARTICLE_REVIEW_NOTE = "짧은 기사 · 최종 검토 필요";
+/** Extra warning when admin promote saved despite thin source / short draft. */
+export const THIN_SOURCE_MATERIAL_NOTE = "원문 정보량 적음";
+/** Absolute floor for admin soft-save (below this = empty / unusable). */
+export const MIN_ADMIN_SOFT_SAVE_BODY_CHARS = 50;
 
 /** @deprecated Use MIN_BODY_CHARS. Kept so callers do not reintroduce a 900-char gate. */
 export const FROM_LINK_MIN_BODY_KO_CHARS = MIN_BODY_CHARS;
@@ -50,10 +54,10 @@ export type BodyContentFlags = {
   thinFacts: boolean;
 };
 
-/** 500–899자: pass quality, but recommend final human review. */
+/** Below target length (incl. under 500): recommend final human review. */
 export function isShortArticleRecommendedReview(bodyKo: string): boolean {
   const len = bodyKo.trim().length;
-  return len >= MIN_BODY_CHARS && len < TARGET_BODY_CHARS_MIN;
+  return len > 0 && len < TARGET_BODY_CHARS_MIN;
 }
 
 function normalizeForCompare(text: string): string {
@@ -295,6 +299,13 @@ const SHORT_SOURCE_SOFT_CHECK_IDS = new Set([
   "summary_body_similarity",
 ]);
 
+/** Admin promote: length/thin density only — never ads/boilerplate/empty. */
+const ADMIN_PROMOTE_SOFT_FAIL_IDS = new Set([
+  "body_ko_length",
+  "body_thin_facts",
+  "summary_body_similarity",
+]);
+
 export function canAllowShortSourceDraftOverride(
   checks: FromLinkQualityCheckItem[],
   sourceBodyChars: number,
@@ -311,6 +322,21 @@ export function canAllowShortSourceDraftOverride(
   if (failed.length === 0) return false;
 
   return failed.every((c) => SHORT_SOURCE_SOFT_CHECK_IDS.has(c.id));
+}
+
+/**
+ * Admin 「기사 만들기」: soft-save when the only hard fails are length/thinness
+ * (not promo/boilerplate/repetition/empty).
+ */
+export function canAllowAdminShortArticleSave(
+  result: Extract<FromLinkDraftQualityResult, { ok: false }>,
+  bodyKo: string
+): boolean {
+  const body = bodyKo.trim();
+  if (body.length < MIN_ADMIN_SOFT_SAVE_BODY_CHARS) return false;
+  const failed = result.failedCheckIds ?? [];
+  if (failed.length === 0) return false;
+  return failed.every((id) => ADMIN_PROMOTE_SOFT_FAIL_IDS.has(id));
 }
 
 function reasonForFailedCheck(
