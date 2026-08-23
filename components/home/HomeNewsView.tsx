@@ -913,7 +913,7 @@ export default function HomeNewsView({
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-news-navy sm:text-4xl">
                 {pageTitle}
               </h1>
-              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-neutral-600 sm:text-[15px]">
+              <p className="mt-2 max-w-2xl text-[13px] leading-snug text-neutral-600 sm:text-sm sm:leading-relaxed lg:max-w-[34rem]">
                 {labels.tagline}
               </p>
             </div>
