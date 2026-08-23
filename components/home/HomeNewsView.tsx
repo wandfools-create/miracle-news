@@ -817,6 +817,15 @@ export default function HomeNewsView({
   const topStories = displaySections.topStories;
   const showTopStories = Boolean(topStories);
   const featuredHub = useMemo(() => {
+    if (
+      displaySections.featuredLeads &&
+      displaySections.featuredLeads.length > 0
+    ) {
+      return {
+        leads: displaySections.featuredLeads,
+        related: displaySections.featuredRelated ?? [],
+      };
+    }
     if (!displaySections.featured || !topStories) {
       return { leads: [] as HomeArticleCard[], related: [] as HomeArticleCard[] };
     }
@@ -836,7 +845,12 @@ export default function HomeNewsView({
       .filter((a) => !leadKeys.has(a.article_id ?? a.id))
       .slice(0, 5);
     return { leads, related };
-  }, [displaySections.featured, topStories]);
+  }, [
+    displaySections.featured,
+    displaySections.featuredLeads,
+    displaySections.featuredRelated,
+    topStories,
+  ]);
   const useFeaturedComboLayout =
     showFeatured &&
     (featuredHub.leads.length >= 2 || featuredHub.related.length > 0);

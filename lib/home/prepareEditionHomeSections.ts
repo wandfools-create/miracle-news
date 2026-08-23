@@ -6,6 +6,7 @@ import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
 import { getArticleRegion } from "./articleRegion";
 import {
   pickFeaturedArticle,
+  pickFeaturedHubArticles,
   sortHomeArticlesForDisplay,
 } from "./featuredSelection";
 import { pickTrendingIssues } from "./pickTrendingIssues";
@@ -30,6 +31,10 @@ export function prepareEditionHomeSections(
     options?.featuredPool ?? articles
   );
   const featured = pickFeaturedArticle(featuredSorted);
+  const featuredHub = pickFeaturedHubArticles(
+    options?.featuredPool ?? articles,
+    featured
+  );
   const featuredKey = featured?.article_id ?? featured?.id;
 
   const pool = sorted.filter(
@@ -104,6 +109,8 @@ export function prepareEditionHomeSections(
 
   return {
     featured,
+    featuredLeads: featuredHub.leads,
+    featuredRelated: featuredHub.related,
     latest: [],
     topStories: {
       leftTitle: columnLabels.leftTitle,

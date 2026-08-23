@@ -139,8 +139,13 @@ export function filterArticlesForHomeSurface(
 
   if (!allowManualTopStory) return pool;
 
-  const extras = articles.filter(
-    (a) => a.is_top_story === true && !pool.some((p) => p.id === a.id)
-  );
+  const extras = articles.filter((a) => {
+    if (a.is_top_story !== true) return false;
+    if (pool.some((p) => p.id === a.id)) return false;
+    // Only still-active (24h) top stories may bypass the 7d surface window.
+    const freshness = getSourceFreshnessTimestamp(a);
+    if (freshness <= 0) return false;
+    return nowMs - freshness <= EDITORIAL_PRIORITY_WINDOW_MS;
+  });
   return extras.length ? [...pool, ...extras] : pool;
 }

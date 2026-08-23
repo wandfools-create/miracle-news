@@ -6,7 +6,11 @@ import {
   filterArticlesForHomeSurface,
   sortArticlesByFreshness,
 } from "./articleFreshness";
-import { pickFeaturedArticle, sortHomeArticlesForDisplay } from "./featuredSelection";
+import {
+  pickFeaturedArticle,
+  pickFeaturedHubArticles,
+  sortHomeArticlesForDisplay,
+} from "./featuredSelection";
 import type { HomeArticleCard } from "./types";
 
 const NOW = Date.parse("2026-08-22T18:00:00.000Z");
@@ -85,7 +89,7 @@ describe("home freshness priority", () => {
     assert.equal(sortArticlesByFreshness([older, recent], NOW)[0]?.id, "recent");
   });
 
-  it("D: manual is_top_story still wins featured hero", () => {
+  it("D: expired is_top_story (40h) no longer wins featured over fresh normal", () => {
     const manual = card({
       id: "manual",
       title: "manual top",
@@ -101,7 +105,51 @@ describe("home freshness priority", () => {
       published_at: hoursAgo(0.1),
     });
     const featured = pickFeaturedArticle([fresh, manual], NOW);
+    assert.equal(featured?.id, "fresh");
+  });
+
+  it("active is_top_story within 24h still wins featured", () => {
+    const manual = card({
+      id: "manual",
+      title: "manual top",
+      is_top_story: true,
+      top_story_order: 1,
+      source_published_at: hoursAgo(3),
+      published_at: hoursAgo(3),
+    });
+    const fresh = card({
+      id: "fresh",
+      title: "fresh normal",
+      source_published_at: hoursAgo(0.1),
+      published_at: hoursAgo(0.1),
+    });
+    const featured = pickFeaturedArticle([fresh, manual], NOW);
     assert.equal(featured?.id, "manual");
+  });
+
+  it("featured related excludes featured and skips articles older than 7d", () => {
+    const featured = card({
+      id: "hero",
+      title: "hero",
+      source_published_at: hoursAgo(1),
+    });
+    const a = card({ id: "a", title: "a", source_published_at: hoursAgo(2) });
+    const b = card({ id: "b", title: "b", source_published_at: hoursAgo(3) });
+    const old = card({
+      id: "old",
+      title: "old may",
+      source_published_at: hoursAgo(30 * 24),
+      is_top_story: true,
+      top_story_order: 1,
+    });
+    const hub = pickFeaturedHubArticles([featured, a, b, old], featured, {
+      nowMs: NOW,
+      relatedLimit: 5,
+    });
+    assert.equal(hub.leads[0]?.id, "hero");
+    assert.equal(hub.leads[1]?.id, "a");
+    assert.ok(hub.related.every((x) => x.id !== "old"));
+    assert.ok(hub.related.every((x) => x.id !== "hero"));
   });
 
   it("falls back to published_at when source_published_at is missing", () => {

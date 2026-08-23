@@ -75,6 +75,10 @@ export type TrendingIssuesBlock = {
 
 export type HomePageSections = {
   featured: HomeArticleCard | null;
+  /** Featured combo leads (hero + optional secondary). */
+  featuredLeads?: HomeArticleCard[];
+  /** Numbered 「주요 기사」 under the hero (excludes featured). */
+  featuredRelated?: HomeArticleCard[];
   latest: HomeArticleCard[];
   /** When set, replaces single latest list with regional two-column layout. */
   topStories?: EditionTopStoriesColumns | null;

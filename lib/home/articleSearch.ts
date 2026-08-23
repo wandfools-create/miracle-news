@@ -144,6 +144,12 @@ export function filterHomePageSections(
   return {
     ...sections,
     featured,
+    featuredLeads: sections.featuredLeads
+      ? filterList(sections.featuredLeads, normalized, locale)
+      : undefined,
+    featuredRelated: sections.featuredRelated
+      ? filterList(sections.featuredRelated, normalized, locale)
+      : undefined,
     latest: filterList(sections.latest, normalized, locale),
     topStories,
     sidebar: filterList(sections.sidebar, normalized, locale),
