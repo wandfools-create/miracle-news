@@ -24,6 +24,12 @@ export const ARTICLE_WORKFLOW = {
     review_status: "rejected",
     is_published: false,
   },
+  /** Soft-cleanup for stale unused review-queue drafts (not hard delete). */
+  archived: {
+    status: "archived",
+    review_status: "archived",
+    is_published: false,
+  },
 } as const;
 
 export const CATEGORY_LABEL_MAP: Record<string, string> = {

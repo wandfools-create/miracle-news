@@ -31,6 +31,7 @@ const navItems = [
   { href: "/admin/approved", label: "승인 완료", key: "approved" },
   { href: "/admin/published", label: "공개 기사", key: "published" },
   { href: "/admin/rejected", label: "반려 기사", key: "rejected" },
+  { href: "/admin/cleanup", label: "오래된 정리", key: "cleanup" },
 ] as const;
 
 export default function AdminQuickNav({ counts, userEmail }: AdminQuickNavProps) {

@@ -82,6 +82,16 @@ export default function AdminHomePage() {
               현재 사이트에 공개된 기사 보기
             </p>
           </Link>
+
+          <Link
+            href="/admin/cleanup"
+            className="rounded-2xl border p-6 shadow-sm hover:bg-gray-50"
+          >
+            <h2 className="text-xl font-semibold">오래된 항목 정리</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              60일 초과 미사용 후보·검토 대기 보관(만료/아카이브)
+            </p>
+          </Link>
         </div>
       </section>
     </main>
