@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { isAllowedAdminEmail } from "@/lib/admin/adminEmails";
+import { parseCandidateCategoryFilter } from "@/lib/collection-candidates/candidateCategory";
 import { candidateListSearchParams } from "@/lib/collection-candidates/candidateListQuery";
 import { dismissCollectionCandidate } from "@/lib/collection-candidates/dismissCollectionCandidate";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -14,8 +15,14 @@ function listPathFromForm(formData: FormData, extra?: Record<string, string>) {
       status: String(formData.get("statusFilter") ?? "").trim() || "actionable",
       source: String(formData.get("sourceFilter") ?? "").trim() || "all",
       date: String(formData.get("dateFilter") ?? "").trim() || "all",
+      category: parseCandidateCategoryFilter(
+        String(formData.get("categoryFilter") ?? "")
+      ),
     })
   );
+  if (String(formData.get("advanced") ?? "").trim() === "1") {
+    params.set("advanced", "1");
+  }
   if (extra) {
     for (const [key, value] of Object.entries(extra)) {
       params.set(key, value);

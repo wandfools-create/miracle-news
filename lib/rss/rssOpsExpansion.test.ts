@@ -27,6 +27,12 @@ describe("RSS ops expansion (fixture only, no OpenAI)", () => {
     assert.equal(RSS_FEED_SOURCES.length, 8);
   });
 
+  it("uses Korea Herald newsAll XML endpoint (not HTML /rss index)", () => {
+    const kh = RSS_FEED_SOURCES.find((f) => f.sourceKey === "korea-herald");
+    assert.ok(kh);
+    assert.equal(kh.feedUrl, "https://www.koreaherald.com/rss/newsAll");
+  });
+
   it("caps per-feed inserts at 5 and item age at 72h", () => {
     assert.equal(RSS_MAX_INSERTS_PER_FEED, 5);
     assert.equal(RSS_MAX_ITEM_AGE_MS, 72 * 60 * 60 * 1000);

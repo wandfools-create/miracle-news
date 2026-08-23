@@ -32,12 +32,14 @@ export async function fetchCollectionCandidates(input?: {
   status?: string | null;
   source?: string | null;
   date?: string | null;
+  category?: string | null;
   limit?: number;
 }): Promise<FetchCollectionCandidatesResult> {
   const query = parseCandidateListQuery({
     status: input?.status ?? undefined,
     source: input?.source ?? undefined,
     date: input?.date ?? undefined,
+    category: input?.category ?? undefined,
   });
   const limit = input?.limit ?? 100;
 

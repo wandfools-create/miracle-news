@@ -50,7 +50,11 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
   {
     sourceKey: "korea-herald",
     label: "The Korea Herald",
-    feedUrl: "https://www.koreaherald.com/rss",
+    /**
+     * `/rss` is an HTML index page (rss-parser fails with "Unexpected close tag").
+     * Stable RSS 2.0 endpoint listed as application/rss+xml alternate on that page.
+     */
+    feedUrl: "https://www.koreaherald.com/rss/newsAll",
     sourceCountry: "KR",
   },
   {

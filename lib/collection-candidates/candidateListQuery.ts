@@ -1,3 +1,8 @@
+import {
+  parseCandidateCategoryFilter,
+  type CandidateCategoryFilterKey,
+} from "@/lib/collection-candidates/candidateCategory";
+
 export const CANDIDATE_SOURCE_FILTERS = [
   { key: "all", label: "전체 출처" },
   { key: "ap", label: "AP" },
@@ -21,12 +26,14 @@ export type CandidateListQuery = {
   status: string;
   source: string;
   date: string;
+  category: CandidateCategoryFilterKey;
 };
 
 export function parseCandidateListQuery(input: {
   status?: string;
   source?: string;
   date?: string;
+  category?: string;
 }): CandidateListQuery {
   const sourceKeys = new Set<string>(
     CANDIDATE_SOURCE_FILTERS.map((s) => s.key).filter((k) => k !== "all")
@@ -40,6 +47,7 @@ export function parseCandidateListQuery(input: {
     status: input.status?.trim() || "actionable",
     source: sourceKeys.has(source) || source === "all" ? source : "all",
     date: dateKeys.has(date) ? date : "all",
+    category: parseCandidateCategoryFilter(input.category),
   };
 }
 
@@ -55,6 +63,9 @@ export function candidateListSearchParams(query: CandidateListQuery): string {
   }
   if (query.date && query.date !== "all") {
     params.set("date", query.date);
+  }
+  if (query.category && query.category !== "all") {
+    params.set("category", query.category);
   }
   return params.toString();
 }
