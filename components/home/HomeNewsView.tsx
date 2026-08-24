@@ -289,7 +289,7 @@ function FeaturedHero({
 
   if (splitLayout) {
     return (
-      <article className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm lg:grid lg:grid-cols-[1.05fr_minmax(0,0.95fr)] lg:items-stretch">
+      <article className="overflow-hidden rounded-lg bg-white shadow-sm lg:grid lg:grid-cols-[1.05fr_minmax(0,0.95fr)] lg:items-stretch">
         <Link href={href} className="block bg-white lg:min-h-[220px]">
           <div
             className={`${newsThumbFrameClass} aspect-video w-full lg:aspect-[16/10] lg:h-full lg:min-h-[220px]`}
@@ -308,7 +308,7 @@ function FeaturedHero({
   }
 
   return (
-    <article className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
+    <article className="overflow-hidden rounded-lg bg-white shadow-sm">
       <Link href={href} className="block">
         <div
           className={`${newsThumbFrameClass} aspect-video w-full max-h-[560px]`}
@@ -394,7 +394,7 @@ function FeaturedLeadCard({
   const href = resolveArticleHref(article, articleHrefPrefix, articleHrefFor);
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
+    <article className="flex h-full flex-col overflow-hidden rounded-lg bg-white shadow-sm">
       <Link href={href} className="block bg-white">
         <div className={`${newsThumbFrameClass} aspect-video w-full max-h-[180px]`}>
           <ArticleThumb
@@ -599,7 +599,7 @@ function LatestRow({
       <div className="flex gap-4 sm:gap-5">
         <Link
           href={href}
-          className="relative block w-32 shrink-0 overflow-hidden rounded-md bg-white ring-1 ring-neutral-200/80 sm:w-44"
+          className="relative block w-32 shrink-0 overflow-hidden rounded-md bg-white sm:w-44"
         >
           <div className={`${newsThumbFrameClass} aspect-video w-full`}>
             <ArticleThumb
