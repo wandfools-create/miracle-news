@@ -8,7 +8,6 @@ import {
   enrichFromShortlistAction,
   unshortlistFromShortlistAction,
 } from "@/app/admin/(app)/collection-shortlist/actions";
-import { checkOriginalPreviewEmbeddable } from "@/app/admin/(app)/collection-candidates/checkPreviewEmbedAction";
 import {
   AI_RECOMMEND_BEST_SUBLABEL,
   AI_RECOMMEND_GRADE_LABELS,
@@ -47,14 +46,6 @@ export type ShortlistCard = {
   aiRecommendReason: string | null;
 };
 
-type PreviewState = {
-  candidateId: string;
-  url: string;
-  title: string;
-  sourceLabel: string;
-  embedAllowed: boolean | null;
-};
-
 function saveScroll() {
   try {
     sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
@@ -75,18 +66,12 @@ function restoreScroll() {
   }
 }
 
-function isMobileViewport() {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(max-width: 767px)").matches;
-}
-
 export default function CollectionShortlistWorkbench({
   candidates,
 }: {
   candidates: ShortlistCard[];
 }) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
-  const [preview, setPreview] = useState<PreviewState | null>(null);
   const [bulkPending, startBulk] = useTransition();
   const [enrichState, enrichAction, enrichPending] = useActionState(
     enrichFromShortlistAction,
@@ -120,27 +105,6 @@ export default function CollectionShortlistWorkbench({
     });
   }, []);
 
-  const openPreview = useCallback(async (c: ShortlistCard) => {
-    if (isMobileViewport()) {
-      window.open(c.originalUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
-    const sourceLabel = c.feedLabel || SOURCE_LABELS[c.source] || c.source;
-    setPreview({
-      candidateId: c.id,
-      url: c.originalUrl,
-      title: c.rssTitle,
-      sourceLabel,
-      embedAllowed: null,
-    });
-    const check = await checkOriginalPreviewEmbeddable(c.originalUrl);
-    setPreview((prev) =>
-      prev && prev.candidateId === c.id
-        ? { ...prev, embedAllowed: check.allowed }
-        : prev
-    );
-  }, []);
-
   function runBulk(
     action: (formData: FormData) => Promise<void>,
     confirmMessage?: string
@@ -156,10 +120,7 @@ export default function CollectionShortlistWorkbench({
   }
 
   return (
-    <div
-      data-cs-workbench
-      className={`relative ${preview ? "lg:pr-[min(45%,28rem)] xl:pr-[42%]" : ""}`}
-    >
+    <div data-cs-workbench className="relative">
       <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
         <button
           type="button"
@@ -253,13 +214,14 @@ export default function CollectionShortlistWorkbench({
                     </p>
                   ) : null}
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => void openPreview(c)}
+                    <a
+                      href={c.originalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium hover:bg-gray-50"
                     >
                       원문 보기
-                    </button>
+                    </a>
                     <form action={enrichAction} className="inline-flex">
                       <input type="hidden" name="candidateId" value={c.id} />
                       <button
@@ -331,82 +293,6 @@ export default function CollectionShortlistWorkbench({
             </button>
           </div>
         </div>
-      ) : null}
-
-      {preview ? (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/30 lg:hidden"
-            onClick={() => setPreview(null)}
-            aria-hidden
-          />
-          <aside className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l bg-white shadow-xl sm:max-w-md lg:max-w-none lg:w-[min(45%,28rem)] xl:w-[42%]">
-            <div className="flex items-start justify-between gap-2 border-b px-3 py-2.5">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-gray-500">
-                  {preview.sourceLabel}
-                </p>
-                <p className="truncate text-sm font-semibold">{preview.title}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPreview(null)}
-                className="rounded-md border px-2 py-1 text-xs"
-              >
-                닫기
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2 border-b px-3 py-2">
-              <a
-                href={preview.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-md border px-2.5 py-1 text-xs font-medium"
-              >
-                새 탭에서 열기
-              </a>
-              <form action={enrichAction}>
-                <input type="hidden" name="candidateId" value={preview.candidateId} />
-                <button
-                  type="submit"
-                  disabled={enrichPending}
-                  className="rounded-md bg-black px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
-                >
-                  기사 만들기
-                </button>
-              </form>
-            </div>
-            <div className="min-h-0 flex-1 bg-gray-50">
-              {preview.embedAllowed === false ? (
-                <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                  <p className="text-sm font-medium">
-                    이 언론사는 내부 미리보기를 허용하지 않습니다
-                  </p>
-                  <a
-                    href={preview.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
-                  >
-                    새 탭에서 원문 열기
-                  </a>
-                </div>
-              ) : preview.embedAllowed === null ? (
-                <div className="flex h-full items-center justify-center text-sm text-gray-500">
-                  미리보기 확인 중…
-                </div>
-              ) : (
-                <iframe
-                  title="원문 미리보기"
-                  src={preview.url}
-                  className="h-full w-full border-0 bg-white"
-                  sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-                  referrerPolicy="no-referrer"
-                />
-              )}
-            </div>
-          </aside>
-        </>
       ) : null}
 
       {selectedCount > 0 ? <div className="h-16" aria-hidden /> : null}

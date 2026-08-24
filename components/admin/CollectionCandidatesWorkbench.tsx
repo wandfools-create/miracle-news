@@ -8,7 +8,6 @@ import {
   deskExpireCandidatesAction,
   deskShortlistCandidatesAction,
 } from "@/app/admin/(app)/collection-candidates/deskMutationActions";
-import { checkOriginalPreviewEmbeddable } from "@/app/admin/(app)/collection-candidates/checkPreviewEmbedAction";
 import EnrichCandidateForm from "@/components/admin/EnrichCandidateForm";
 import CandidateFilterHiddenFields from "@/components/admin/CandidateFilterHiddenFields";
 import {
@@ -73,23 +72,9 @@ type Props = {
   showLocalizeTools: boolean;
 };
 
-type PreviewState = {
-  candidateId: string;
-  url: string;
-  title: string;
-  sourceLabel: string;
-  canMakeArticle: boolean;
-  embedAllowed: boolean | null;
-};
-
 type DeskMutationResult =
   | { ok: true; action: string; ids: string[]; count: number }
   | { ok: false; error: string };
-
-function isMobileViewport() {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(max-width: 767px)").matches;
-}
 
 function candidateListKey(list: WorkbenchCandidate[]): string {
   return list.map((c) => c.id).join(",");
@@ -106,7 +91,6 @@ export default function CollectionCandidatesWorkbench({
 }: Props) {
   const [rows, setRows] = useState(candidates);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
-  const [preview, setPreview] = useState<PreviewState | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
@@ -136,7 +120,6 @@ export default function CollectionCandidatesWorkbench({
       for (const id of remove) next.delete(id);
       return next;
     });
-    setPreview((prev) => (prev && remove.has(prev.candidateId) ? null : prev));
   }, []);
 
   const runDeskMutation = useCallback(
@@ -201,38 +184,6 @@ export default function CollectionCandidatesWorkbench({
     setSelected(new Set());
   }, []);
 
-  const openPreview = useCallback(async (c: WorkbenchCandidate) => {
-    if (isMobileViewport()) {
-      window.open(c.originalUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    const sourceLabel = c.feedLabel || SOURCE_LABELS[c.source] || c.source;
-    const canMakeArticle =
-      c.status === "pending" ||
-      c.status === "shortlisted" ||
-      c.status === "enrich_failed" ||
-      c.status === "enriching";
-
-    setPreview({
-      candidateId: c.id,
-      url: c.originalUrl,
-      title: c.rssTitle,
-      sourceLabel,
-      canMakeArticle,
-      embedAllowed: null,
-    });
-
-    const check = await checkOriginalPreviewEmbeddable(c.originalUrl);
-    setPreview((prev) =>
-      prev && prev.candidateId === c.id
-        ? { ...prev, embedAllowed: check.allowed }
-        : prev
-    );
-  }, []);
-
-  const closePreview = useCallback(() => setPreview(null), []);
-
   function runEnrichBulk() {
     if (selectedCount === 0) return;
     if (
@@ -273,10 +224,7 @@ export default function CollectionCandidatesWorkbench({
   );
 
   return (
-    <div
-      data-cc-workbench
-      className={`relative ${preview ? "lg:pr-[min(45%,28rem)] xl:pr-[42%]" : ""}`}
-    >
+    <div data-cc-workbench className="relative">
       <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
         <button
           type="button"
@@ -489,13 +437,14 @@ export default function CollectionCandidatesWorkbench({
                   ) : null}
 
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => void openPreview(c)}
+                    <a
+                      href={c.originalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-800 hover:bg-gray-50"
                     >
                       원문 보기
-                    </button>
+                    </a>
                     {canShortlist ? (
                       <button
                         type="button"
@@ -639,90 +588,6 @@ export default function CollectionCandidatesWorkbench({
             </button>
           </div>
         </div>
-      ) : null}
-
-      {preview ? (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/30 lg:hidden"
-            onClick={closePreview}
-            aria-hidden
-          />
-          <aside
-            className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-gray-200 bg-white shadow-xl sm:max-w-md lg:max-w-none lg:w-[min(45%,28rem)] xl:w-[42%]"
-            role="dialog"
-            aria-label="원문 미리보기"
-          >
-            <div className="flex items-start justify-between gap-2 border-b border-gray-200 px-3 py-2.5">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-gray-500">
-                  {preview.sourceLabel}
-                </p>
-                <p className="truncate text-sm font-semibold text-gray-900">
-                  {preview.title}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closePreview}
-                className="shrink-0 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium hover:bg-gray-50"
-              >
-                닫기
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2 border-b border-gray-100 px-3 py-2">
-              <a
-                href={preview.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-800 hover:bg-gray-50"
-              >
-                새 탭에서 열기
-              </a>
-              {preview.canMakeArticle ? (
-                <EnrichCandidateForm
-                  candidateId={preview.candidateId}
-                  view={viewFilter}
-                  status={statusFilter}
-                  source={sourceFilter}
-                  date={dateFilter}
-                  category={categoryFilter}
-                  advanced={showLocalizeTools}
-                  compact
-                />
-              ) : null}
-            </div>
-            <div className="min-h-0 flex-1 bg-gray-50">
-              {preview.embedAllowed === false ? (
-                <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                  <p className="text-sm font-medium text-gray-800">
-                    이 언론사는 내부 미리보기를 허용하지 않습니다
-                  </p>
-                  <a
-                    href={preview.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
-                  >
-                    새 탭에서 원문 열기
-                  </a>
-                </div>
-              ) : preview.embedAllowed === null ? (
-                <div className="flex h-full items-center justify-center text-sm text-gray-500">
-                  미리보기 확인 중…
-                </div>
-              ) : (
-                <iframe
-                  title="원문 미리보기"
-                  src={preview.url}
-                  className="h-full w-full border-0 bg-white"
-                  sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-                  referrerPolicy="no-referrer"
-                />
-              )}
-            </div>
-          </aside>
-        </>
       ) : null}
 
       {selectedCount > 0 ? <div className="h-16" aria-hidden /> : null}
