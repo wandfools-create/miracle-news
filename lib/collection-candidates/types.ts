@@ -41,6 +41,8 @@ export type CollectionCandidateRow = {
   ai_recommend_score: number | null;
   ai_recommend_reason: string | null;
   ai_recommended_at: string | null;
+  discord_brief_sent_at: string | null;
+  discord_brief_message_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -66,6 +68,8 @@ export const COLLECTION_CANDIDATE_LIST_SELECT = `
   ai_recommend_score,
   ai_recommend_reason,
   ai_recommended_at,
+  discord_brief_sent_at,
+  discord_brief_message_id,
   created_at,
   updated_at
 `;

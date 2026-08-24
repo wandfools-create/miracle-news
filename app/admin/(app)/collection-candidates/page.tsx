@@ -14,6 +14,7 @@ import {
   compareCandidatesByAiRecommend,
   normalizeAiRecommendGrade,
 } from "@/lib/collection-candidates/candidateRecommend";
+import { applyAiRecommendPostProcess } from "@/lib/collection-candidates/candidateRecommendPostProcess";
 import { fetchCollectionCandidates } from "@/lib/admin/fetchCollectionCandidates";
 import {
   CANDIDATE_DATE_FILTERS,
@@ -112,25 +113,61 @@ export default async function CollectionCandidatesPage({
     };
   });
 
+  const postProcessedById = new Map(
+    applyAiRecommendPostProcess(
+      classified
+        .filter((c) => c.aiRecommendGrade)
+        .map((c) => ({
+          id: c.id,
+          grade: c.aiRecommendGrade!,
+          score: c.aiRecommendScore ?? 0,
+          reason: c.aiRecommendReason ?? "",
+          title: c.rssTitle,
+          summary: c.rssSummary ?? "",
+          source: c.source,
+          originalUrl: c.originalUrl,
+          rssPublishedAt: c.rssPublishedAt,
+          createdAt: c.createdAt,
+        }))
+    ).map((item) => [item.id, item])
+  );
+
+  const classifiedWithPostProcess: WorkbenchCandidate[] = classified.map((c) => {
+    const adjusted = postProcessedById.get(c.id);
+    if (!adjusted) return c;
+    return {
+      ...c,
+      aiRecommendGrade: adjusted.grade,
+      aiRecommendScore: adjusted.score,
+      aiRecommendReason: adjusted.reason,
+    };
+  });
+
   const byCategory =
     query.category === "all"
-      ? classified
-      : classified.filter((c) => c.candidateCategory === query.category);
+      ? classifiedWithPostProcess
+      : classifiedWithPostProcess.filter(
+          (c) => c.candidateCategory === query.category
+        );
 
   const filtered =
     query.view === "ai"
       ? [...byCategory].sort(compareCandidatesByAiRecommend)
       : byCategory;
 
-  const unevaluatedCount = classified.filter((c) => !c.aiRecommendGrade).length;
+  const unevaluatedCount = classifiedWithPostProcess.filter(
+    (c) => !c.aiRecommendGrade
+  ).length;
 
   const categoryCounts = CANDIDATE_CATEGORY_FILTERS.map((tab) => {
     if (tab.key === "all") {
-      return { ...tab, count: classified.length };
+      return { ...tab, count: classifiedWithPostProcess.length };
     }
     return {
       ...tab,
-      count: classified.filter((c) => c.candidateCategory === tab.key).length,
+      count: classifiedWithPostProcess.filter(
+        (c) => c.candidateCategory === tab.key
+      ).length,
     };
   });
 

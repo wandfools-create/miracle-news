@@ -12,6 +12,7 @@ import {
   candidateFreshnessCutoffIso,
   parseAiRecommendResponseItems,
 } from "@/lib/collection-candidates/candidateRecommend";
+import { applyAiRecommendPostProcess } from "@/lib/collection-candidates/candidateRecommendPostProcess";
 import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
@@ -58,7 +59,9 @@ export async function recommendUnevaluatedCollectionCandidates(): Promise<Recomm
 
   const { data, error } = await client
     .from("collection_candidates")
-    .select("id, source, rss_title, rss_summary, rss_published_at, created_at, ai_recommended_at")
+    .select(
+      "id, source, rss_title, rss_summary, rss_published_at, created_at, original_url, ai_recommended_at"
+    )
     .in("status", ["pending", "enrich_failed", "enriching"])
     .is("ai_recommended_at", null)
     .or(
@@ -128,11 +131,40 @@ export async function recommendUnevaluatedCollectionCandidates(): Promise<Recomm
 
   const parsed = parseAiRecommendResponseItems(completion.data.items);
   const byId = new Map(parsed.map((item) => [item.id, item]));
+
+  const toPostProcess = rows
+    .map((row) => {
+      const scored = byId.get(String((row as { id: string }).id));
+      if (!scored) return null;
+      return {
+        id: String((row as { id: string }).id),
+        grade: scored.grade,
+        score: scored.score,
+        reason: scored.reason,
+        title: String((row as { rss_title?: string }).rss_title ?? "").trim(),
+        summary: truncateSummary(
+          String((row as { rss_summary?: string | null }).rss_summary ?? "")
+        ),
+        source: String((row as { source?: string }).source ?? ""),
+        originalUrl: String(
+          (row as { original_url?: string }).original_url ?? ""
+        ),
+        rssPublishedAt:
+          (row as { rss_published_at?: string | null }).rss_published_at ??
+          null,
+        createdAt: (row as { created_at?: string }).created_at ?? null,
+      };
+    })
+    .filter(Boolean) as Parameters<typeof applyAiRecommendPostProcess>[0];
+
+  const processed = applyAiRecommendPostProcess(toPostProcess);
+  const processedById = new Map(processed.map((item) => [item.id, item]));
+
   const now = new Date().toISOString();
   let updated = 0;
 
   for (const row of payload) {
-    const scored = byId.get(row.id);
+    const scored = processedById.get(row.id);
     if (!scored) continue;
 
     const { error: updateError } = await client

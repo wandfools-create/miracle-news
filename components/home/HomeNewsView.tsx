@@ -381,6 +381,9 @@ function TopStoriesColumnCard({
   );
 }
 
+/** 주요 기사 카드 이미지: 행 내 동일 높이 (width 100% + 16:10). */
+const FEATURED_LEAD_THUMB_FRAME_CLASS = `${newsThumbFrameClass} aspect-[16/10] w-full`;
+
 function FeaturedLeadCard({
   article,
   locale,
@@ -401,12 +404,13 @@ function FeaturedLeadCard({
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-lg bg-white shadow-sm">
-      <Link href={href} className="block bg-white">
-        <div className={`${newsThumbFrameClass} aspect-video w-full max-h-[180px]`}>
+      <Link href={href} className="block shrink-0 bg-white">
+        <div className={FEATURED_LEAD_THUMB_FRAME_CLASS}>
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
             priority={priority}
+            objectFit="cover"
             sizes="(max-width: 640px) 100vw, 50vw"
           />
         </div>
