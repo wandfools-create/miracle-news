@@ -1,4 +1,5 @@
 import Image from "next/image";
+import type { ReactNode } from "react";
 
 import type { HomeArticleCard } from "@/lib/home/types";
 
@@ -10,11 +11,16 @@ type Props = {
   sizes?: string;
   /** Prefer next/image when true (default). Hub views may use plain img. */
   useNextImage?: boolean;
+  /**
+   * contain (default): show full photo, letterbox on white — Hero / large cards.
+   * cover: fill fixed frame, center-crop — list thumbnails for visual uniformity.
+   */
+  objectFit?: "contain" | "cover";
 };
 
 /**
- * Full photo visible (object-contain), horizontally & vertically centered on white.
- * Uses flex centering (not absolute top-left fill) so letterboxed images sit mid-frame.
+ * Thumbnail inside a sized frame (`newsThumbFrameClass` + aspect/size on parent).
+ * contain: flex-centered letterbox. cover: absolute fill + center crop.
  */
 export default function NewsThumbnail({
   article,
@@ -23,6 +29,7 @@ export default function NewsThumbnail({
   className = "",
   sizes = "100vw",
   useNextImage = true,
+  objectFit = "contain",
 }: Props) {
   if (!article.thumbnail_url) {
     return (
@@ -37,34 +44,60 @@ export default function NewsThumbnail({
     );
   }
 
-  const imgClass =
-    "h-auto max-h-full w-auto max-w-full object-contain object-center";
+  const isCover = objectFit === "cover";
+  const imgClass = isCover
+    ? "absolute inset-0 h-full w-full object-cover object-center"
+    : "h-auto max-h-full w-auto max-w-full object-contain object-center";
+  const imgStyle = { objectPosition: "center center" as const };
+
+  let media: ReactNode;
+  if (useNextImage && isCover) {
+    media = (
+      <Image
+        src={article.thumbnail_url}
+        alt={article.title || ""}
+        fill
+        sizes={sizes}
+        className={imgClass}
+        priority={priority}
+        style={imgStyle}
+      />
+    );
+  } else if (useNextImage) {
+    media = (
+      <Image
+        src={article.thumbnail_url}
+        alt={article.title || ""}
+        width={1600}
+        height={900}
+        sizes={sizes}
+        className={imgClass}
+        priority={priority}
+        style={imgStyle}
+      />
+    );
+  } else {
+    media = (
+      // eslint-disable-next-line @next/next/no-img-element -- optional plain img for hub views
+      <img
+        src={article.thumbnail_url}
+        alt={article.title || ""}
+        className={imgClass}
+        loading={priority ? "eager" : "lazy"}
+        style={imgStyle}
+      />
+    );
+  }
 
   return (
     <div
-      className={`flex h-full w-full items-center justify-center bg-white ${className}`}
+      className={
+        isCover
+          ? `relative h-full w-full bg-white ${className}`
+          : `flex h-full w-full items-center justify-center bg-white ${className}`
+      }
     >
-      {useNextImage ? (
-        <Image
-          src={article.thumbnail_url}
-          alt={article.title || ""}
-          width={1600}
-          height={900}
-          sizes={sizes}
-          className={imgClass}
-          priority={priority}
-          style={{ objectPosition: "center center" }}
-        />
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element -- optional plain img for hub views
-        <img
-          src={article.thumbnail_url}
-          alt={article.title || ""}
-          className={imgClass}
-          loading={priority ? "eager" : "lazy"}
-          style={{ objectPosition: "center center" }}
-        />
-      )}
+      {media}
     </div>
   );
 }

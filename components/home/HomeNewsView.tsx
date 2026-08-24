@@ -164,12 +164,14 @@ function ArticleThumb({
   priority = false,
   className = "",
   sizes = "100vw",
+  objectFit = "contain",
 }: {
   article: HomeArticleCard;
   noImageLabel: string;
   priority?: boolean;
   className?: string;
   sizes?: string;
+  objectFit?: "contain" | "cover";
 }) {
   return (
     <NewsThumbnail
@@ -178,6 +180,7 @@ function ArticleThumb({
       priority={priority}
       className={className}
       sizes={sizes}
+      objectFit={objectFit}
     />
   );
 }
@@ -326,6 +329,11 @@ function FeaturedHero({
   );
 }
 
+/** 주요 기사 목록 썸네일: 좌·우 컬럼 동일 규격 (16:10). */
+const TOP_STORY_THUMB_LINK_CLASS =
+  "relative block h-[70px] w-28 shrink-0 overflow-hidden rounded-md bg-white sm:h-[90px] sm:w-36";
+const TOP_STORY_THUMB_FRAME_CLASS = `${newsThumbFrameClass} h-full w-full aspect-[16/10]`;
+
 function TopStoriesColumnCard({
   article,
   locale,
@@ -345,14 +353,12 @@ function TopStoriesColumnCard({
   return (
     <article className="border-b border-neutral-200 py-3.5 last:border-b-0 last:pb-0 sm:py-4">
       <div className="flex gap-3 sm:gap-4">
-        <Link
-          href={href}
-          className="relative block w-28 shrink-0 overflow-hidden rounded-md bg-white ring-1 ring-neutral-200/80 sm:w-36"
-        >
-          <div className={`${newsThumbFrameClass} aspect-video w-full`}>
+        <Link href={href} className={TOP_STORY_THUMB_LINK_CLASS}>
+          <div className={TOP_STORY_THUMB_FRAME_CLASS}>
             <ArticleThumb
               article={article}
               noImageLabel={labels.noImage}
+              objectFit="cover"
               sizes="(max-width: 640px) 112px, 144px"
             />
           </div>
