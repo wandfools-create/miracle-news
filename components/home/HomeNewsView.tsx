@@ -722,50 +722,46 @@ function SidebarItem({
   );
 }
 
+/** Desktop default: 3×2 photo-first source leads. */
+const SOURCE_LEAD_DISPLAY_LIMIT = 6;
+
 function SourceLeadMini({
   article,
   sourceLabel,
-  locale,
   labels,
   articleHrefPrefix,
   articleHrefFor,
 }: {
   article: HomeArticleCard;
   sourceLabel: string;
-  locale: ArticleLocale;
   labels: HomeNewsLabels;
   articleHrefPrefix: string;
   articleHrefFor?: (article: HomeArticleCard) => string;
 }) {
-  const displayLocale = article.locale ?? locale;
   const href = resolveArticleHref(article, articleHrefPrefix, articleHrefFor);
 
   return (
-    <article className="flex gap-3 rounded-lg border border-neutral-200/80 bg-white p-3">
-      <Link
-        href={href}
-        className="relative block w-20 shrink-0 overflow-hidden rounded-md bg-white"
-      >
-        <div className={`${newsThumbFrameClass} aspect-video w-full`}>
+    <article className="flex flex-col bg-white">
+      <Link href={href} className="block bg-white">
+        <div
+          className={`${newsThumbFrameClass} aspect-[16/10] w-full min-h-[168px] sm:min-h-[190px] lg:min-h-[210px]`}
+        >
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
-            sizes="80px"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           />
         </div>
       </Link>
-      <div className="min-w-0 flex-1">
-        <span className="inline-flex rounded-md bg-neutral-900 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+      <div className="pt-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
           {sourceLabel}
-        </span>
-        <h3 className="mt-1.5 text-[15px] font-semibold leading-snug text-neutral-950">
+        </p>
+        <h3 className="mt-1.5 text-[15px] font-semibold leading-snug text-neutral-950 sm:text-base">
           <Link href={href} className="line-clamp-2 hover:underline">
             {article.title}
           </Link>
         </h3>
-        <p className="mt-1 text-[13px] text-neutral-500">
-          {listDateText(article, displayLocale)}
-        </p>
       </div>
     </article>
   );
@@ -854,7 +850,9 @@ export default function HomeNewsView({
   );
   const showAside = showTrending || showSidebar;
   const filteredSourceLeadCards = useMemo(() => {
-    if (!selectedSourceLabel) return displaySections.sourceLeadCards;
+    if (!selectedSourceLabel) {
+      return displaySections.sourceLeadCards.slice(0, SOURCE_LEAD_DISPLAY_LIMIT);
+    }
     return displaySections.sourceLeadCards.filter(
       (item) => item.label === selectedSourceLabel
     );
@@ -1115,16 +1113,15 @@ export default function HomeNewsView({
                     })}
                   </div>
 
-                  <h3 className="mb-4 text-[17px] font-bold text-news-navy">
+                  <h3 className="mb-5 text-[17px] font-bold text-news-navy">
                     {labels.sourceLeadsTitle}
                   </h3>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-10 lg:grid-cols-3 lg:gap-x-8 lg:gap-y-12">
                     {filteredSourceLeadCards.map((item) => (
                       <SourceLeadMini
                         key={item.key}
                         article={item.article}
                         sourceLabel={item.label}
-                        locale={locale}
                         labels={labels}
                         articleHrefPrefix={articleHrefPrefix}
                         articleHrefFor={articleHrefFor}
