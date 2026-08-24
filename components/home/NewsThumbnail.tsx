@@ -13,8 +13,8 @@ type Props = {
 };
 
 /**
- * Fixed-box news thumbnail: full photo visible (object-contain), centered on white.
- * Does not crop faces/scenes to fill the frame.
+ * Full photo visible (object-contain), horizontally & vertically centered on white.
+ * Uses flex centering (not absolute top-left fill) so letterboxed images sit mid-frame.
  */
 export default function NewsThumbnail({
   article,
@@ -37,32 +37,38 @@ export default function NewsThumbnail({
     );
   }
 
-  const fitClass = "h-full w-full object-contain object-center";
-
-  if (!useNextImage) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element -- optional plain img for hub views
-      <img
-        src={article.thumbnail_url}
-        alt={article.title || ""}
-        className={`${fitClass} ${className}`}
-        loading={priority ? "eager" : "lazy"}
-      />
-    );
-  }
+  const imgClass =
+    "h-auto max-h-full w-auto max-w-full object-contain object-center";
 
   return (
-    <Image
-      src={article.thumbnail_url}
-      alt={article.title || ""}
-      fill
-      sizes={sizes}
-      className={`${fitClass} ${className}`}
-      priority={priority}
-    />
+    <div
+      className={`flex h-full w-full items-center justify-center bg-white ${className}`}
+    >
+      {useNextImage ? (
+        <Image
+          src={article.thumbnail_url}
+          alt={article.title || ""}
+          width={1600}
+          height={900}
+          sizes={sizes}
+          className={imgClass}
+          priority={priority}
+          style={{ objectPosition: "center center" }}
+        />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- optional plain img for hub views
+        <img
+          src={article.thumbnail_url}
+          alt={article.title || ""}
+          className={imgClass}
+          loading={priority ? "eager" : "lazy"}
+          style={{ objectPosition: "center center" }}
+        />
+      )}
+    </div>
   );
 }
 
-/** Wrapper classes for fixed thumbnail frames (keep layout size; white letterbox). */
+/** Fixed thumbnail frame: keep card layout size; white letterbox; center child. */
 export const newsThumbFrameClass =
   "relative overflow-hidden bg-white flex items-center justify-center";

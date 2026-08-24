@@ -143,14 +143,14 @@ function SectionHeading({
 }) {
   return (
     <header className="mb-4 border-b border-neutral-200/80 pb-3 sm:mb-5 sm:pb-4">
-      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-news-red">
+      <p className="text-[13px] font-bold uppercase tracking-[0.14em] text-news-red">
         {eyebrow}
       </p>
-      <h2 className="mt-1 text-xl font-bold tracking-tight text-news-navy sm:text-2xl">
+      <h2 className="mt-1 text-[1.375rem] font-bold tracking-tight text-news-navy sm:text-[1.625rem]">
         {title}
       </h2>
       {description ? (
-        <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-neutral-600">
+        <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-neutral-600 sm:text-base">
           {description}
         </p>
       ) : null}
@@ -193,11 +193,11 @@ function StoryMetaLine({
   const date = listDateText(article, displayLocale);
 
   return (
-    <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-medium text-neutral-500">
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] font-medium text-neutral-500 sm:text-sm">
       {article.locale ? (
         <>
           <span
-            className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+            className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
               article.locale === "ko"
                 ? "bg-neutral-900 text-white"
                 : "border border-neutral-300 bg-white text-neutral-700"
@@ -251,8 +251,8 @@ function FeaturedHero({
       <h2
         className={`mt-3 font-bold leading-[1.28] tracking-[-0.02em] text-news-navy ${
           splitLayout
-            ? "text-xl sm:text-[1.35rem] lg:text-[1.5rem]"
-            : "text-[1.5rem] sm:text-[1.875rem] lg:text-[2.125rem]"
+            ? "text-[1.375rem] sm:text-[1.5rem] lg:text-[1.625rem]"
+            : "text-[1.625rem] sm:text-2xl lg:text-[2.25rem]"
         }`}
       >
         <Link
@@ -267,8 +267,8 @@ function FeaturedHero({
         <p
           className={`mt-4 text-neutral-700 ${
             splitLayout
-              ? "line-clamp-2 text-sm leading-relaxed sm:text-[15px]"
-              : "max-w-3xl border-l-[3px] border-news-navy pl-4 text-base font-medium leading-[1.65] sm:text-lg"
+              ? "line-clamp-2 text-[15px] leading-relaxed sm:text-base"
+              : "max-w-3xl border-l-[3px] border-news-navy pl-4 text-[17px] font-medium leading-[1.65] sm:text-lg"
           }`}
         >
           {truncateSummary(article.summary, splitLayout ? 110 : 220, displayLocale)}
@@ -276,7 +276,7 @@ function FeaturedHero({
       ) : null}
 
       <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
-        {published ? <p className="text-sm text-neutral-500">{published}</p> : null}
+        {published ? <p className="text-[15px] text-neutral-500">{published}</p> : null}
         <Link
           href={href}
           className="inline-flex items-center justify-center rounded-md bg-news-navy px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
@@ -359,13 +359,13 @@ function TopStoriesColumnCard({
         </Link>
         <div className="min-w-0 flex-1">
           <StoryMetaLine article={article} locale={displayLocale} />
-          <h3 className="mt-1.5 text-sm font-bold leading-snug text-neutral-950 sm:text-[15px]">
+          <h3 className="mt-1.5 text-[15px] font-bold leading-snug text-neutral-950 sm:text-base">
             <Link href={href} className="line-clamp-3 hover:underline">
               {article.title}
             </Link>
           </h3>
           {article.summary ? (
-            <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-neutral-600 sm:text-sm">
+            <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-neutral-600 sm:text-[15px]">
               {truncateSummary(article.summary, 120, displayLocale)}
             </p>
           ) : null}
@@ -407,7 +407,7 @@ function FeaturedLeadCard({
       </Link>
       <div className="flex flex-1 flex-col p-3.5 sm:p-4">
         <StoryMetaLine article={article} locale={displayLocale} />
-        <h2 className="mt-2 text-base font-bold leading-snug tracking-[-0.01em] text-news-navy sm:text-lg">
+        <h2 className="mt-2 text-[17px] font-bold leading-snug tracking-[-0.01em] text-news-navy sm:text-xl">
           <Link
             href={href}
             className="line-clamp-3 hover:text-news-red hover:underline decoration-neutral-300 underline-offset-2"
@@ -416,7 +416,7 @@ function FeaturedLeadCard({
           </Link>
         </h2>
         {article.summary ? (
-          <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-neutral-600">
+          <p className="mt-2 line-clamp-2 text-[15px] leading-relaxed text-neutral-600">
             {truncateSummary(article.summary, 100, displayLocale)}
           </p>
         ) : null}
@@ -463,7 +463,7 @@ function FeaturedRelatedItem({
         </Link>
         <div className="min-w-0 flex-1">
           <StoryMetaLine article={article} locale={displayLocale} />
-          <h3 className="mt-1.5 text-sm font-bold leading-snug text-neutral-950 sm:text-[15px]">
+          <h3 className="mt-1.5 text-[15px] font-bold leading-snug text-neutral-950 sm:text-base">
             <Link href={href} className="line-clamp-2 hover:underline">
               {article.title}
             </Link>
@@ -506,7 +506,7 @@ function FeaturedWithRelated({
       </div>
       {related.length > 0 ? (
         <aside className="rounded-lg border border-neutral-200 bg-white px-3 py-2 shadow-sm sm:px-3.5 sm:py-2.5">
-          <h3 className="border-b border-neutral-200 pb-2 text-sm font-bold uppercase tracking-wide text-neutral-700">
+          <h3 className="border-b border-neutral-200 pb-2 text-[15px] font-bold uppercase tracking-wide text-neutral-700">
             {labels.latestTitle}
           </h3>
           <div className="mt-1">
@@ -552,11 +552,11 @@ function TopStoriesColumn({
       className={`flex min-w-0 flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm`}
     >
       <div className={`border-t-4 ${accentClass} px-4 py-3 sm:px-5`}>
-        <h3 className="text-lg font-bold text-news-navy">{title}</h3>
+        <h3 className="text-xl font-bold text-news-navy">{title}</h3>
       </div>
       <div className="flex-1 px-3 py-2 sm:px-4 sm:py-3">
         {articles.length === 0 ? (
-          <p className="py-8 text-center text-sm text-neutral-500">{emptyLabel}</p>
+          <p className="py-8 text-center text-[15px] text-neutral-500">{emptyLabel}</p>
         ) : (
           articles.map((article) => (
             <TopStoriesColumnCard
@@ -617,7 +617,7 @@ function LatestRow({
 
         <div className="min-w-0 flex-1 py-0.5">
           <StoryMetaLine article={article} locale={displayLocale} />
-          <h3 className="mt-2 text-[1.0625rem] font-bold leading-snug text-neutral-950 sm:text-lg">
+          <h3 className="mt-2 text-[1.1875rem] font-bold leading-snug text-neutral-950 sm:text-xl">
             <Link
               href={href}
               className="line-clamp-3 hover:underline decoration-neutral-300 underline-offset-2 [text-wrap:pretty]"
@@ -625,7 +625,7 @@ function LatestRow({
               {article.title}
             </Link>
           </h3>
-          <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-neutral-600">
+          <p className="mt-2 line-clamp-2 text-[15px] leading-relaxed text-neutral-600">
             {truncateSummary(article.summary, 140, displayLocale)}
           </p>
         </div>
@@ -663,7 +663,7 @@ function CategoryCard({
       </Link>
       <div className="flex flex-1 flex-col p-4 sm:p-5">
         <StoryMetaLine article={article} locale={displayLocale} />
-        <h3 className="mt-2.5 text-base font-bold leading-snug text-neutral-950 sm:text-[1.0625rem]">
+        <h3 className="mt-2.5 text-[17px] font-bold leading-snug text-neutral-950 sm:text-[1.1875rem]">
           <Link
             href={href}
             className="line-clamp-3 hover:underline decoration-neutral-300 underline-offset-2"
@@ -671,7 +671,7 @@ function CategoryCard({
             {article.title}
           </Link>
         </h3>
-        <p className="mt-2 line-clamp-3 flex-1 text-sm leading-relaxed text-neutral-600">
+        <p className="mt-2 line-clamp-3 flex-1 text-[15px] leading-relaxed text-neutral-600">
           {truncateSummary(article.summary, 120, displayLocale)}
         </p>
       </div>
@@ -702,17 +702,17 @@ function SidebarItem({
           {index + 1}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+          <p className="text-[12px] font-semibold uppercase tracking-wide text-neutral-500">
             {getSourceLabel(article.source, article.original_url)}
           </p>
-          <h3 className="mt-1 text-sm font-semibold leading-snug text-neutral-900">
+          <h3 className="mt-1 text-[15px] font-semibold leading-snug text-neutral-900">
             <Link href={href} className="line-clamp-2 hover:underline">
               {article.title}
             </Link>
           </h3>
           <time
             dateTime={article.published_at ?? article.created_at}
-            className="mt-1 block text-xs text-neutral-500"
+            className="mt-1 block text-[13px] text-neutral-500"
           >
             {listDateText(article, displayLocale)}
           </time>
@@ -755,15 +755,15 @@ function SourceLeadMini({
         </div>
       </Link>
       <div className="min-w-0 flex-1">
-        <span className="inline-flex rounded-md bg-neutral-900 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+        <span className="inline-flex rounded-md bg-neutral-900 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
           {sourceLabel}
         </span>
-        <h3 className="mt-1.5 text-sm font-semibold leading-snug text-neutral-950">
+        <h3 className="mt-1.5 text-[15px] font-semibold leading-snug text-neutral-950">
           <Link href={href} className="line-clamp-2 hover:underline">
             {article.title}
           </Link>
         </h3>
-        <p className="mt-1 text-xs text-neutral-500">
+        <p className="mt-1 text-[13px] text-neutral-500">
           {listDateText(article, displayLocale)}
         </p>
       </div>
@@ -1115,7 +1115,7 @@ export default function HomeNewsView({
                     })}
                   </div>
 
-                  <h3 className="mb-4 text-base font-bold text-news-navy">
+                  <h3 className="mb-4 text-[17px] font-bold text-news-navy">
                     {labels.sourceLeadsTitle}
                   </h3>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -1152,7 +1152,7 @@ export default function HomeNewsView({
                       return (
                         <div key={category}>
                           <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-news-red/70 pb-2">
-                            <h3 className="text-lg font-bold text-news-navy">
+                            <h3 className="text-xl font-bold text-news-navy">
                               {getCategoryLabel(category, locale)}
                             </h3>
                             <span className="text-sm text-neutral-500">
@@ -1202,10 +1202,10 @@ export default function HomeNewsView({
                   <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
                     {labels.sidebarEyebrow}
                   </p>
-                  <h2 className="mt-1 text-base font-bold text-neutral-950">
+                  <h2 className="mt-1 text-[17px] font-bold text-neutral-950">
                     {labels.sidebarTitle}
                   </h2>
-                  <p className="mt-2 text-sm leading-relaxed text-neutral-600">
+                  <p className="mt-2 text-[15px] leading-relaxed text-neutral-600">
                     {labels.sidebarDesc}
                   </p>
                   <div className="mt-4 space-y-1">
