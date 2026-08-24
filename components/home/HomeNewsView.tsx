@@ -2,7 +2,6 @@
 
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { type ArticleLocale } from "@/lib/article/formatPublishedDate";
 import { getCategoryLabel } from "@/lib/article/categoryLabels";
 import {
@@ -15,6 +14,9 @@ import { getSourceLabel } from "@/lib/koreanArticleDisplay";
 import HomeNewsSearch, {
   type HomeNewsSearchLabels,
 } from "@/components/home/HomeNewsSearch";
+import NewsThumbnail, {
+  newsThumbFrameClass,
+} from "@/components/home/NewsThumbnail";
 import {
   newsMainGrid,
   newsPageShell,
@@ -162,38 +164,20 @@ function ArticleThumb({
   priority = false,
   className = "",
   sizes = "100vw",
-  objectFit = "cover",
 }: {
   article: HomeArticleCard;
   noImageLabel: string;
   priority?: boolean;
   className?: string;
   sizes?: string;
-  objectFit?: "cover" | "contain";
 }) {
-  if (!article.thumbnail_url) {
-    return (
-      <div
-        className={`flex h-full w-full flex-col items-center justify-center bg-neutral-100 text-center text-xs text-neutral-400 ${className}`}
-      >
-        <span className="mb-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-neutral-300 text-[10px] font-semibold text-neutral-500">
-          AI
-        </span>
-        {noImageLabel}
-      </div>
-    );
-  }
-
   return (
-    <Image
-      src={article.thumbnail_url}
-      alt={article.title}
-      fill
-      sizes={sizes}
-      className={`${
-        objectFit === "contain" ? "object-contain" : "object-cover"
-      } object-center ${className}`}
+    <NewsThumbnail
+      article={article}
+      noImageLabel={noImageLabel}
       priority={priority}
+      className={className}
+      sizes={sizes}
     />
   );
 }
@@ -306,8 +290,10 @@ function FeaturedHero({
   if (splitLayout) {
     return (
       <article className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm lg:grid lg:grid-cols-[1.05fr_minmax(0,0.95fr)] lg:items-stretch">
-        <Link href={href} className="block bg-neutral-100 lg:min-h-[190px]">
-          <div className="relative aspect-video w-full lg:aspect-auto lg:h-full lg:min-h-[190px]">
+        <Link href={href} className="block bg-white lg:min-h-[220px]">
+          <div
+            className={`${newsThumbFrameClass} aspect-video w-full lg:aspect-[16/10] lg:h-full lg:min-h-[220px]`}
+          >
             <ArticleThumb
               article={article}
               noImageLabel={labels.noImage}
@@ -324,7 +310,9 @@ function FeaturedHero({
   return (
     <article className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
       <Link href={href} className="block">
-        <div className="relative aspect-video w-full max-h-[520px] bg-neutral-100">
+        <div
+          className={`${newsThumbFrameClass} aspect-video w-full max-h-[560px]`}
+        >
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
@@ -359,9 +347,9 @@ function TopStoriesColumnCard({
       <div className="flex gap-3 sm:gap-4">
         <Link
           href={href}
-          className="relative block w-28 shrink-0 overflow-hidden rounded-md bg-neutral-100 ring-1 ring-neutral-200/80 sm:w-36"
+          className="relative block w-28 shrink-0 overflow-hidden rounded-md bg-white ring-1 ring-neutral-200/80 sm:w-36"
         >
-          <div className="relative aspect-video w-full">
+          <div className={`${newsThumbFrameClass} aspect-video w-full`}>
             <ArticleThumb
               article={article}
               noImageLabel={labels.noImage}
@@ -407,8 +395,8 @@ function FeaturedLeadCard({
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
-      <Link href={href} className="block bg-neutral-100">
-        <div className="relative aspect-video w-full max-h-[180px]">
+      <Link href={href} className="block bg-white">
+        <div className={`${newsThumbFrameClass} aspect-video w-full max-h-[180px]`}>
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
@@ -463,9 +451,9 @@ function FeaturedRelatedItem({
         </span>
         <Link
           href={href}
-          className="relative block w-24 shrink-0 overflow-hidden rounded-md bg-neutral-100 ring-1 ring-neutral-200/80 sm:w-28"
+          className="relative block w-24 shrink-0 overflow-hidden rounded-md bg-white ring-1 ring-neutral-200/80 sm:w-28"
         >
-          <div className="relative aspect-video w-full">
+          <div className={`${newsThumbFrameClass} aspect-video w-full`}>
             <ArticleThumb
               article={article}
               noImageLabel={labels.noImage}
@@ -611,9 +599,9 @@ function LatestRow({
       <div className="flex gap-4 sm:gap-5">
         <Link
           href={href}
-          className="relative block w-32 shrink-0 overflow-hidden rounded-md bg-neutral-100 ring-1 ring-neutral-200/80 sm:w-44"
+          className="relative block w-32 shrink-0 overflow-hidden rounded-md bg-white ring-1 ring-neutral-200/80 sm:w-44"
         >
-          <div className="relative aspect-video w-full">
+          <div className={`${newsThumbFrameClass} aspect-video w-full`}>
             <ArticleThumb
               article={article}
               noImageLabel={labels.noImage}
@@ -664,8 +652,8 @@ function CategoryCard({
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-xl border border-neutral-200/90 bg-white">
-      <Link href={href} className="block bg-neutral-100">
-        <div className="relative aspect-video w-full">
+      <Link href={href} className="block bg-white">
+        <div className={`${newsThumbFrameClass} aspect-video w-full`}>
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
@@ -758,12 +746,11 @@ function SourceLeadMini({
         href={href}
         className="relative block w-20 shrink-0 overflow-hidden rounded-md bg-white"
       >
-        <div className="relative aspect-video w-full bg-white">
+        <div className={`${newsThumbFrameClass} aspect-video w-full`}>
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
             sizes="80px"
-            objectFit="contain"
           />
         </div>
       </Link>

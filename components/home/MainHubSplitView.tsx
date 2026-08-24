@@ -14,6 +14,7 @@ import type { MainHubColumnSections, MainHubSplitSections } from "@/lib/home/mai
 import { getSourceLabel } from "@/lib/koreanArticleDisplay";
 import type { HomeArticleCard } from "@/lib/home/types";
 import type { HomeNewsLabels } from "./HomeNewsView";
+import NewsThumbnail from "@/components/home/NewsThumbnail";
 
 export type MainHubSplitLabels = HomeNewsLabels & {
   usColumnTitle: string;
@@ -110,20 +111,12 @@ function ArticleThumb({
   noImageLabel: string;
   priority?: boolean;
 }) {
-  if (!article.thumbnail_url) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-neutral-100 text-center text-xs text-neutral-400">
-        {noImageLabel}
-      </div>
-    );
-  }
-
   return (
-    <img
-      src={article.thumbnail_url}
-      alt=""
-      className="h-full w-full object-cover object-center"
-      loading={priority ? "eager" : "lazy"}
+    <NewsThumbnail
+      article={article}
+      noImageLabel={noImageLabel}
+      priority={priority}
+      useNextImage={false}
     />
   );
 }
@@ -190,8 +183,8 @@ function ColumnFeatured({
 
   return (
     <article className="overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50/80">
-      <Link href={href} className="block bg-neutral-100">
-        <div className="aspect-[16/10] w-full max-h-[280px]">
+      <Link href={href} className="block bg-white">
+        <div className="flex aspect-[16/10] w-full max-h-[280px] items-center justify-center overflow-hidden bg-white">
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
@@ -323,7 +316,7 @@ function ColumnSocialRow({
     <article className="flex gap-3 border-b border-neutral-200 py-3 last:border-b-0">
       <Link
         href={href}
-        className="block h-14 w-20 shrink-0 overflow-hidden rounded bg-neutral-100"
+        className="flex h-14 w-20 shrink-0 items-center justify-center overflow-hidden rounded bg-white"
       >
         <ArticleThumb article={article} noImageLabel={labels.noImage} />
       </Link>

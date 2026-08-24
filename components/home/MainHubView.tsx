@@ -12,6 +12,7 @@ import {
 import { getSourceLabel } from "@/lib/koreanArticleDisplay";
 import type { MainHubSections } from "@/lib/home/prepareMainHubSections";
 import type { HomeArticleCard } from "@/lib/home/types";
+import NewsThumbnail from "@/components/home/NewsThumbnail";
 
 type MainHubLabels = {
   tagline: string;
@@ -99,19 +100,12 @@ function ArticleThumb({
   article: HomeArticleCard;
   priority?: boolean;
 }) {
-  if (!article.thumbnail_url) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-neutral-100 text-xs text-neutral-400">
-        {labels.noImage}
-      </div>
-    );
-  }
   return (
-    <img
-      src={article.thumbnail_url}
-      alt=""
-      className="h-full w-full object-cover"
-      loading={priority ? "eager" : "lazy"}
+    <NewsThumbnail
+      article={article}
+      noImageLabel={labels.noImage}
+      priority={priority}
+      useNextImage={false}
     />
   );
 }
@@ -201,7 +195,7 @@ export default function MainHubView({
                 />
                 <article className="overflow-hidden rounded-xl border border-neutral-200/90 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
                   <Link href={getArticleHref(sections.featured)} className="block">
-                    <div className="aspect-[16/10] w-full max-h-[min(52vw,420px)] bg-neutral-100 sm:aspect-[2/1] sm:max-h-[440px]">
+                    <div className="flex aspect-[16/10] w-full max-h-[min(52vw,420px)] items-center justify-center overflow-hidden bg-white sm:aspect-[2/1] sm:max-h-[440px]">
                       <ArticleThumb article={sections.featured} priority />
                     </div>
                   </Link>
@@ -279,7 +273,7 @@ export default function MainHubView({
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-sm font-bold text-white">
                             {index + 1}
                           </span>
-                          <div className="hidden h-16 w-24 shrink-0 overflow-hidden rounded-lg bg-neutral-100 sm:block sm:h-[4.5rem] sm:w-28">
+                          <div className="hidden h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white sm:flex sm:h-[4.5rem] sm:w-28">
                             <ArticleThumb article={article} />
                           </div>
                           <div className="min-w-0 flex-1">
@@ -326,7 +320,7 @@ export default function MainHubView({
                         href={getArticleHref(article)}
                         className="flex gap-3 rounded-xl border border-neutral-200/90 bg-white p-3 transition hover:border-neutral-300 sm:p-4"
                       >
-                        <div className="h-16 w-20 shrink-0 overflow-hidden rounded-lg bg-neutral-100">
+                        <div className="flex h-16 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
                           <ArticleThumb article={article} />
                         </div>
                         <div className="min-w-0">
