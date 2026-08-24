@@ -49,7 +49,7 @@ export async function bulkDismissCandidatesAction(formData: FormData) {
 
   revalidatePath("/admin/collection-candidates");
 
-  if (!result.ok) {
+  if (!result.ok || result.count === 0) {
     redirect(collectionCandidatesListPath(formData, { dismissError: "1" }));
   }
 
@@ -69,7 +69,7 @@ export async function bulkExpireCandidatesAction(formData: FormData) {
 
   revalidatePath("/admin/collection-candidates");
 
-  if (!result.ok) {
+  if (!result.ok || result.count === 0) {
     redirect(collectionCandidatesListPath(formData, { dismissError: "1" }));
   }
 
@@ -91,7 +91,7 @@ export async function bulkShortlistCandidatesAction(formData: FormData) {
   revalidatePath("/admin/collection-candidates");
   revalidatePath("/admin/collection-shortlist");
 
-  if (!result.ok) {
+  if (!result.ok || result.count === 0) {
     redirect(collectionCandidatesListPath(formData, { dismissError: "1" }));
   }
 

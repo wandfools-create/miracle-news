@@ -28,4 +28,13 @@ describe("editorial shortlist wiring (fixture / source scan)", () => {
     assert.match(src, /status:\s*"shortlisted"/);
     assert.match(src, /status:\s*"pending"/);
   });
+
+  it("shortlist ops return updated ids (not count-only success)", () => {
+    const src = readFileSync(
+      join(process.cwd(), "lib/collection-candidates/shortlistOps.ts"),
+      "utf8"
+    );
+    assert.match(src, /\{ ok: true; count: number; ids: string\[\] \}/);
+    assert.match(src, /\.select\("id"\)/);
+  });
 });

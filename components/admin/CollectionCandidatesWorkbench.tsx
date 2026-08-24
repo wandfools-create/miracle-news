@@ -1,21 +1,16 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
+import { bulkEnrichCandidatesAction } from "@/app/admin/(app)/collection-candidates/bulkCandidateActions";
 import {
-  bulkDismissCandidatesAction,
-  bulkEnrichCandidatesAction,
-  bulkExpireCandidatesAction,
-  bulkShortlistCandidatesAction,
-} from "@/app/admin/(app)/collection-candidates/bulkCandidateActions";
+  deskDismissCandidatesAction,
+  deskExpireCandidatesAction,
+  deskShortlistCandidatesAction,
+} from "@/app/admin/(app)/collection-candidates/deskMutationActions";
 import { checkOriginalPreviewEmbeddable } from "@/app/admin/(app)/collection-candidates/checkPreviewEmbedAction";
 import EnrichCandidateForm from "@/components/admin/EnrichCandidateForm";
-import DismissCandidateForm from "@/components/admin/DismissCandidateForm";
-import ShortlistCandidateForm from "@/components/admin/ShortlistCandidateForm";
 import CandidateFilterHiddenFields from "@/components/admin/CandidateFilterHiddenFields";
-import {
-  preserveCandidateListScrollNow,
-} from "@/components/admin/CandidateListScrollRestore";
 import {
   localizePendingCandidatesAction,
   type LocalizeCandidatesActionState,
@@ -87,9 +82,17 @@ type PreviewState = {
   embedAllowed: boolean | null;
 };
 
+type DeskMutationResult =
+  | { ok: true; action: string; ids: string[]; count: number }
+  | { ok: false; error: string };
+
 function isMobileViewport() {
   if (typeof window === "undefined") return false;
   return window.matchMedia("(max-width: 767px)").matches;
+}
+
+function candidateListKey(list: WorkbenchCandidate[]): string {
+  return list.map((c) => c.id).join(",");
 }
 
 export default function CollectionCandidatesWorkbench({
@@ -101,19 +104,85 @@ export default function CollectionCandidatesWorkbench({
   categoryFilter,
   showLocalizeTools,
 }: Props) {
+  const [rows, setRows] = useState(candidates);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
   const [bulkPending, startBulk] = useTransition();
   const [localizeState, localizeAction, localizePending] = useActionState<
     LocalizeCandidatesActionState,
     FormData
   >(localizePendingCandidatesAction, null);
-  const visibleIds = useMemo(
-    () => candidates.map((c) => c.id),
-    [candidates]
-  );
 
+  const listKey = candidateListKey(candidates);
+
+  useEffect(() => {
+    setRows(candidates);
+    setSelected(new Set());
+    setActionError(null);
+    setActionNotice(null);
+  }, [listKey, candidates]);
+
+  const visibleIds = useMemo(() => rows.map((c) => c.id), [rows]);
   const selectedCount = selected.size;
+
+  const removeIdsFromView = useCallback((ids: string[]) => {
+    const remove = new Set(ids);
+    setRows((prev) => prev.filter((c) => !remove.has(c.id)));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of remove) next.delete(id);
+      return next;
+    });
+    setPreview((prev) => (prev && remove.has(prev.candidateId) ? null : prev));
+  }, []);
+
+  const runDeskMutation = useCallback(
+    (
+      ids: string[],
+      mutate: (ids: string[]) => Promise<DeskMutationResult>,
+      successLabel: string,
+      confirmMessage?: string
+    ) => {
+      if (ids.length === 0) return;
+      if (confirmMessage && !window.confirm(confirmMessage)) return;
+
+      const scrollY = window.scrollY;
+      setActionError(null);
+      setActionNotice(null);
+      setPendingIds((prev) => new Set([...prev, ...ids]));
+
+      startBulk(() => {
+        void (async () => {
+          try {
+            const result = await mutate(ids);
+            if (!result.ok) {
+              setActionError(result.error);
+              return;
+            }
+            removeIdsFromView(result.ids);
+            setActionNotice(`${successLabel} ${result.count}건`);
+            requestAnimationFrame(() => {
+              window.scrollTo(0, scrollY);
+            });
+          } catch (err) {
+            setActionError(
+              err instanceof Error ? err.message : "처리 중 오류가 발생했습니다."
+            );
+          } finally {
+            setPendingIds((prev) => {
+              const next = new Set(prev);
+              for (const id of ids) next.delete(id);
+              return next;
+            });
+          }
+        })();
+      });
+    },
+    [removeIdsFromView]
+  );
 
   const toggleOne = useCallback((id: string, checked: boolean) => {
     setSelected((prev) => {
@@ -141,6 +210,7 @@ export default function CollectionCandidatesWorkbench({
     const sourceLabel = c.feedLabel || SOURCE_LABELS[c.source] || c.source;
     const canMakeArticle =
       c.status === "pending" ||
+      c.status === "shortlisted" ||
       c.status === "enrich_failed" ||
       c.status === "enriching";
 
@@ -163,33 +233,31 @@ export default function CollectionCandidatesWorkbench({
 
   const closePreview = useCallback(() => setPreview(null), []);
 
-  function appendSelectedToForm(form: HTMLFormElement) {
-    form.querySelectorAll('input[data-bulk-id="1"]').forEach((el) => el.remove());
-    for (const id of selected) {
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = "candidateIds";
-      input.value = id;
-      input.dataset.bulkId = "1";
-      form.appendChild(input);
-    }
-  }
-
-  function runBulk(
-    action: (formData: FormData) => Promise<void>,
-    confirmMessage?: string
-  ) {
+  function runEnrichBulk() {
     if (selectedCount === 0) return;
-    if (confirmMessage && !window.confirm(confirmMessage)) return;
-    preserveCandidateListScrollNow();
+    if (
+      !window.confirm(
+        `선택한 ${selectedCount}건을 기사로 만드시겠습니까? OpenAI 비용이 발생합니다.`
+      )
+    ) {
+      return;
+    }
     startBulk(() => {
       const form = document.getElementById(
         "cc-bulk-form"
       ) as HTMLFormElement | null;
       if (!form) return;
-      appendSelectedToForm(form);
+      form.querySelectorAll('input[data-bulk-id="1"]').forEach((el) => el.remove());
+      for (const id of selected) {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "candidateIds";
+        input.value = id;
+        input.dataset.bulkId = "1";
+        form.appendChild(input);
+      }
       const fd = new FormData(form);
-      void action(fd);
+      void bulkEnrichCandidatesAction(fd);
     });
   }
 
@@ -232,9 +300,20 @@ export default function CollectionCandidatesWorkbench({
           전체 선택 해제
         </button>
         <span className="text-xs text-gray-500">
-          {candidates.length}건 · 선택 {selectedCount}
+          {rows.length}건 · 선택 {selectedCount}
         </span>
       </div>
+
+      {actionError ? (
+        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {actionError}
+        </div>
+      ) : null}
+      {actionNotice ? (
+        <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          {actionNotice}
+        </div>
+      ) : null}
 
       <form id="cc-bulk-form" className="hidden" aria-hidden>
         {renderFilterFields()}
@@ -246,7 +325,6 @@ export default function CollectionCandidatesWorkbench({
           action={localizeAction}
           className="mb-3 hidden"
           onSubmit={() => {
-            preserveCandidateListScrollNow();
             const form = document.getElementById(
               "localize-candidates-form"
             ) as HTMLFormElement | null;
@@ -271,8 +349,14 @@ export default function CollectionCandidatesWorkbench({
         <p className="mb-2 text-xs text-red-700">{localizeState.error}</p>
       ) : null}
 
+      {rows.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-600">
+          이 화면에서 처리할 후보가 없습니다.
+        </div>
+      ) : null}
+
       <div className="space-y-2.5">
-        {candidates.map((c) => {
+        {rows.map((c) => {
           const sourceLabel = c.feedLabel || SOURCE_LABELS[c.source] || c.source;
           const statusLabel = CANDIDATE_STATUS_LABELS[c.status] ?? c.status;
           const canMakeArticle =
@@ -294,6 +378,7 @@ export default function CollectionCandidatesWorkbench({
             c.aiRecommendGrade === "best" || c.aiRecommendGrade === "priority";
           const failureText = shortenCandidateFailure(c.enrichError, 100);
           const checked = selected.has(c.id);
+          const busy = pendingIds.has(c.id) || bulkPending;
 
           return (
             <article
@@ -305,6 +390,7 @@ export default function CollectionCandidatesWorkbench({
                   type="checkbox"
                   className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300"
                   checked={checked}
+                  disabled={busy}
                   onChange={(e) => toggleOne(c.id, e.target.checked)}
                   aria-label="후보 선택"
                 />
@@ -351,11 +437,11 @@ export default function CollectionCandidatesWorkbench({
                           ? "bg-blue-50 text-blue-800"
                           : c.status === "shortlisted"
                             ? "bg-violet-100 text-violet-900"
-                          : c.status === "enrich_failed"
-                            ? "bg-red-50 text-red-800"
-                            : c.status === "enriched"
-                              ? "bg-green-50 text-green-800"
-                              : "bg-gray-100 text-gray-700"
+                            : c.status === "enrich_failed"
+                              ? "bg-red-50 text-red-800"
+                              : c.status === "enriched"
+                                ? "bg-green-50 text-green-800"
+                                : "bg-gray-100 text-gray-700"
                       }`}
                     >
                       {statusLabel}
@@ -411,17 +497,24 @@ export default function CollectionCandidatesWorkbench({
                       원문 보기
                     </button>
                     {canShortlist ? (
-                      <ShortlistCandidateForm
-                        candidateId={c.id}
-                        view={viewFilter}
-                        status={statusFilter}
-                        source={sourceFilter}
-                        date={dateFilter}
-                        category={categoryFilter}
-                        advanced={showLocalizeTools}
-                        compact
-                        emphasize={emphasizeShortlist}
-                      />
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          runDeskMutation(
+                            [c.id],
+                            deskShortlistCandidatesAction,
+                            "보관함 이동"
+                          )
+                        }
+                        className={
+                          emphasizeShortlist
+                            ? "rounded-md border border-violet-400 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-950 hover:bg-violet-100 disabled:opacity-50"
+                            : "rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                        }
+                      >
+                        {busy ? "처리 중…" : "편집 보관함에 담기"}
+                      </button>
                     ) : null}
                     {canMakeArticle ? (
                       <EnrichCandidateForm
@@ -447,16 +540,20 @@ export default function CollectionCandidatesWorkbench({
                       </a>
                     ) : null}
                     {canDismiss ? (
-                      <DismissCandidateForm
-                        candidateId={c.id}
-                        view={viewFilter}
-                        status={statusFilter}
-                        source={sourceFilter}
-                        date={dateFilter}
-                        category={categoryFilter}
-                        advanced={showLocalizeTools}
-                        compact
-                      />
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          runDeskMutation(
+                            [c.id],
+                            deskDismissCandidatesAction,
+                            "제외"
+                          )
+                        }
+                        className="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {busy ? "처리 중…" : "제외"}
+                      </button>
                     ) : null}
                   </div>
                 </div>
@@ -476,7 +573,11 @@ export default function CollectionCandidatesWorkbench({
               type="button"
               disabled={bulkPending}
               onClick={() =>
-                runBulk(bulkShortlistCandidatesAction, undefined)
+                runDeskMutation(
+                  [...selected],
+                  deskShortlistCandidatesAction,
+                  "보관함 이동"
+                )
               }
               className="rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm font-semibold text-violet-950 hover:bg-violet-100 disabled:opacity-50"
             >
@@ -486,7 +587,11 @@ export default function CollectionCandidatesWorkbench({
               type="button"
               disabled={bulkPending}
               onClick={() =>
-                runBulk(bulkDismissCandidatesAction, undefined)
+                runDeskMutation(
+                  [...selected],
+                  deskDismissCandidatesAction,
+                  "제외"
+                )
               }
               className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
             >
@@ -496,8 +601,10 @@ export default function CollectionCandidatesWorkbench({
               type="button"
               disabled={bulkPending}
               onClick={() =>
-                runBulk(
-                  bulkExpireCandidatesAction,
+                runDeskMutation(
+                  [...selected],
+                  deskExpireCandidatesAction,
+                  "만료",
                   `선택한 ${selectedCount}건을 보관/만료 처리할까요? (OpenAI 비용 없음)`
                 )
               }
@@ -508,12 +615,7 @@ export default function CollectionCandidatesWorkbench({
             <button
               type="button"
               disabled={bulkPending}
-              onClick={() =>
-                runBulk(
-                  bulkEnrichCandidatesAction,
-                  `선택한 ${selectedCount}건을 기사로 만드시겠습니까? OpenAI 비용이 발생합니다.`
-                )
-              }
+              onClick={runEnrichBulk}
               className="rounded-lg bg-black px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
             >
               선택 기사 만들기

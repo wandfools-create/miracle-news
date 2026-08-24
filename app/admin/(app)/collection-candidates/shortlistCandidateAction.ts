@@ -35,6 +35,13 @@ export async function shortlistCollectionCandidateAction(formData: FormData) {
   if (!result.ok) {
     redirect(collectionCandidatesListPath(formData, { dismissError: "1" }));
   }
+  if (result.count === 0) {
+    redirect(collectionCandidatesListPath(formData, { dismissError: "1" }));
+  }
 
-  redirect(collectionCandidatesListPath(formData, { shortlisted: "1" }));
+  redirect(
+    collectionCandidatesListPath(formData, {
+      shortlisted: String(result.count),
+    })
+  );
 }

@@ -20,7 +20,10 @@ function uniqueIds(ids: string[]): string[] {
 export async function shortlistCollectionCandidates(input: {
   candidateIds: string[];
   shortlistedBy?: string | null;
-}): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+}): Promise<
+  | { ok: true; count: number; ids: string[] }
+  | { ok: false; error: string }
+> {
   const ids = uniqueIds(input.candidateIds);
   if (ids.length === 0) {
     return { ok: false, error: "선택된 후보가 없습니다." };
@@ -44,14 +47,29 @@ export async function shortlistCollectionCandidates(input: {
     .is("article_id", null)
     .select("id");
 
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, count: data?.length ?? 0 };
+  if (error) {
+    console.error("[collection-candidates] shortlist update failed", {
+      ids,
+      error: error.message,
+    });
+    return { ok: false, error: error.message };
+  }
+
+  const updatedIds = (data ?? []).map((row) => String((row as { id: string }).id));
+  console.info("[collection-candidates] shortlisted", {
+    requested: ids.length,
+    updated: updatedIds.length,
+  });
+  return { ok: true, count: updatedIds.length, ids: updatedIds };
 }
 
 /** Return shortlisted candidates to pending. No OpenAI. */
 export async function unshortlistCollectionCandidates(input: {
   candidateIds: string[];
-}): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+}): Promise<
+  | { ok: true; count: number; ids: string[] }
+  | { ok: false; error: string }
+> {
   const ids = uniqueIds(input.candidateIds);
   if (ids.length === 0) {
     return { ok: false, error: "선택된 후보가 없습니다." };
@@ -74,5 +92,6 @@ export async function unshortlistCollectionCandidates(input: {
     .select("id");
 
   if (error) return { ok: false, error: error.message };
-  return { ok: true, count: data?.length ?? 0 };
+  const updatedIds = (data ?? []).map((row) => String((row as { id: string }).id));
+  return { ok: true, count: updatedIds.length, ids: updatedIds };
 }

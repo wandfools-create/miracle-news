@@ -4,16 +4,11 @@ import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/serviceRole";
+import { DISMISSABLE_CANDIDATE_STATUSES } from "@/lib/collection-candidates/dismissCollectionCandidate";
 
-const DISMISSABLE = [
-  "pending",
-  "shortlisted",
-  "enrich_failed",
-  "enriching",
-  "selected",
-] as const;
 const EXPIRABLE = [
   "pending",
+  "shortlisted",
   "enrich_failed",
   "enriching",
   "selected",
@@ -28,7 +23,10 @@ function uniqueIds(ids: string[]): string[] {
 export async function dismissCollectionCandidatesBulk(input: {
   candidateIds: string[];
   dismissedBy?: string | null;
-}): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+}): Promise<
+  | { ok: true; count: number; ids: string[] }
+  | { ok: false; error: string }
+> {
   const ids = uniqueIds(input.candidateIds);
   if (ids.length === 0) {
     return { ok: false, error: "선택된 후보가 없습니다." };
@@ -47,17 +45,28 @@ export async function dismissCollectionCandidatesBulk(input: {
       dismissed_by: input.dismissedBy?.trim() || null,
     })
     .in("id", ids)
-    .in("status", [...DISMISSABLE])
+    .in("status", [...DISMISSABLE_CANDIDATE_STATUSES])
     .select("id");
 
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, count: data?.length ?? 0 };
+  if (error) {
+    console.error("[collection-candidates] dismiss bulk failed", error.message);
+    return { ok: false, error: error.message };
+  }
+  const updatedIds = (data ?? []).map((row) => String((row as { id: string }).id));
+  console.info("[collection-candidates] dismissed bulk", {
+    requested: ids.length,
+    updated: updatedIds.length,
+  });
+  return { ok: true, count: updatedIds.length, ids: updatedIds };
 }
 
-/** Soft-expire (보관/만료) many candidates. No OpenAI. Never touches linked articles. */
+/** Soft-expire many candidates. No OpenAI. Never touches linked articles. */
 export async function expireCollectionCandidatesBulk(input: {
   candidateIds: string[];
-}): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+}): Promise<
+  | { ok: true; count: number; ids: string[] }
+  | { ok: false; error: string }
+> {
   const ids = uniqueIds(input.candidateIds);
   if (ids.length === 0) {
     return { ok: false, error: "선택된 후보가 없습니다." };
@@ -80,5 +89,6 @@ export async function expireCollectionCandidatesBulk(input: {
     .select("id");
 
   if (error) return { ok: false, error: error.message };
-  return { ok: true, count: data?.length ?? 0 };
+  const updatedIds = (data ?? []).map((row) => String((row as { id: string }).id));
+  return { ok: true, count: updatedIds.length, ids: updatedIds };
 }
