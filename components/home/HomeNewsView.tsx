@@ -162,12 +162,14 @@ function ArticleThumb({
   priority = false,
   className = "",
   sizes = "100vw",
+  objectFit = "cover",
 }: {
   article: HomeArticleCard;
   noImageLabel: string;
   priority?: boolean;
   className?: string;
   sizes?: string;
+  objectFit?: "cover" | "contain";
 }) {
   if (!article.thumbnail_url) {
     return (
@@ -188,7 +190,9 @@ function ArticleThumb({
       alt={article.title}
       fill
       sizes={sizes}
-      className={`object-cover object-center ${className}`}
+      className={`${
+        objectFit === "contain" ? "object-contain" : "object-cover"
+      } object-center ${className}`}
       priority={priority}
     />
   );
@@ -752,13 +756,14 @@ function SourceLeadMini({
     <article className="flex gap-3 rounded-lg border border-neutral-200/80 bg-white p-3">
       <Link
         href={href}
-        className="relative block w-20 shrink-0 overflow-hidden rounded-md bg-neutral-100"
+        className="relative block w-20 shrink-0 overflow-hidden rounded-md bg-white"
       >
-        <div className="relative aspect-video w-full">
+        <div className="relative aspect-video w-full bg-white">
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
             sizes="80px"
+            objectFit="contain"
           />
         </div>
       </Link>

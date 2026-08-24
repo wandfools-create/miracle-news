@@ -11,6 +11,13 @@ export type RssFeedSource = {
   /** Default: standard RSS via `feedUrl`. AP uses GraphQL (feeds.apnews.com is defunct). */
   fetchKind?: "rss" | "ap-graphql";
   apCategoryPath?: string;
+  /**
+   * When false, cron/collect skips this feed (no new candidates).
+   * Keep the row for future KR-native Yonhap etc. Default true.
+   */
+  enabled?: boolean;
+  /** Optional operator note (shown in admin source health). */
+  disabledReason?: string;
 };
 
 export const RSS_FEED_SOURCES: RssFeedSource[] = [
@@ -43,9 +50,13 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
   },
   {
     sourceKey: "yonhap",
-    label: "Yonhap News Agency",
+    label: "Yonhap News Agency (English)",
     feedUrl: "https://en.yna.co.kr/RSS/news.xml",
     sourceCountry: "KR",
+    /** English scrapes of KR news — low display value; prefer future KR-native path. */
+    enabled: false,
+    disabledReason:
+      "영문판 우회·중복 수집 품질이 낮아 자동 수집 비활성. 기존 후보·기사는 유지. 향후 한국어 본판 검토용으로 행 유지.",
   },
   {
     sourceKey: "korea-herald",
@@ -70,6 +81,17 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     sourceCountry: "US",
   },
 ];
+
+/** Feeds that cron/collect actually fetches. */
+export function getActiveRssFeedSources(): RssFeedSource[] {
+  return RSS_FEED_SOURCES.filter((f) => f.enabled !== false);
+}
+
+export function isRssFeedSourceEnabled(sourceKey: string): boolean {
+  const feed = RSS_FEED_SOURCES.find((f) => f.sourceKey === sourceKey);
+  if (!feed) return false;
+  return feed.enabled !== false;
+}
 
 /** Legacy stub rows (title/link/summary only). */
 export const RSS_SOURCE_SECTION_STUB = "rss:collect-v1";

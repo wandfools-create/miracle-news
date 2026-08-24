@@ -4,14 +4,12 @@ import { koHomeLabels } from "@/lib/home/koHomeLabels";
 import { prepareEditionHomeSections } from "@/lib/home/prepareEditionHomeSections";
 import { koHomeSearchLabels } from "@/lib/home/koSearchLabels";
 import { formatServerHeaderDate } from "@/lib/home/serverDateLabels";
-import { featuredSourceConfigs } from "@/lib/koreanArticleDisplay";
 
 export const dynamic = "force-dynamic";
 
 export default async function KoreanHomePage() {
   const { articles, error } = await fetchEditionHomeArticles("ko");
   const headerDateText = formatServerHeaderDate("ko");
-  const sourceOptions = featuredSourceConfigs.map((s) => s.label);
 
   const sections = prepareEditionHomeSections(
     articles,
@@ -22,6 +20,9 @@ export default async function KoreanHomePage() {
     },
     { featuredPool: articles }
   );
+
+  /** Only outlets that currently have published articles (e.g. hide Yonhap at 0). */
+  const sourceOptions = sections.activeSourceLabels;
 
   return (
     <HomeNewsView

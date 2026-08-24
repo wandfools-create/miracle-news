@@ -1,5 +1,7 @@
 /** Non-article RSS items: skip before from-link / OpenAI (AP, Fox, PBS, CSM). */
 
+import { getSportsCollectionSkipReason } from "@/lib/rss/sportsCollectionPolicy";
+
 export const RSS_NON_ARTICLE_PATH_KEYWORDS = [
   "photo-gallery",
   "photos",
@@ -84,7 +86,7 @@ const RSS_NON_ARTICLE_TITLE_PATTERNS: Array<{ label: string; pattern: RegExp }> 
   ];
 
 export type RssItemSkipReason = {
-  code: "path_keyword" | "title_pattern" | "similar_title";
+  code: "path_keyword" | "title_pattern" | "similar_title" | "sports_policy";
   detail: string;
   summary: string;
 };
@@ -141,7 +143,7 @@ function titleMatchesNonArticlePattern(title: string): string | null {
 /** Skip non-text RSS items (galleries, video, live blogs) before enrich. */
 export function getRssItemSkipReason(
   sourceKey: string,
-  input: { title: string; url: string }
+  input: { title: string; url: string; summary?: string | null }
 ): RssItemSkipReason | null {
   if (!isPrefilterSource(sourceKey)) return null;
 
@@ -170,6 +172,19 @@ export function getRssItemSkipReason(
     };
   }
 
+  const sportsSkip = getSportsCollectionSkipReason({
+    title: input.title,
+    summary: input.summary,
+    url: input.url,
+  });
+  if (sportsSkip) {
+    return {
+      code: "sports_policy",
+      detail: sportsSkip.detail,
+      summary: sportsSkip.summary,
+    };
+  }
+
   return null;
 }
 
@@ -182,9 +197,11 @@ export function shouldReclassifyEnrichFailureAsSkipped(input: {
   sourceKey: string;
   title: string;
   url: string;
+  summary?: string | null;
 }): RssItemSkipReason | null {
   return getRssItemSkipReason(input.sourceKey, {
     title: input.title,
     url: input.url,
+    summary: input.summary,
   });
 }

@@ -85,7 +85,8 @@ export const koreanSourceConfigs: SourceConfig[] = [
     key: "yonhap",
     label: "Yonhap News Agency",
     aliases: ["Yonhap", "Yonhap News", "연합뉴스"],
-    description: "한국 · 국제 · 영문 통신",
+    description:
+      "한국 · 국제 · 영문 통신 (영문 RSS 자동 수집 비활성 — 기존 기사만 표시)",
   },
   {
     key: "korea-herald",

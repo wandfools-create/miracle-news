@@ -20,11 +20,17 @@ import {
   type CollectRssOptions,
   type RssCollectCostStats,
 } from "@/lib/rss/rssCollectConfig";
-import { RSS_FEED_SOURCES, type RssFeedSource } from "@/lib/rss/feedSources";
+import {
+  getActiveRssFeedSources,
+  RSS_FEED_SOURCES,
+  type RssFeedSource,
+} from "@/lib/rss/feedSources";
 import {
   evaluateRssItemAge,
+  RSS_FIRST_PASS_INSERTS_PER_FEED,
   RSS_MAX_INSERTS_PER_FEED,
   RSS_MAX_ITEMS_PER_FEED,
+  rssFeedInsertQuota,
 } from "@/lib/rss/rssItemFreshness";
 import { parseRssFeed, type ParsedRssItem } from "@/lib/rss/parseRssFeed";
 import {
@@ -354,6 +360,7 @@ async function prefilterRssFeedItems(
     const skipReason = getRssItemSkipReason(feed.sourceKey, {
       title: item.title,
       url: resolved.href,
+      summary: item.summary,
     });
     if (skipReason) {
       skipped += 1;
@@ -373,12 +380,15 @@ async function prefilterRssFeedItems(
   return { toProcess, skipped };
 }
 
-async function collectSingleFeed(
-  feed: RssFeedSource,
-  seenUrls: Set<string>,
-  ctx: CollectRunContext
-): Promise<FeedCollectStats> {
-  const stats: FeedCollectStats = {
+type PreparedFeed = {
+  feed: RssFeedSource;
+  stats: FeedCollectStats;
+  /** Remaining prefiltered items to try (shared across fair passes). */
+  queue: ParsedRssItem[];
+};
+
+function emptyFeedStats(feed: RssFeedSource): FeedCollectStats {
+  return {
     sourceKey: feed.sourceKey,
     label: feed.label,
     feedUrl: feed.feedUrl,
@@ -390,12 +400,22 @@ async function collectSingleFeed(
     skippedOld: 0,
     failed: 0,
   };
+}
 
+/** Fetch + prefilter one feed. Parse/fetch errors stay on this feed; run continues. */
+async function prepareFeed(
+  feed: RssFeedSource,
+  ctx: CollectRunContext
+): Promise<PreparedFeed> {
+  const stats = emptyFeedStats(feed);
   const fetched = await fetchFeedItems(feed);
   if (!fetched.ok) {
     stats.error = fetched.error;
-    await logFeedCollection(feed.label, stats, ctx);
-    return stats;
+    console.warn("[collectRss] feed failed (continuing other feeds)", {
+      source: feed.sourceKey,
+      error: fetched.error,
+    });
+    return { feed, stats, queue: [] };
   }
 
   const items = fetched.items.slice(0, RSS_MAX_ITEMS_PER_FEED);
@@ -408,46 +428,65 @@ async function collectSingleFeed(
   );
   stats.skipped += prefilterSkipped;
 
-  let feedInsertBudget = RSS_MAX_INSERTS_PER_FEED;
+  return { feed, stats, queue: [...toProcess] };
+}
 
-  for (const item of toProcess) {
-    if (ctx.options.save && ctx.remainingCandidateBudget.value <= 0) break;
-    if (feedInsertBudget <= 0) break;
+/**
+ * Process up to `maxNewInserts` successful saves from this feed's queue.
+ * Does not exceed per-feed cap or run budget (checked via caller quota).
+ */
+async function drainFeedInsertQuota(
+  prepared: PreparedFeed,
+  seenUrls: Set<string>,
+  ctx: CollectRunContext,
+  maxNewInserts: number
+): Promise<void> {
+  if (maxNewInserts <= 0) return;
 
-    const outcome = await processRssItem(feed, item, seenUrls, ctx);
+  let savedThisCall = 0;
+  while (
+    savedThisCall < maxNewInserts &&
+    prepared.queue.length > 0 &&
+    (!ctx.options.save || ctx.remainingCandidateBudget.value > 0) &&
+    prepared.stats.inserted + (prepared.stats.wouldInsert ?? 0) <
+      RSS_MAX_INSERTS_PER_FEED
+  ) {
+    const item = prepared.queue.shift()!;
+    const outcome = await processRssItem(prepared.feed, item, seenUrls, ctx);
 
     if (outcome === "duplicate") {
-      stats.duplicates += 1;
+      prepared.stats.duplicates += 1;
       continue;
     }
     if (outcome === "skipped_old") {
-      stats.skippedOld += 1;
+      prepared.stats.skippedOld += 1;
       continue;
     }
     if (
       outcome === "skipped" ||
       (typeof outcome === "object" && outcome.kind === "prefilter_skipped")
     ) {
-      stats.skipped += 1;
+      prepared.stats.skipped += 1;
       continue;
     }
     if (outcome === "insert_failed") {
-      stats.failed += 1;
+      prepared.stats.failed += 1;
       continue;
     }
     if (typeof outcome === "object" && outcome.kind === "would_insert") {
-      stats.wouldInsert = (stats.wouldInsert ?? 0) + 1;
-      feedInsertBudget -= 1;
+      prepared.stats.wouldInsert = (prepared.stats.wouldInsert ?? 0) + 1;
+      savedThisCall += 1;
       continue;
     }
 
-    stats.inserted += 1;
-    feedInsertBudget -= 1;
+    prepared.stats.inserted += 1;
+    savedThisCall += 1;
     ctx.remainingCandidateBudget.value -= 1;
   }
+}
 
-  await logFeedCollection(feed.label, stats, ctx);
-  return stats;
+function feedSavedCount(stats: FeedCollectStats): number {
+  return stats.inserted + (stats.wouldInsert ?? 0);
 }
 
 export async function collectRssToReviewQueue(
@@ -465,7 +504,6 @@ export async function collectRssToReviewQueue(
 
   const seenUrls = new Set<string>();
   const seenTitles = await loadRecentCandidateTitles();
-  const feeds: FeedCollectStats[] = [];
 
   const ctx: CollectRunContext = {
     options,
@@ -483,18 +521,54 @@ export async function collectRssToReviewQueue(
     console.info("[collectRss] test mode — no DB writes");
   }
 
-  console.info("[collectRss] run start (v5 candidates, no OpenAI)", {
+  const activeFeeds = getActiveRssFeedSources();
+
+  console.info("[collectRss] run start (v5 candidates, fair pass, no OpenAI)", {
     mode: options.mode,
     save: options.save,
     maxCandidatesPerRun: options.maxCandidatesPerRun,
     maxInsertsPerFeed: RSS_MAX_INSERTS_PER_FEED,
+    firstPassInsertsPerFeed: RSS_FIRST_PASS_INSERTS_PER_FEED,
     openaiCalls: 0,
-    feedCount: RSS_FEED_SOURCES.length,
+    feedCount: activeFeeds.length,
+    registeredFeedCount: RSS_FEED_SOURCES.length,
   });
 
-  for (const feed of RSS_FEED_SOURCES) {
-    const stats = await collectSingleFeed(feed, seenUrls, ctx);
-    feeds.push(stats);
+  // 1) Prepare every active feed (fetch failures isolated per source).
+  const prepared: PreparedFeed[] = [];
+  for (const feed of activeFeeds) {
+    prepared.push(await prepareFeed(feed, ctx));
+  }
+
+  // 2) Fair pass 1 — each feed gets up to FIRST_PASS inserts.
+  for (const p of prepared) {
+    const quota = rssFeedInsertQuota({
+      pass: 1,
+      alreadyInserted: feedSavedCount(p.stats),
+      runBudgetRemaining: ctx.options.save
+        ? ctx.remainingCandidateBudget.value
+        : Number.MAX_SAFE_INTEGER,
+    });
+    await drainFeedInsertQuota(p, seenUrls, ctx, quota);
+  }
+
+  // 3) Fair pass 2 — leftover run budget, still capped at MAX per feed.
+  for (const p of prepared) {
+    if (ctx.options.save && ctx.remainingCandidateBudget.value <= 0) break;
+    const quota = rssFeedInsertQuota({
+      pass: 2,
+      alreadyInserted: feedSavedCount(p.stats),
+      runBudgetRemaining: ctx.options.save
+        ? ctx.remainingCandidateBudget.value
+        : Number.MAX_SAFE_INTEGER,
+    });
+    await drainFeedInsertQuota(p, seenUrls, ctx, quota);
+  }
+
+  const feeds: FeedCollectStats[] = [];
+  for (const p of prepared) {
+    await logFeedCollection(p.feed.label, p.stats, ctx);
+    feeds.push(p.stats);
   }
 
   const totals = feeds.reduce(

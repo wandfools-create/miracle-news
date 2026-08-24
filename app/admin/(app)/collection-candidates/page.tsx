@@ -5,6 +5,7 @@ import CollectionCandidatesWorkbench, {
   type WorkbenchCandidate,
 } from "@/components/admin/CollectionCandidatesWorkbench";
 import RecommendCandidatesForm from "@/components/admin/RecommendCandidatesForm";
+import RssSourceHealthPanel from "@/components/admin/RssSourceHealthPanel";
 import {
   CANDIDATE_CATEGORY_FILTERS,
   classifyCandidateCategory,
@@ -165,6 +166,10 @@ export default async function CollectionCandidatesPage({
           에 담아 두고, 그다음 기사 만들기를 실행하세요. 「AI 추천 갱신」은
           저비용 모델로 제목·요약만 평가합니다.
         </p>
+
+        <div className="mt-4">
+          <RssSourceHealthPanel />
+        </div>
 
         <div className="mt-5 flex flex-wrap gap-1.5">
           {CANDIDATE_VIEW_FILTERS.map((tab) => {
