@@ -1,5 +1,6 @@
 import "server-only";
 
+import { candidateFreshnessCutoffIso } from "@/lib/collection-candidates/candidateRecommend";
 import {
   COLLECTION_CANDIDATE_LIST_SELECT,
   type CollectionCandidateRow,
@@ -29,6 +30,7 @@ const ACTIONABLE_STATUSES: CollectionCandidateStatus[] = [
 ];
 
 export async function fetchCollectionCandidates(input?: {
+  view?: string | null;
   status?: string | null;
   source?: string | null;
   date?: string | null;
@@ -36,6 +38,7 @@ export async function fetchCollectionCandidates(input?: {
   limit?: number;
 }): Promise<FetchCollectionCandidatesResult> {
   const query = parseCandidateListQuery({
+    view: input?.view ?? undefined,
     status: input?.status ?? undefined,
     source: input?.source ?? undefined,
     date: input?.date ?? undefined,
@@ -63,6 +66,7 @@ export async function fetchCollectionCandidates(input?: {
   }
 
   const { client } = createServiceRoleSupabaseClient();
+  const cutoffIso = candidateFreshnessCutoffIso();
 
   let dbQuery = client
     .from("collection_candidates")
@@ -71,7 +75,29 @@ export async function fetchCollectionCandidates(input?: {
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (statusFilter === "actionable") {
+  if (statusFilter === "shortlisted") {
+    dbQuery = dbQuery.eq("status", "shortlisted");
+  } else if (query.view === "ai" || query.view === "recent") {
+    if (query.view === "recent") {
+      dbQuery = dbQuery.eq("status", "pending");
+    } else if (statusFilter === "actionable") {
+      dbQuery = dbQuery.in("status", ACTIONABLE_STATUSES);
+    } else if (statusFilter !== "all") {
+      dbQuery = dbQuery.eq("status", statusFilter);
+    }
+
+    const range = dateFilterRange(query.date);
+    const fromIso =
+      range && range.from > cutoffIso ? range.from : cutoffIso;
+    dbQuery = dbQuery.or(
+      `rss_published_at.gte.${fromIso},and(rss_published_at.is.null,created_at.gte.${fromIso})`
+    );
+  } else if (query.view === "older") {
+    dbQuery = dbQuery.eq("status", "pending");
+    dbQuery = dbQuery.or(
+      `rss_published_at.lt.${cutoffIso},and(rss_published_at.is.null,created_at.lt.${cutoffIso})`
+    );
+  } else if (statusFilter === "actionable") {
     dbQuery = dbQuery.in("status", ACTIONABLE_STATUSES);
   } else if (statusFilter !== "all") {
     dbQuery = dbQuery.eq("status", statusFilter);
@@ -79,13 +105,6 @@ export async function fetchCollectionCandidates(input?: {
 
   if (query.source !== "all") {
     dbQuery = dbQuery.eq("source", query.source);
-  }
-
-  const range = dateFilterRange(query.date);
-  if (range) {
-    dbQuery = dbQuery.or(
-      `rss_published_at.gte.${range.from},and(rss_published_at.is.null,created_at.gte.${range.from})`
-    );
   }
 
   const { data, error } = await dbQuery;
@@ -116,13 +135,37 @@ export async function countActionableCollectionCandidates(): Promise<number> {
   }
 
   const { client } = createServiceRoleSupabaseClient();
+  const cutoffIso = candidateFreshnessCutoffIso();
   const { count, error } = await client
     .from("collection_candidates")
     .select("id", { count: "exact", head: true })
-    .in("status", ACTIONABLE_STATUSES);
+    .in("status", ACTIONABLE_STATUSES)
+    .or(
+      `rss_published_at.gte.${cutoffIso},and(rss_published_at.is.null,created_at.gte.${cutoffIso})`
+    );
 
   if (error) {
     console.warn("[admin/collection-candidates] count failed", error);
+    return 0;
+  }
+  return count ?? 0;
+}
+
+export async function countShortlistedCollectionCandidates(): Promise<number> {
+  const envCheck = await checkSupabaseServiceEnvWithDns();
+  if (!envCheck.ok) {
+    console.warn("[admin/collection-shortlist] count skipped", envCheck.error);
+    return 0;
+  }
+
+  const { client } = createServiceRoleSupabaseClient();
+  const { count, error } = await client
+    .from("collection_candidates")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "shortlisted");
+
+  if (error) {
+    console.warn("[admin/collection-shortlist] count failed", error);
     return 0;
   }
   return count ?? 0;

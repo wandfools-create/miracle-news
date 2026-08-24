@@ -1,12 +1,14 @@
 /** collection_candidates.status */
 export type CollectionCandidateStatus =
   | "pending"
+  | "shortlisted"
   | "selected"
   | "enriching"
   | "enriched"
   | "enrich_failed"
   | "dismissed"
   | "expired";
+
 
 export type CollectionCandidateRow = {
   id: string;
@@ -35,6 +37,10 @@ export type CollectionCandidateRow = {
   enrich_attempt_count: number;
   article_id: string | null;
   collection_run_id: string | null;
+  ai_recommend_grade: string | null;
+  ai_recommend_score: number | null;
+  ai_recommend_reason: string | null;
+  ai_recommended_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -56,6 +62,10 @@ export const COLLECTION_CANDIDATE_LIST_SELECT = `
   enrich_category,
   enrich_attempt_count,
   article_id,
+  ai_recommend_grade,
+  ai_recommend_score,
+  ai_recommend_reason,
+  ai_recommended_at,
   created_at,
   updated_at
 `;
@@ -63,6 +73,7 @@ export const COLLECTION_CANDIDATE_LIST_SELECT = `
 export const CANDIDATE_STATUS_LABELS: Record<CollectionCandidateStatus, string> =
   {
     pending: "수집 대기",
+    shortlisted: "선정됨",
     selected: "선택됨",
     enriching: "기사 만드는 중",
     enriched: "검토 대기 저장됨",

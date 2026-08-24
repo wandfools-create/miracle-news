@@ -1,4 +1,5 @@
 type Props = {
+  view?: string;
   status: string;
   source: string;
   date: string;
@@ -7,6 +8,7 @@ type Props = {
 };
 
 export default function CandidateFilterHiddenFields({
+  view = "ai",
   status,
   source,
   date,
@@ -15,6 +17,7 @@ export default function CandidateFilterHiddenFields({
 }: Props) {
   return (
     <>
+      <input type="hidden" name="viewFilter" value={view} />
       <input type="hidden" name="statusFilter" value={status} />
       <input type="hidden" name="sourceFilter" value={source} />
       <input type="hidden" name="dateFilter" value={date} />

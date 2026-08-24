@@ -4,37 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { isAllowedAdminEmail } from "@/lib/admin/adminEmails";
-import { parseCandidateCategoryFilter } from "@/lib/collection-candidates/candidateCategory";
-import { candidateListSearchParams } from "@/lib/collection-candidates/candidateListQuery";
 import { localizeSelectedCollectionCandidates } from "@/lib/collection-candidates/localizeCollectionCandidates";
+import { collectionCandidatesListPath } from "@/lib/collection-candidates/listPathFromForm";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type LocalizeCandidatesActionState =
   | { ok: true; queued: number; updated: number; openaiCalls: number }
   | { ok: false; error: string; step?: string }
   | null;
-
-function listPathFromForm(formData: FormData, extra?: Record<string, string>) {
-  const params = new URLSearchParams(
-    candidateListSearchParams({
-      status: String(formData.get("statusFilter") ?? "").trim() || "actionable",
-      source: String(formData.get("sourceFilter") ?? "").trim() || "all",
-      date: String(formData.get("dateFilter") ?? "").trim() || "all",
-      category: parseCandidateCategoryFilter(
-        String(formData.get("categoryFilter") ?? "")
-      ),
-    })
-  );
-  if (String(formData.get("advanced") ?? "").trim() === "1") {
-    params.set("advanced", "1");
-  }
-  if (extra) {
-    for (const [key, value] of Object.entries(extra)) {
-      params.set(key, value);
-    }
-  }
-  return `/admin/collection-candidates?${params.toString()}`;
-}
 
 /** 선택 항목 한글화 — OpenAI만. jsdom / from-link 미사용. */
 export async function localizePendingCandidatesAction(
@@ -64,7 +41,7 @@ export async function localizePendingCandidatesAction(
 
   revalidatePath("/admin/collection-candidates");
   redirect(
-    listPathFromForm(formData, {
+    collectionCandidatesListPath(formData, {
       localized: String(result.updated),
       queued: String(result.queued),
     })

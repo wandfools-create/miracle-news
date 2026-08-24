@@ -3,6 +3,14 @@ import {
   type CandidateCategoryFilterKey,
 } from "@/lib/collection-candidates/candidateCategory";
 
+export const CANDIDATE_VIEW_FILTERS = [
+  { key: "ai", label: "AI 추천" },
+  { key: "recent", label: "전체" },
+  { key: "older", label: "이전 후보" },
+] as const;
+
+export type CandidateViewKey = (typeof CANDIDATE_VIEW_FILTERS)[number]["key"];
+
 export const CANDIDATE_SOURCE_FILTERS = [
   { key: "all", label: "전체 출처" },
   { key: "ap", label: "AP" },
@@ -23,13 +31,22 @@ export const CANDIDATE_DATE_FILTERS = [
 ] as const;
 
 export type CandidateListQuery = {
+  /** Primary desk view: AI recommend / recent 48h / older pending. */
+  view: CandidateViewKey;
   status: string;
   source: string;
   date: string;
   category: CandidateCategoryFilterKey;
 };
 
+export function parseCandidateView(raw: string | null | undefined): CandidateViewKey {
+  const value = raw?.trim() || "ai";
+  if (value === "recent" || value === "older" || value === "ai") return value;
+  return "ai";
+}
+
 export function parseCandidateListQuery(input: {
+  view?: string;
   status?: string;
   source?: string;
   date?: string;
@@ -42,9 +59,17 @@ export function parseCandidateListQuery(input: {
 
   const source = input.source?.trim() || "all";
   const date = input.date?.trim() || "all";
+  const view = parseCandidateView(input.view);
+
+  let status = input.status?.trim() || "";
+  if (!status) {
+    if (view === "older" || view === "recent") status = "pending";
+    else status = "actionable";
+  }
 
   return {
-    status: input.status?.trim() || "actionable",
+    view,
+    status,
     source: sourceKeys.has(source) || source === "all" ? source : "all",
     date: dateKeys.has(date) ? date : "all",
     category: parseCandidateCategoryFilter(input.category),
@@ -53,10 +78,17 @@ export function parseCandidateListQuery(input: {
 
 export function candidateListSearchParams(query: CandidateListQuery): string {
   const params = new URLSearchParams();
-  if (query.status && query.status !== "actionable") {
+  if (query.view && query.view !== "ai") {
+    params.set("view", query.view);
+  }
+  const defaultStatus =
+    query.view === "older"
+      ? "pending"
+      : query.view === "recent"
+        ? "pending"
+        : "actionable";
+  if (query.status && query.status !== defaultStatus) {
     params.set("status", query.status);
-  } else {
-    params.set("status", query.status || "actionable");
   }
   if (query.source && query.source !== "all") {
     params.set("source", query.source);

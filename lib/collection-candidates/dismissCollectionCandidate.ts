@@ -5,7 +5,13 @@ import {
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/serviceRole";
 
-const DISMISSABLE = ["pending", "enrich_failed", "enriching", "selected"] as const;
+const DISMISSABLE = [
+  "pending",
+  "shortlisted",
+  "enrich_failed",
+  "enriching",
+  "selected",
+] as const;
 
 export async function dismissCollectionCandidate(input: {
   candidateId: string;

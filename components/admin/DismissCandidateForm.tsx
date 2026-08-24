@@ -7,6 +7,7 @@ type Props = {
   source: string;
   date: string;
   category?: string;
+  view?: string;
   advanced?: boolean;
   compact?: boolean;
 };
@@ -17,6 +18,7 @@ export default function DismissCandidateForm({
   source,
   date,
   category = "all",
+  view = "ai",
   advanced = false,
   compact = false,
 }: Props) {
@@ -24,6 +26,7 @@ export default function DismissCandidateForm({
     <form action={dismissCollectionCandidateAction} className="inline-flex">
       <input type="hidden" name="candidateId" value={candidateId} />
       <CandidateFilterHiddenFields
+        view={view}
         status={status}
         source={source}
         date={date}

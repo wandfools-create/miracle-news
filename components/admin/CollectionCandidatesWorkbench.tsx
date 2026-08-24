@@ -6,10 +6,12 @@ import {
   bulkDismissCandidatesAction,
   bulkEnrichCandidatesAction,
   bulkExpireCandidatesAction,
+  bulkShortlistCandidatesAction,
 } from "@/app/admin/(app)/collection-candidates/bulkCandidateActions";
 import { checkOriginalPreviewEmbeddable } from "@/app/admin/(app)/collection-candidates/checkPreviewEmbedAction";
 import EnrichCandidateForm from "@/components/admin/EnrichCandidateForm";
 import DismissCandidateForm from "@/components/admin/DismissCandidateForm";
+import ShortlistCandidateForm from "@/components/admin/ShortlistCandidateForm";
 import CandidateFilterHiddenFields from "@/components/admin/CandidateFilterHiddenFields";
 import {
   localizePendingCandidatesAction,
@@ -20,6 +22,11 @@ import {
   getCandidateCategoryLabel,
   type CandidateCategoryKey,
 } from "@/lib/collection-candidates/candidateCategory";
+import {
+  AI_RECOMMEND_BEST_SUBLABEL,
+  AI_RECOMMEND_GRADE_LABELS,
+  type AiRecommendGrade,
+} from "@/lib/collection-candidates/candidateRecommend";
 import {
   CANDIDATE_STATUS_LABELS,
   type CollectionCandidateStatus,
@@ -49,15 +56,20 @@ export type WorkbenchCandidate = {
   hasKorean: boolean;
   originalUrl: string;
   rssPublishedAt: string | null;
+  createdAt?: string | null;
   status: CollectionCandidateStatus;
   enrichError: string | null;
   enrichStep: string | null;
   articleId: string | null;
   candidateCategory: CandidateCategoryKey;
+  aiRecommendGrade: AiRecommendGrade | null;
+  aiRecommendScore: number | null;
+  aiRecommendReason: string | null;
 };
 
 type Props = {
   candidates: WorkbenchCandidate[];
+  viewFilter: string;
   statusFilter: string;
   sourceFilter: string;
   dateFilter: string;
@@ -103,6 +115,7 @@ function isMobileViewport() {
 
 export default function CollectionCandidatesWorkbench({
   candidates,
+  viewFilter,
   statusFilter,
   sourceFilter,
   dateFilter,
@@ -219,6 +232,7 @@ export default function CollectionCandidatesWorkbench({
 
   const renderFilterFields = () => (
     <CandidateFilterHiddenFields
+      view={viewFilter}
       status={statusFilter}
       source={sourceFilter}
       date={dateFilter}
@@ -300,13 +314,21 @@ export default function CollectionCandidatesWorkbench({
           const statusLabel = CANDIDATE_STATUS_LABELS[c.status] ?? c.status;
           const canMakeArticle =
             c.status === "pending" ||
+            c.status === "shortlisted" ||
             c.status === "enrich_failed" ||
             c.status === "enriching";
           const canDismiss =
             c.status === "pending" ||
+            c.status === "shortlisted" ||
             c.status === "enrich_failed" ||
             c.status === "enriching" ||
             c.status === "selected";
+          const canShortlist =
+            c.status === "pending" ||
+            c.status === "enrich_failed" ||
+            c.status === "enriching";
+          const emphasizeShortlist =
+            c.aiRecommendGrade === "best" || c.aiRecommendGrade === "priority";
           const failureText = shortenCandidateFailure(c.enrichError, 100);
           const checked = selected.has(c.id);
 
@@ -324,6 +346,25 @@ export default function CollectionCandidatesWorkbench({
                   aria-label="후보 선택"
                 />
                 <div className="min-w-0 flex-1">
+                  {(c.aiRecommendGrade === "best" ||
+                    c.aiRecommendGrade === "priority") && (
+                    <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                      {c.aiRecommendGrade === "best" ? (
+                        <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-white">
+                          BEST · {AI_RECOMMEND_BEST_SUBLABEL}
+                        </span>
+                      ) : (
+                        <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[11px] font-bold text-white">
+                          {AI_RECOMMEND_GRADE_LABELS.priority}
+                        </span>
+                      )}
+                      {typeof c.aiRecommendScore === "number" ? (
+                        <span className="text-[11px] font-semibold text-gray-600">
+                          {c.aiRecommendScore}점
+                        </span>
+                      ) : null}
+                    </div>
+                  )}
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-semibold text-gray-700">
                       {sourceLabel}
@@ -331,10 +372,22 @@ export default function CollectionCandidatesWorkbench({
                     <span className="rounded bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-700">
                       {getCandidateCategoryLabel(c.candidateCategory)}
                     </span>
+                    {c.aiRecommendGrade &&
+                    c.aiRecommendGrade !== "best" &&
+                    c.aiRecommendGrade !== "priority" ? (
+                      <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-800">
+                        {AI_RECOMMEND_GRADE_LABELS[c.aiRecommendGrade]}
+                        {typeof c.aiRecommendScore === "number"
+                          ? ` · ${c.aiRecommendScore}`
+                          : ""}
+                      </span>
+                    ) : null}
                     <span
                       className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${
                         c.status === "pending"
                           ? "bg-blue-50 text-blue-800"
+                          : c.status === "shortlisted"
+                            ? "bg-violet-100 text-violet-900"
                           : c.status === "enrich_failed"
                             ? "bg-red-50 text-red-800"
                             : c.status === "enriched"
@@ -368,6 +421,11 @@ export default function CollectionCandidatesWorkbench({
                   <h2 className="mt-1 text-[15px] font-semibold leading-snug text-gray-900 sm:text-base">
                     {c.rssTitle}
                   </h2>
+                  {c.aiRecommendReason ? (
+                    <p className="mt-0.5 line-clamp-1 text-xs text-violet-800">
+                      추천: {c.aiRecommendReason}
+                    </p>
+                  ) : null}
                   {c.rssSummary ? (
                     <p className="mt-0.5 line-clamp-2 text-sm leading-5 text-gray-600">
                       {c.rssSummary}
@@ -389,9 +447,23 @@ export default function CollectionCandidatesWorkbench({
                     >
                       원문 보기
                     </button>
+                    {canShortlist ? (
+                      <ShortlistCandidateForm
+                        candidateId={c.id}
+                        view={viewFilter}
+                        status={statusFilter}
+                        source={sourceFilter}
+                        date={dateFilter}
+                        category={categoryFilter}
+                        advanced={showLocalizeTools}
+                        compact
+                        emphasize={emphasizeShortlist}
+                      />
+                    ) : null}
                     {canMakeArticle ? (
                       <EnrichCandidateForm
                         candidateId={c.id}
+                        view={viewFilter}
                         status={statusFilter}
                         source={sourceFilter}
                         date={dateFilter}
@@ -414,6 +486,7 @@ export default function CollectionCandidatesWorkbench({
                     {canDismiss ? (
                       <DismissCandidateForm
                         candidateId={c.id}
+                        view={viewFilter}
                         status={statusFilter}
                         source={sourceFilter}
                         date={dateFilter}
@@ -436,6 +509,16 @@ export default function CollectionCandidatesWorkbench({
             <span className="mr-2 text-sm font-semibold text-gray-900">
               {selectedCount}건 선택
             </span>
+            <button
+              type="button"
+              disabled={bulkPending}
+              onClick={() =>
+                runBulk(bulkShortlistCandidatesAction, undefined)
+              }
+              className="rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm font-semibold text-violet-950 hover:bg-violet-100 disabled:opacity-50"
+            >
+              선택 항목 보관함에 담기
+            </button>
             <button
               type="button"
               disabled={bulkPending}
@@ -534,6 +617,7 @@ export default function CollectionCandidatesWorkbench({
               {preview.canMakeArticle ? (
                 <EnrichCandidateForm
                   candidateId={preview.candidateId}
+                  view={viewFilter}
                   status={statusFilter}
                   source={sourceFilter}
                   date={dateFilter}

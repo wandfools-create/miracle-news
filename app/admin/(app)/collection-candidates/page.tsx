@@ -3,14 +3,20 @@ import Link from "next/link";
 import CollectionCandidatesWorkbench, {
   type WorkbenchCandidate,
 } from "@/components/admin/CollectionCandidatesWorkbench";
+import RecommendCandidatesForm from "@/components/admin/RecommendCandidatesForm";
 import {
   CANDIDATE_CATEGORY_FILTERS,
   classifyCandidateCategory,
 } from "@/lib/collection-candidates/candidateCategory";
+import {
+  compareCandidatesByAiRecommend,
+  normalizeAiRecommendGrade,
+} from "@/lib/collection-candidates/candidateRecommend";
 import { fetchCollectionCandidates } from "@/lib/admin/fetchCollectionCandidates";
 import {
   CANDIDATE_DATE_FILTERS,
   CANDIDATE_SOURCE_FILTERS,
+  CANDIDATE_VIEW_FILTERS,
   candidateListSearchParams,
 } from "@/lib/collection-candidates/candidateListQuery";
 import type { CollectionCandidateStatus } from "@/lib/collection-candidates/types";
@@ -21,6 +27,7 @@ export const maxDuration = 300;
 
 type PageProps = {
   searchParams: Promise<{
+    view?: string;
     status?: string;
     source?: string;
     date?: string;
@@ -31,7 +38,10 @@ type PageProps = {
     queued?: string;
     dismissed?: string;
     expired?: string;
+    shortlisted?: string;
     dismissError?: string;
+    recommended?: string;
+    recommendQueued?: string;
     advanced?: string;
   }>;
 };
@@ -39,6 +49,7 @@ type PageProps = {
 const STATUS_TABS: Array<{ key: string; label: string }> = [
   { key: "actionable", label: "처리 대상" },
   { key: "pending", label: "수집 대기" },
+  { key: "shortlisted", label: "선정됨" },
   { key: "enrich_failed", label: "보강 실패" },
   { key: "enriched", label: "보강 완료" },
   { key: "dismissed", label: "제외됨" },
@@ -55,11 +66,15 @@ export default async function CollectionCandidatesPage({
   const queuedCount = params.queued?.trim() || null;
   const dismissed = params.dismissed?.trim() || null;
   const expired = params.expired?.trim() || null;
+  const shortlistedFlash = params.shortlisted?.trim() || null;
   const dismissError = params.dismissError?.trim() || null;
+  const recommended = params.recommended?.trim() || null;
+  const recommendQueued = params.recommendQueued?.trim() || null;
   const showLocalizeTools = params.advanced?.trim() === "1";
 
   const { candidates, error, statusFilter, query } =
     await fetchCollectionCandidates({
+      view: params.view,
       status: params.status,
       source: params.source,
       date: params.date,
@@ -72,6 +87,7 @@ export default async function CollectionCandidatesPage({
       rssTitle: c.rss_title,
       rssSummary: c.rss_summary,
     });
+    const aiRecommendGrade = normalizeAiRecommendGrade(c.ai_recommend_grade);
     return {
       id: c.id,
       source: c.source,
@@ -81,18 +97,30 @@ export default async function CollectionCandidatesPage({
       hasKorean: Boolean(c.rss_title_ko?.trim()),
       originalUrl: c.original_url,
       rssPublishedAt: c.rss_published_at,
+      createdAt: c.created_at,
       status: c.status as CollectionCandidateStatus,
       enrichError: c.enrich_error,
       enrichStep: c.enrich_step,
       articleId: c.article_id,
       candidateCategory,
+      aiRecommendGrade,
+      aiRecommendScore:
+        typeof c.ai_recommend_score === "number" ? c.ai_recommend_score : null,
+      aiRecommendReason: c.ai_recommend_reason,
     };
   });
 
-  const filtered =
+  const byCategory =
     query.category === "all"
       ? classified
       : classified.filter((c) => c.candidateCategory === query.category);
+
+  const filtered =
+    query.view === "ai"
+      ? [...byCategory].sort(compareCandidatesByAiRecommend)
+      : byCategory;
+
+  const unevaluatedCount = classified.filter((c) => !c.aiRecommendGrade).length;
 
   const categoryCounts = CANDIDATE_CATEGORY_FILTERS.map((tab) => {
     if (tab.key === "all") {
@@ -125,25 +153,36 @@ export default async function CollectionCandidatesPage({
         </h1>
 
         <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
-          규칙 기반 카테고리·출처·날짜로 빠르게 걸러 보세요. 목록·필터·제외·미리보기에는
-          OpenAI 비용이 없습니다. OpenAI는 「기사 만들기」·「한글화」에서만 호출됩니다.
+          기본은 AI 추천 우선 보기입니다. 쓸 만한 후보는{" "}
+          <Link
+            href="/admin/collection-shortlist"
+            className="font-semibold text-violet-800 underline"
+          >
+            편집 보관함
+          </Link>
+          에 담아 두고, 그다음 기사 만들기를 실행하세요. 「AI 추천 갱신」은
+          저비용 모델로 제목·요약만 평가합니다.
         </p>
 
         <div className="mt-5 flex flex-wrap gap-1.5">
-          {STATUS_TABS.map((tab) => {
-            const active = query.status === tab.key;
+          {CANDIDATE_VIEW_FILTERS.map((tab) => {
+            const active = query.view === tab.key;
             const href = `/admin/collection-candidates?${candidateListSearchParams({
               ...query,
-              status: tab.key,
+              view: tab.key,
+              status:
+                tab.key === "older" || tab.key === "recent"
+                  ? "pending"
+                  : "actionable",
             })}${advancedSuffix}`;
             return (
               <Link
                 key={tab.key}
                 href={href}
-                className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition sm:text-sm ${
+                className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${
                   active
-                    ? "border-black bg-black text-white"
-                    : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                    ? "border-violet-800 bg-violet-800 text-white"
+                    : "border-gray-300 text-gray-800 hover:bg-gray-50"
                 }`}
               >
                 {tab.label}
@@ -151,6 +190,20 @@ export default async function CollectionCandidatesPage({
             );
           })}
         </div>
+
+        {query.view === "ai" ? (
+          <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/50 p-3">
+            <RecommendCandidatesForm
+              view={query.view}
+              status={query.status}
+              source={query.source}
+              date={query.date}
+              category={query.category}
+              advanced={showLocalizeTools}
+              unevaluatedCount={unevaluatedCount}
+            />
+          </div>
+        ) : null}
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {categoryCounts.map((tab) => {
@@ -176,11 +229,36 @@ export default async function CollectionCandidatesPage({
           })}
         </div>
 
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {STATUS_TABS.map((tab) => {
+            const active = query.status === tab.key && query.view === "ai";
+            const href = `/admin/collection-candidates?${candidateListSearchParams({
+              ...query,
+              view: "ai",
+              status: tab.key,
+            })}${advancedSuffix}`;
+            return (
+              <Link
+                key={tab.key}
+                href={href}
+                className={`rounded-md border px-2 py-0.5 text-[11px] font-medium transition ${
+                  active
+                    ? "border-gray-800 bg-gray-800 text-white"
+                    : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                }`}
+              >
+                {tab.label}
+              </Link>
+            );
+          })}
+        </div>
+
         <form
           method="get"
           action="/admin/collection-candidates"
           className="mt-4 flex flex-wrap items-end gap-3"
         >
+          <input type="hidden" name="view" value={query.view} />
           <input type="hidden" name="status" value={query.status} />
           <input type="hidden" name="category" value={query.category} />
           {showLocalizeTools ? (
@@ -232,8 +310,20 @@ export default async function CollectionCandidatesPage({
               고급: OpenAI 후보 한글화
             </Link>
           )}
-          {" · "}상태 필터: {statusFilter}
+          {" · "}
+          {query.view === "recent"
+            ? "전체 = 최근 48시간 pending"
+            : query.view === "older"
+              ? "이전 후보 = 48시간 초과 pending"
+              : `AI 추천 · 상태 ${statusFilter}`}
         </p>
+
+        {recommended != null ? (
+          <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-950">
+            AI 추천 갱신 완료: {recommended}건 저장
+            {recommendQueued ? ` (요청 ${recommendQueued}건)` : ""}.
+          </div>
+        ) : null}
 
         {localizedCount ? (
           <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
@@ -256,6 +346,16 @@ export default async function CollectionCandidatesPage({
                 </Link>
               </>
             ) : null}
+          </div>
+        ) : null}
+
+        {shortlistedFlash ? (
+          <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-950">
+            편집 보관함에{" "}
+            {shortlistedFlash === "1" ? "담았습니다" : `${shortlistedFlash}건 담았습니다`}.{" "}
+            <Link href="/admin/collection-shortlist" className="font-semibold underline">
+              보관함 열기
+            </Link>
           </div>
         ) : null}
 
@@ -282,14 +382,25 @@ export default async function CollectionCandidatesPage({
           <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             <p className="font-semibold">후보 목록을 불러오지 못했습니다.</p>
             <p className="mt-1">{error.message}</p>
+            {error.code === "42703" ? (
+              <p className="mt-2 text-xs">
+                AI 추천 컬럼이 없으면{" "}
+                <code className="rounded bg-red-100 px-1">
+                  migrations/20260824_collection_candidates_ai_recommend.sql
+                </code>
+                을 Supabase에 적용하세요.
+              </p>
+            ) : null}
           </div>
         ) : null}
 
         {!error && filtered.length === 0 ? (
           <div className="mt-6 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-600">
-            {statusFilter === "actionable"
-              ? "처리할 후보가 없습니다. 다른 카테고리·출처를 선택해 보세요."
-              : "이 필터에 해당하는 후보가 없습니다."}
+            {query.view === "ai"
+              ? "표시할 후보가 없습니다. RSS 수집 후 「AI 추천 갱신」을 눌러 보세요."
+              : query.view === "older"
+                ? "48시간을 넘긴 pending 후보가 없습니다."
+                : "최근 48시간 pending 후보가 없습니다."}
           </div>
         ) : null}
 
@@ -297,6 +408,7 @@ export default async function CollectionCandidatesPage({
           <div className="mt-5">
             <CollectionCandidatesWorkbench
               candidates={filtered}
+              viewFilter={query.view}
               statusFilter={query.status}
               sourceFilter={query.source}
               dateFilter={query.date}

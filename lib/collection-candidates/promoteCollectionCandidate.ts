@@ -12,7 +12,12 @@ import {
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/serviceRole";
 
-const CLAIMABLE_STATUSES = ["pending", "enrich_failed", "enriching"] as const;
+const CLAIMABLE_STATUSES = [
+  "pending",
+  "shortlisted",
+  "enrich_failed",
+  "enriching",
+] as const;
 
 export type PromoteCollectionCandidateResult =
   | { ok: true; articleId: string; alreadyEnriched?: boolean }

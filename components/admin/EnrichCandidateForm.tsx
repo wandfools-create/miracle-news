@@ -14,6 +14,7 @@ type Props = {
   source: string;
   date: string;
   category?: string;
+  view?: string;
   advanced?: boolean;
   retry?: boolean;
   compact?: boolean;
@@ -25,6 +26,7 @@ export default function EnrichCandidateForm({
   source,
   date,
   category = "all",
+  view = "ai",
   advanced = false,
   retry = false,
   compact = false,
@@ -38,6 +40,7 @@ export default function EnrichCandidateForm({
     <form action={formAction} className="inline-flex flex-col items-start gap-1">
       <input type="hidden" name="candidateId" value={candidateId} />
       <CandidateFilterHiddenFields
+        view={view}
         status={status}
         source={source}
         date={date}

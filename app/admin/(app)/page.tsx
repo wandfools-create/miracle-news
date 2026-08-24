@@ -34,6 +34,16 @@ export default function AdminHomePage() {
           </Link>
 
           <Link
+            href="/admin/collection-shortlist"
+            className="rounded-2xl border p-6 shadow-sm hover:bg-gray-50"
+          >
+            <h2 className="text-xl font-semibold">편집 보관함</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              선정한 후보만 모아 기사 만들기 전 재검토
+            </p>
+          </Link>
+
+          <Link
             href="/admin/review"
             className="rounded-2xl border p-6 shadow-sm hover:bg-gray-50"
           >

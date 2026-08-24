@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import { countActionableCollectionCandidates } from "@/lib/admin/fetchCollectionCandidates";
+import { countActionableCollectionCandidates, countShortlistedCollectionCandidates } from "@/lib/admin/fetchCollectionCandidates";
 import AdminQuickNav from "@/components/admin/AdminQuickNav";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -21,6 +21,7 @@ export default async function AdminDashboardLayout({
     { count: publishedCount },
     { count: rejectedCount },
     collectionCandidatesCount,
+    collectionShortlistCount,
   ] = await Promise.all([
     supabase
       .from("articles")
@@ -59,6 +60,7 @@ export default async function AdminDashboardLayout({
       .eq("status", "rejected"),
 
     countActionableCollectionCandidates(),
+    countShortlistedCollectionCandidates(),
   ]);
 
   return (
@@ -68,6 +70,7 @@ export default async function AdminDashboardLayout({
         counts={{
           review: reviewCount ?? 0,
           collectionCandidates: collectionCandidatesCount,
+          collectionShortlist: collectionShortlistCount,
           onHold: onHoldCount ?? 0,
           revision: revisionCount ?? 0,
           approved: approvedCount ?? 0,
