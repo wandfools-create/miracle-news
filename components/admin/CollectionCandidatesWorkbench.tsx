@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 
 import {
   bulkDismissCandidatesAction,
@@ -13,6 +13,9 @@ import EnrichCandidateForm from "@/components/admin/EnrichCandidateForm";
 import DismissCandidateForm from "@/components/admin/DismissCandidateForm";
 import ShortlistCandidateForm from "@/components/admin/ShortlistCandidateForm";
 import CandidateFilterHiddenFields from "@/components/admin/CandidateFilterHiddenFields";
+import {
+  preserveCandidateListScrollNow,
+} from "@/components/admin/CandidateListScrollRestore";
 import {
   localizePendingCandidatesAction,
   type LocalizeCandidatesActionState,
@@ -33,8 +36,6 @@ import {
 } from "@/lib/collection-candidates/types";
 import { formatDateTimeKo } from "@/lib/articleWorkflow";
 import { shortenCandidateFailure } from "@/lib/collection-candidates/candidateListQuery";
-
-const SCROLL_KEY = "admin-cc-scroll-y";
 
 const SOURCE_LABELS: Record<string, string> = {
   ap: "AP",
@@ -86,28 +87,6 @@ type PreviewState = {
   embedAllowed: boolean | null;
 };
 
-function saveScroll() {
-  try {
-    sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
-  } catch {
-    /* ignore */
-  }
-}
-
-function restoreScroll() {
-  try {
-    const raw = sessionStorage.getItem(SCROLL_KEY);
-    if (raw == null) return;
-    const y = Number.parseInt(raw, 10);
-    if (!Number.isFinite(y) || y < 0) return;
-    requestAnimationFrame(() => {
-      window.scrollTo(0, y);
-    });
-  } catch {
-    /* ignore */
-  }
-}
-
 function isMobileViewport() {
   if (typeof window === "undefined") return false;
   return window.matchMedia("(max-width: 767px)").matches;
@@ -129,22 +108,6 @@ export default function CollectionCandidatesWorkbench({
     LocalizeCandidatesActionState,
     FormData
   >(localizePendingCandidatesAction, null);
-
-  useEffect(() => {
-    restoreScroll();
-  }, []);
-
-  useEffect(() => {
-    function onSubmitCapture(e: Event) {
-      const target = e.target;
-      if (!(target instanceof HTMLFormElement)) return;
-      if (!target.closest("[data-cc-workbench]")) return;
-      saveScroll();
-    }
-    document.addEventListener("submit", onSubmitCapture, true);
-    return () => document.removeEventListener("submit", onSubmitCapture, true);
-  }, []);
-
   const visibleIds = useMemo(
     () => candidates.map((c) => c.id),
     [candidates]
@@ -218,7 +181,7 @@ export default function CollectionCandidatesWorkbench({
   ) {
     if (selectedCount === 0) return;
     if (confirmMessage && !window.confirm(confirmMessage)) return;
-    saveScroll();
+    preserveCandidateListScrollNow();
     startBulk(() => {
       const form = document.getElementById(
         "cc-bulk-form"
@@ -283,7 +246,7 @@ export default function CollectionCandidatesWorkbench({
           action={localizeAction}
           className="mb-3 hidden"
           onSubmit={() => {
-            saveScroll();
+            preserveCandidateListScrollNow();
             const form = document.getElementById(
               "localize-candidates-form"
             ) as HTMLFormElement | null;

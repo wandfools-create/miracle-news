@@ -3,6 +3,10 @@ import {
   candidateListSearchParams,
   parseCandidateView,
 } from "@/lib/collection-candidates/candidateListQuery";
+import {
+  buildScrollHash,
+  parseScrollYFormValue,
+} from "@/lib/collection-candidates/candidateListScroll";
 
 /** Shared redirect path builder for collection-candidate server actions. */
 export function collectionCandidatesListPath(
@@ -27,8 +31,16 @@ export function collectionCandidatesListPath(
   }
   if (extra) {
     for (const [key, value] of Object.entries(extra)) {
+      if (key === "scrollY") continue;
       params.set(key, value);
     }
   }
-  return `/admin/collection-candidates?${params.toString()}`;
+  const path = `/admin/collection-candidates?${params.toString()}`;
+  const scrollY =
+    parseScrollYFormValue(formData.get("scrollY")) ??
+    parseScrollYFormValue(extra?.scrollY ?? null);
+  if (scrollY != null) {
+    return `${path}#${buildScrollHash(scrollY)}`;
+  }
+  return path;
 }

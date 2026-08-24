@@ -22,6 +22,7 @@ export default function CandidateFilterHiddenFields({
       <input type="hidden" name="sourceFilter" value={source} />
       <input type="hidden" name="dateFilter" value={date} />
       <input type="hidden" name="categoryFilter" value={category} />
+      <input type="hidden" name="scrollY" defaultValue="0" />
       {advanced ? <input type="hidden" name="advanced" value="1" /> : null}
     </>
   );

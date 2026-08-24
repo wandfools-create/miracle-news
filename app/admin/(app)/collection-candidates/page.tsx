@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import CandidateListScrollRestore from "@/components/admin/CandidateListScrollRestore";
 import CollectionCandidatesWorkbench, {
   type WorkbenchCandidate,
 } from "@/components/admin/CollectionCandidatesWorkbench";
@@ -143,6 +144,7 @@ export default async function CollectionCandidatesPage({
 
   return (
     <main className="min-h-screen bg-white text-black">
+      <CandidateListScrollRestore />
       <section className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         <p className="text-xs font-semibold tracking-wide text-gray-500 sm:text-sm">
           관리자 / 수집 후보
@@ -179,6 +181,7 @@ export default async function CollectionCandidatesPage({
               <Link
                 key={tab.key}
                 href={href}
+                data-cc-filter-nav="1"
                 className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${
                   active
                     ? "border-violet-800 bg-violet-800 text-white"
@@ -216,6 +219,7 @@ export default async function CollectionCandidatesPage({
               <Link
                 key={tab.key}
                 href={href}
+                data-cc-filter-nav="1"
                 className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition sm:text-sm ${
                   active
                     ? "border-sky-700 bg-sky-700 text-white"
@@ -241,6 +245,7 @@ export default async function CollectionCandidatesPage({
               <Link
                 key={tab.key}
                 href={href}
+                data-cc-filter-nav="1"
                 className={`rounded-md border px-2 py-0.5 text-[11px] font-medium transition ${
                   active
                     ? "border-gray-800 bg-gray-800 text-white"
@@ -256,6 +261,7 @@ export default async function CollectionCandidatesPage({
         <form
           method="get"
           action="/admin/collection-candidates"
+          data-cc-filter-nav="1"
           className="mt-4 flex flex-wrap items-end gap-3"
         >
           <input type="hidden" name="view" value={query.view} />
