@@ -81,11 +81,12 @@ describe("RSS ops expansion (fixture only, no OpenAI)", () => {
     assert.equal(yonhap.enabled, false);
   });
 
-  it("uses Korea Herald newsAll XML endpoint (not HTML /rss index)", () => {
+  it("uses Korea Herald newsAll XML endpoint on us-intl desk", () => {
     const kh = RSS_FEED_SOURCES.find((f) => f.sourceKey === "korea-herald");
     assert.ok(kh);
     assert.equal(kh.feedUrl, "https://www.koreaherald.com/rss/newsAll");
     assert.equal(isRssFeedSourceEnabled("korea-herald"), true);
+    assert.equal(kh.collectRegion, "us-intl");
   });
 
   it("caps per-publisher inserts at 4 with first-pass fair share of 3", () => {

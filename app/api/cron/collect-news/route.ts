@@ -1,24 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  cronSecretMissingResponse,
+  cronUnauthorizedResponse,
+  isCronAuthorized,
+} from "@/lib/cron/cronAuth";
 import { collectRssToReviewQueue } from "@/lib/rss/collectRssToReviewQueue";
 import { resolveCollectRssOptions } from "@/lib/rss/rssCollectConfig";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-function isAuthorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return false;
-
-  const auth = request.headers.get("authorization");
-  if (auth === `Bearer ${secret}`) return true;
-
-  const cronHeader = request.headers.get("x-cron-secret");
-  if (cronHeader === secret) return true;
-
-  return false;
-}
-
+/**
+ * Legacy manual/compat collect endpoint.
+ * Prefer /api/cron/collect-news-us and /api/cron/collect-news-kr for Production crons.
+ * Pass ?region=us-intl|korea for a regional run (no ET hour gate).
+ */
 async function runCollect(request: NextRequest) {
   const options = resolveCollectRssOptions(request.nextUrl.searchParams);
   const result = await collectRssToReviewQueue(options);
@@ -31,6 +28,7 @@ async function runCollect(request: NextRequest) {
 
   return NextResponse.json({
     ok: result.ok,
+    region: options.region,
     mode: result.mode,
     save: result.save,
     testMode: result.testMode,
@@ -47,14 +45,11 @@ async function runCollect(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   if (!process.env.CRON_SECRET?.trim()) {
-    return NextResponse.json(
-      { ok: false, error: "CRON_SECRET is not configured" },
-      { status: 500 }
-    );
+    return cronSecretMissingResponse();
   }
 
-  if (!isAuthorized(request)) {
-    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  if (!isCronAuthorized(request)) {
+    return cronUnauthorizedResponse();
   }
 
   return runCollect(request);

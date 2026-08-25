@@ -10,6 +10,10 @@ import {
   type CollectionCandidateRow,
 } from "@/lib/collection-candidates/types";
 import {
+  sourceKeysForCollectRegion,
+  type CollectRegion,
+} from "@/lib/rss/collectRegions";
+import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/serviceRole";
@@ -19,7 +23,9 @@ export { isMorningBriefSendEligible, selectMorningBriefItemsFromRows } from "@/l
 const ACTIONABLE_STATUSES = ["pending", "enrich_failed", "enriching"] as const;
 
 /** Rows not yet sent to Discord; AI evaluated; within 48h lookback. */
-export async function fetchMorningBriefCandidateRows(): Promise<
+export async function fetchMorningBriefCandidateRows(options?: {
+  region?: CollectRegion | null;
+}): Promise<
   | { ok: true; rows: CollectionCandidateRow[] }
   | { ok: false; error: string }
 > {
@@ -29,7 +35,7 @@ export async function fetchMorningBriefCandidateRows(): Promise<
   const { client } = createServiceRoleSupabaseClient();
   const cutoffIso = candidateFreshnessCutoffIso();
 
-  const { data, error } = await client
+  let query = client
     .from("collection_candidates")
     .select(COLLECTION_CANDIDATE_LIST_SELECT)
     .in("status", [...ACTIONABLE_STATUSES])
@@ -37,7 +43,13 @@ export async function fetchMorningBriefCandidateRows(): Promise<
     .is("discord_brief_sent_at", null)
     .or(
       `rss_published_at.gte.${cutoffIso},and(rss_published_at.is.null,created_at.gte.${cutoffIso})`
-    )
+    );
+
+  if (options?.region) {
+    query = query.in("source", sourceKeysForCollectRegion(options.region));
+  }
+
+  const { data, error } = await query
     .order("rss_published_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(100);
@@ -46,11 +58,14 @@ export async function fetchMorningBriefCandidateRows(): Promise<
   return { ok: true, rows: (data ?? []) as CollectionCandidateRow[] };
 }
 
-export async function fetchMorningBriefItems(maxItems: number): Promise<
+export async function fetchMorningBriefItems(
+  maxItems: number,
+  options?: { region?: CollectRegion | null }
+): Promise<
   | { ok: true; items: MorningBriefItem[] }
   | { ok: false; error: string }
 > {
-  const loaded = await fetchMorningBriefCandidateRows();
+  const loaded = await fetchMorningBriefCandidateRows(options);
   if (!loaded.ok) return loaded;
   return {
     ok: true,

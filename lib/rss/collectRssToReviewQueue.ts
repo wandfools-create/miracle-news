@@ -64,6 +64,7 @@ export type CollectRssResult = {
   testMode: boolean;
   dryRun: boolean;
   maxCandidatesPerRun: number;
+  region: CollectRssOptions["region"];
   costs: RssCollectCostStats;
   feeds: FeedCollectStats[];
   totals: {
@@ -563,7 +564,7 @@ export async function collectRssToReviewQueue(
     console.info("[collectRss] test mode — no DB writes");
   }
 
-  const activeFeeds = getActiveRssFeedSources();
+  const activeFeeds = getActiveRssFeedSources(options.region);
   const mainFeeds = activeFeeds.filter(
     (f) => f.sourceKey !== YONHAP_KR_RADAR_SOURCE_KEY
   );
@@ -574,6 +575,7 @@ export async function collectRssToReviewQueue(
   console.info("[collectRss] run start (v5 candidates, fair pass, no OpenAI)", {
     mode: options.mode,
     save: options.save,
+    region: options.region,
     maxCandidatesPerRun: options.maxCandidatesPerRun,
     maxInsertsPerFeed: RSS_MAX_INSERTS_PER_FEED,
     firstPassInsertsPerFeed: RSS_FIRST_PASS_INSERTS_PER_FEED,
@@ -679,6 +681,7 @@ export async function collectRssToReviewQueue(
     testMode: options.testMode,
     dryRun: !options.save,
     maxCandidatesPerRun: options.maxCandidatesPerRun,
+    region: options.region,
     costs: {
       ...costs,
       enrichAttempts: 0,

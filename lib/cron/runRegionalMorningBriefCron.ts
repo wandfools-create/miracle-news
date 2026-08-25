@@ -5,35 +5,33 @@ import {
   cronUnauthorizedResponse,
   isCronAuthorized,
 } from "@/lib/cron/cronAuth";
-import { parseCollectRegion } from "@/lib/rss/collectRegions";
 import { runMorningBriefCron } from "@/lib/discord/runMorningBrief";
-
-export const runtime = "nodejs";
-export const maxDuration = 300;
+import type { CollectRegion } from "@/lib/rss/collectRegions";
 
 /**
- * Legacy manual/compat Morning Brief.
- * Prefer /api/cron/morning-brief-us and /api/cron/morning-brief-kr for Production.
- * Optional ?region=us-intl|korea. No article create/publish.
+ * Manual/compat regional Morning Brief (not registered in vercel.json).
+ * Does not create or publish articles — recommend + Discord shortlist only.
  */
-export async function GET(request: NextRequest) {
+export async function runRegionalMorningBriefCron(
+  request: NextRequest,
+  region: CollectRegion
+): Promise<NextResponse> {
   if (!process.env.CRON_SECRET?.trim()) {
     return cronSecretMissingResponse();
   }
-
   if (!isCronAuthorized(request)) {
     return cronUnauthorizedResponse();
   }
 
   const dryRun = request.nextUrl.searchParams.get("dryRun") === "1";
-  const region = parseCollectRegion(request.nextUrl.searchParams.get("region"));
   const result = await runMorningBriefCron({ dryRun, region });
 
   return NextResponse.json({
     ok: result.ok,
-    region: region ?? null,
+    skipped: false,
+    region,
     sent: result.sent,
-    skipped: result.skipped,
+    skippedItems: result.skipped,
     dryRun: result.dryRun ?? false,
     recommend: result.recommend
       ? {
@@ -45,8 +43,4 @@ export async function GET(request: NextRequest) {
     errors: result.errors,
     vercelEnv: process.env.VERCEL_ENV ?? null,
   });
-}
-
-export async function POST(request: NextRequest) {
-  return GET(request);
 }

@@ -1,12 +1,12 @@
 {
   "crons": [
     {
-      "path": "/api/cron/collect-news",
-      "schedule": "0 8 * * *"
+      "path": "/api/cron/desk-us",
+      "schedule": "0 12 * * *"
     },
     {
-      "path": "/api/cron/morning-brief",
-      "schedule": "15 8 * * *"
+      "path": "/api/cron/desk-kr",
+      "schedule": "0 0 * * *"
     }
   ]
 }

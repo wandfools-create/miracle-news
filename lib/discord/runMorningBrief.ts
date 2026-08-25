@@ -9,55 +9,93 @@ import { sendDiscordChannelMessage } from "@/lib/discord/discordApi";
 import type { DiscordFetch } from "@/lib/discord/discordApi";
 import { getDiscordEnv } from "@/lib/discord/env";
 import { buildMorningBriefPayload } from "@/lib/discord/morningBriefMessage";
+import type { CollectRegion } from "@/lib/rss/collectRegions";
 
-export type MorningBriefCronResult = {
+export type MorningBriefRecommendResult = Awaited<
+  ReturnType<typeof recommendUnevaluatedCollectionCandidates>
+>;
+
+export type MorningBriefDiscordResult = {
   ok: boolean;
-  recommend: Awaited<ReturnType<typeof recommendUnevaluatedCollectionCandidates>> | null;
   sent: number;
   skipped: number;
   errors: string[];
   dryRun?: boolean;
+  region?: CollectRegion | null;
+};
+
+export type MorningBriefCronResult = {
+  ok: boolean;
+  recommend: MorningBriefRecommendResult | null;
+  sent: number;
+  skipped: number;
+  errors: string[];
+  dryRun?: boolean;
+  region?: CollectRegion | null;
 };
 
 /**
- * Morning Brief pipeline: optional AI recommend → post-process filter → Discord send.
- * Discord failures never throw to caller; RSS/DB unaffected.
+ * AI recommend only (title+summary). Never promotes/publishes articles.
  */
-export async function runMorningBriefCron(options?: {
+export async function runMorningBriefRecommend(options?: {
+  region?: CollectRegion | null;
+}): Promise<MorningBriefRecommendResult> {
+  return recommendUnevaluatedCollectionCandidates({
+    region: options?.region ?? null,
+  });
+}
+
+/**
+ * Discord BEST/priority brief send only. Never creates/publishes articles.
+ * Collect DB writes are never rolled back from Discord failures.
+ */
+export async function runMorningBriefDiscord(options?: {
   fetchImpl?: DiscordFetch;
-  /** When true, skip Discord HTTP (local/tests). */
   dryRun?: boolean;
-}): Promise<MorningBriefCronResult> {
+  region?: CollectRegion | null;
+}): Promise<MorningBriefDiscordResult> {
   const errors: string[] = [];
-  let recommend: MorningBriefCronResult["recommend"] = null;
   let sent = 0;
   let skipped = 0;
-
-  try {
-    recommend = await recommendUnevaluatedCollectionCandidates();
-    if (!recommend.ok) {
-      errors.push(`recommend:${recommend.step}:${recommend.error}`);
-    }
-  } catch (err) {
-    errors.push(`recommend:exception:${String(err)}`);
-  }
+  const region = options?.region ?? null;
 
   const discordEnv = getDiscordEnv();
   if (!discordEnv) {
-    errors.push("discord:env_not_configured");
-    return { ok: errors.length === 0, recommend, sent, skipped, errors, dryRun: options?.dryRun };
+    return {
+      ok: false,
+      sent,
+      skipped,
+      errors: ["discord:env_not_configured"],
+      dryRun: options?.dryRun,
+      region,
+    };
   }
 
   let itemsResult: Awaited<ReturnType<typeof fetchMorningBriefItems>>;
   try {
-    itemsResult = await fetchMorningBriefItems(discordEnv.morningBriefMaxItems);
+    itemsResult = await fetchMorningBriefItems(
+      discordEnv.morningBriefMaxItems,
+      { region }
+    );
     if (!itemsResult.ok) {
-      errors.push(`fetch:${itemsResult.error}`);
-      return { ok: false, recommend, sent, skipped, errors, dryRun: options?.dryRun };
+      return {
+        ok: false,
+        sent,
+        skipped,
+        errors: [`fetch:${itemsResult.error}`],
+        dryRun: options?.dryRun,
+        region,
+      };
     }
   } catch (err) {
-    errors.push(`fetch:exception:${String(err)}`);
-    return { ok: false, recommend, sent, skipped, errors, dryRun: options?.dryRun };
+    return {
+      ok: false,
+      sent,
+      skipped,
+      errors: [`fetch:exception:${String(err)}`],
+      dryRun: options?.dryRun,
+      region,
+    };
   }
 
   for (const item of itemsResult.items) {
@@ -97,19 +135,80 @@ export async function runMorningBriefCron(options?: {
     }
   }
 
-  console.info("[morning-brief] cron done", {
+  console.info("[morning-brief] discord step done", {
+    region,
     sent,
     skipped,
+    errorCount: errors.length,
+  });
+
+  return {
+    ok: errors.length === 0 || sent > 0,
+    sent,
+    skipped,
+    errors,
+    dryRun: options?.dryRun,
+    region,
+  };
+}
+
+/**
+ * Morning Brief pipeline: AI recommend → Discord send.
+ * Never creates or publishes articles. Steps are independent.
+ */
+export async function runMorningBriefCron(options?: {
+  fetchImpl?: DiscordFetch;
+  dryRun?: boolean;
+  region?: CollectRegion | null;
+}): Promise<MorningBriefCronResult> {
+  const errors: string[] = [];
+  let recommend: MorningBriefRecommendResult | null = null;
+  const region = options?.region ?? null;
+
+  try {
+    recommend = await runMorningBriefRecommend({ region });
+    if (!recommend.ok) {
+      errors.push(`recommend:${recommend.step}:${recommend.error}`);
+    }
+  } catch (err) {
+    errors.push(`recommend:exception:${String(err)}`);
+  }
+
+  let discord: MorningBriefDiscordResult;
+  try {
+    discord = await runMorningBriefDiscord({
+      fetchImpl: options?.fetchImpl,
+      dryRun: options?.dryRun,
+      region,
+    });
+    errors.push(...discord.errors);
+  } catch (err) {
+    discord = {
+      ok: false,
+      sent: 0,
+      skipped: 0,
+      errors: [`discord:exception:${String(err)}`],
+      dryRun: options?.dryRun,
+      region,
+    };
+    errors.push(...discord.errors);
+  }
+
+  console.info("[morning-brief] cron done", {
+    region,
+    sent: discord.sent,
+    skipped: discord.skipped,
     errorCount: errors.length,
     recommendUpdated: recommend?.ok ? recommend.updated : null,
   });
 
   return {
-    ok: errors.length === 0 || sent > 0,
+    ok: errors.length === 0 || discord.sent > 0,
     recommend,
-    sent,
-    skipped,
+    sent: discord.sent,
+    skipped: discord.skipped,
     errors,
     dryRun: options?.dryRun,
+    region,
   };
 }

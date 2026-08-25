@@ -14,6 +14,10 @@ import {
 } from "@/lib/collection-candidates/candidateRecommend";
 import { applyAiRecommendPostProcess } from "@/lib/collection-candidates/candidateRecommendPostProcess";
 import {
+  sourceKeysForCollectRegion,
+  type CollectRegion,
+} from "@/lib/rss/collectRegions";
+import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/serviceRole";
@@ -40,9 +44,11 @@ function truncateSummary(summary: string): string {
 /**
  * Score unevaluated actionable candidates (title+summary only).
  * Skips rows that already have ai_recommended_at. Uses OPENAI_CANDIDATE_MODEL.
- * Never extracts article body / never promotes to review.
+ * Never extracts article body / never promotes to review / never publishes.
  */
-export async function recommendUnevaluatedCollectionCandidates(): Promise<RecommendCollectionCandidatesResult> {
+export async function recommendUnevaluatedCollectionCandidates(options?: {
+  region?: CollectRegion | null;
+}): Promise<RecommendCollectionCandidatesResult> {
   const envCheck = await checkSupabaseServiceEnvWithDns();
   if (!envCheck.ok) {
     return { ok: false, error: envCheck.error, step: envCheck.step, openaiCalls: 0 };
@@ -57,7 +63,7 @@ export async function recommendUnevaluatedCollectionCandidates(): Promise<Recomm
   const { client } = createServiceRoleSupabaseClient();
   const cutoffIso = candidateFreshnessCutoffIso();
 
-  const { data, error } = await client
+  let query = client
     .from("collection_candidates")
     .select(
       "id, source, rss_title, rss_summary, rss_published_at, created_at, original_url, ai_recommended_at"
@@ -66,7 +72,13 @@ export async function recommendUnevaluatedCollectionCandidates(): Promise<Recomm
     .is("ai_recommended_at", null)
     .or(
       `rss_published_at.gte.${cutoffIso},and(rss_published_at.is.null,created_at.gte.${cutoffIso})`
-    )
+    );
+
+  if (options?.region) {
+    query = query.in("source", sourceKeysForCollectRegion(options.region));
+  }
+
+  const { data, error } = await query
     .order("rss_published_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(AI_RECOMMEND_MAX_BATCH);

@@ -1,4 +1,11 @@
 /** Primary RSS collection targets (ops v1 expansion). */
+import type { CollectRegion } from "@/lib/rss/collectRegions";
+import {
+  COLLECT_REGION_KOREA,
+  COLLECT_REGION_US_INTL,
+  isSourceInCollectRegion,
+} from "@/lib/rss/collectRegions";
+
 export type RssFeedSourceCountry = "US" | "KR" | "GB";
 
 /** Desk category stored on collection_candidates.category when known. */
@@ -19,6 +26,11 @@ export type RssFeedSource = {
   /** Human-readable source URL (RSS or API docs). */
   feedUrl: string;
   sourceCountry: RssFeedSourceCountry;
+  /**
+   * Which regional collect cron owns this feed.
+   * us-intl = 08:00 ET; korea = 20:00 ET.
+   */
+  collectRegion: CollectRegion;
   /** Default: standard RSS via `feedUrl`. AP uses GraphQL; Yonhap KR uses news sitemaps. */
   fetchKind?: "rss" | "ap-graphql" | "yna-sitemap-radar";
   apCategoryPath?: string;
@@ -44,6 +56,7 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     label: "PBS NewsHour",
     feedUrl: "https://www.pbs.org/newshour/feeds/rss/headlines",
     sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
   },
   {
     sourceKey: "ap",
@@ -53,24 +66,28 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     fetchKind: "ap-graphql",
     apCategoryPath: "/",
     sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
   },
   {
     sourceKey: "fox-news",
     label: "Fox News",
     feedUrl: "https://moxie.foxnews.com/google-publisher/latest.xml",
     sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
   },
   {
     sourceKey: "csm",
     label: "The Christian Science Monitor",
     feedUrl: "https://rss.csmonitor.com/feeds/world",
     sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
   },
   {
     sourceKey: "yonhap",
     label: "Yonhap News Agency (English)",
     feedUrl: "https://en.yna.co.kr/RSS/news.xml",
     sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_KOREA,
     /** English scrapes of KR news — low display value; prefer future KR-native path. */
     enabled: false,
     disabledReason:
@@ -82,21 +99,25 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     /**
      * `/rss` is an HTML index page (rss-parser fails with "Unexpected close tag").
      * Stable RSS 2.0 endpoint listed as application/rss+xml alternate on that page.
+     * English KR outlet — morning US/intl desk (not native Korean evening).
      */
     feedUrl: "https://www.koreaherald.com/rss/newsAll",
     sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_US_INTL,
   },
   {
     sourceKey: "bbc",
     label: "BBC World",
     feedUrl: "https://feeds.bbci.co.uk/news/world/rss.xml",
     sourceCountry: "GB",
+    collectRegion: COLLECT_REGION_US_INTL,
   },
   {
     sourceKey: "sciencedaily",
     label: "ScienceDaily",
     feedUrl: "https://www.sciencedaily.com/rss/all.xml",
     sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
   },
   {
     sourceKey: "chosun",
@@ -104,6 +125,7 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     feedUrl:
       "https://www.chosun.com/arc/outboundfeeds/rss/category/politics/?outputType=xml",
     sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_KOREA,
     category: "politics",
   },
   {
@@ -112,6 +134,7 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     feedUrl:
       "https://www.chosun.com/arc/outboundfeeds/rss/category/economy/?outputType=xml",
     sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_KOREA,
     category: "economy",
   },
   {
@@ -120,6 +143,7 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     feedUrl:
       "https://www.chosun.com/arc/outboundfeeds/rss/category/national/?outputType=xml",
     sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_KOREA,
     category: "society",
   },
   {
@@ -128,6 +152,7 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     feedUrl:
       "https://www.chosun.com/arc/outboundfeeds/rss/category/international/?outputType=xml",
     sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_KOREA,
     category: "world",
   },
   {
@@ -135,6 +160,7 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     label: "TV조선",
     feedUrl: "https://news.tvchosun.com/site/data/rss/politics.xml",
     sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_KOREA,
     category: "politics",
   },
   {
@@ -142,6 +168,7 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     label: "TV조선",
     feedUrl: "https://news.tvchosun.com/site/data/rss/economy.xml",
     sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_KOREA,
     category: "economy",
   },
   {
@@ -149,6 +176,7 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     label: "TV조선",
     feedUrl: "https://news.tvchosun.com/site/data/rss/national.xml",
     sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_KOREA,
     category: "society",
   },
   {
@@ -156,6 +184,7 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     label: "TV조선",
     feedUrl: "https://news.tvchosun.com/site/data/rss/international.xml",
     sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_KOREA,
     category: "world",
   },
   {
@@ -165,20 +194,32 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     feedUrl: "https://www.yna.co.kr/news-sitemap6.xml",
     fetchKind: "yna-sitemap-radar",
     sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_KOREA,
     maxInsertsPerRun: 3,
   },
 ];
 
-/** Feeds that cron/collect actually fetches. */
-export function getActiveRssFeedSources(): RssFeedSource[] {
-  return RSS_FEED_SOURCES.filter((f) => f.enabled !== false);
+/** Feeds that cron/collect actually fetches (optionally region-filtered). */
+export function getActiveRssFeedSources(
+  region?: CollectRegion | null
+): RssFeedSource[] {
+  return RSS_FEED_SOURCES.filter((f) => {
+    if (f.enabled === false) return false;
+    if (!region) return true;
+    return (
+      f.collectRegion === region ||
+      isSourceInCollectRegion(f.sourceKey, region)
+    );
+  });
 }
 
 /** Unique source keys among active feeds (multi-category publishers count once). */
-export function getActiveRssPublisherKeys(): string[] {
+export function getActiveRssPublisherKeys(
+  region?: CollectRegion | null
+): string[] {
   const keys: string[] = [];
   const seen = new Set<string>();
-  for (const feed of getActiveRssFeedSources()) {
+  for (const feed of getActiveRssFeedSources(region)) {
     if (seen.has(feed.sourceKey)) continue;
     seen.add(feed.sourceKey);
     keys.push(feed.sourceKey);

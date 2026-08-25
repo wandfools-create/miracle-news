@@ -2,6 +2,11 @@ import "server-only";
 
 import { RSS_SOURCE_SECTION_ENRICHED } from "@/lib/rss/feedSources";
 import {
+  parseCollectRegion,
+  resolveMaxCandidatesForRegion,
+  type CollectRegion,
+} from "@/lib/rss/collectRegions";
+import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/serviceRole";
@@ -38,6 +43,8 @@ export type CollectRssOptions = {
   maxCandidatesPerRun: number;
   maxEnrichPerRun: number;
   maxSavesPerDay: number;
+  /** When set, only feeds in this regional desk run. */
+  region: CollectRegion | null;
 };
 
 function isTruthy(value: string | null | undefined): boolean {
@@ -46,6 +53,7 @@ function isTruthy(value: string | null | undefined): boolean {
   return v === "1" || v === "true" || v === "yes" || v === "on";
 }
 
+/** @deprecated Prefer region-specific caps via resolveMaxCandidatesForRegion. */
 export function getRssMaxCandidatesPerRun(): number {
   const raw = process.env.RSS_MAX_CANDIDATES_PER_RUN?.trim();
   const parsed = raw ? Number.parseInt(raw, 10) : 30;
@@ -81,7 +89,8 @@ export function isRssCollectSaveEnabled(): boolean {
  * OpenAI / article creation is never part of this path.
  */
 export function resolveCollectRssOptions(
-  searchParams?: URLSearchParams | null
+  searchParams?: URLSearchParams | null,
+  defaults?: { region?: CollectRegion | null }
 ): CollectRssOptions {
   const testFromQuery = isTruthy(searchParams?.get("test") ?? undefined);
   const testFromEnv = isTruthy(process.env.RSS_COLLECT_TEST);
@@ -92,15 +101,32 @@ export function resolveCollectRssOptions(
   if (testMode) mode = "test";
   else if (save) mode = "save";
 
+  const region =
+    parseCollectRegion(searchParams?.get("region")) ??
+    defaults?.region ??
+    null;
+
+  const maxCandidatesPerRun = region
+    ? resolveMaxCandidatesForRegion(region)
+    : getRssMaxCandidatesPerRun();
+
   return {
     mode,
     save,
     testMode,
     persistLogs: !testMode,
-    maxCandidatesPerRun: getRssMaxCandidatesPerRun(),
+    maxCandidatesPerRun,
     maxEnrichPerRun: 0,
     maxSavesPerDay: getRssMaxSavesPerDay(),
+    region,
   };
+}
+
+export function resolveCollectRssOptionsForRegion(
+  region: CollectRegion,
+  searchParams?: URLSearchParams | null
+): CollectRssOptions {
+  return resolveCollectRssOptions(searchParams, { region });
 }
 
 function startOfUtcDayIso(): string {
