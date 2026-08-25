@@ -2,10 +2,20 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isAllowedAdminEmail } from "@/lib/admin/adminEmails";
 import { updateSupabaseSession } from "@/lib/supabase/middleware";
 
-export async function middleware(request: NextRequest) {
+/**
+ * Admin-only routing gate (Next.js 16 `proxy` = former `middleware`).
+ * Public pages and /api/* (cron, discord, ingest) are excluded via matcher —
+ * they never invoke this function.
+ */
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (!pathname.startsWith("/admin")) {
+  // Defense in depth if matcher is ever widened.
+  if (
+    !pathname.startsWith("/admin") ||
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/_next/")
+  ) {
     return NextResponse.next();
   }
 
@@ -42,6 +52,7 @@ export async function middleware(request: NextRequest) {
 
     return response;
   } catch {
+    // Auth timeout / Supabase outage: never hang the edge. Keep login usable.
     if (!isLoginPage) {
       const loginUrl = request.nextUrl.clone();
       loginUrl.pathname = "/admin/login";
@@ -52,5 +63,9 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  /*
+   * Admin desk only. Does not match /, /ko, /en, /api/cron/*, /api/discord/*, etc.
+   * Dual entries cover `/admin` and nested paths.
+   */
+  matcher: ["/admin", "/admin/:path*"],
 };
