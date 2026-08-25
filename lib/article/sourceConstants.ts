@@ -28,4 +28,5 @@ export const LEGACY_SOURCE_KEYS = ["reuters"] as const;
 
 export const EXCLUDED_RECOMMENDATION_SOURCE_KEYS = new Set<string>([
   ...LEGACY_SOURCE_KEYS,
+  "yonhap-kr-radar",
 ]);

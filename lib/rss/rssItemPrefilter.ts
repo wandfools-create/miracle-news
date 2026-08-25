@@ -28,7 +28,23 @@ export const RSS_PREFILTER_SOURCE_KEYS = [
   "korea-herald",
   "bbc",
   "sciencedaily",
+  "chosun",
+  "tvchosun",
 ] as const;
+
+/** TV조선 broadcast / clip / sports-desk titles (not general news). */
+export const TVCHOSUN_BROADCAST_TITLE_PATTERNS: Array<{
+  label: string;
+  pattern: RegExp;
+}> = [
+  { label: "클로징", pattern: /클로징/ },
+  { label: "다시보기", pattern: /다시\s*보기|다시보기/ },
+  { label: "풀영상", pattern: /풀\s*영상|풀영상/ },
+  { label: "클립", pattern: /클립/ },
+  { label: "경기결과", pattern: /경기\s*결과|경기결과/ },
+  { label: "하이라이트", pattern: /하이라이트/ },
+  { label: "VOD", pattern: /\bVOD\b|방송\s*다시/i },
+];
 
 export type RssPrefilterSourceKey = (typeof RSS_PREFILTER_SOURCE_KEYS)[number];
 
@@ -86,7 +102,13 @@ const RSS_NON_ARTICLE_TITLE_PATTERNS: Array<{ label: string; pattern: RegExp }> 
   ];
 
 export type RssItemSkipReason = {
-  code: "path_keyword" | "title_pattern" | "similar_title" | "sports_policy";
+  code:
+    | "path_keyword"
+    | "title_pattern"
+    | "similar_title"
+    | "sports_policy"
+    | "rss_category"
+    | "broadcast_title";
   detail: string;
   summary: string;
 };
@@ -140,10 +162,32 @@ function titleMatchesNonArticlePattern(title: string): string | null {
   return null;
 }
 
+function tvChosunBroadcastTitleMatch(title: string): string | null {
+  const trimmed = title.trim();
+  if (!trimmed) return null;
+  for (const { label, pattern } of TVCHOSUN_BROADCAST_TITLE_PATTERNS) {
+    if (pattern.test(trimmed)) return label;
+  }
+  return null;
+}
+
+function rssCategoryIsSports(categories: string[] | undefined): boolean {
+  if (!categories?.length) return false;
+  return categories.some((c) => {
+    const t = c.trim().toLowerCase();
+    return t === "스포츠" || t === "sports" || t === "sport";
+  });
+}
+
 /** Skip non-text RSS items (galleries, video, live blogs) before enrich. */
 export function getRssItemSkipReason(
   sourceKey: string,
-  input: { title: string; url: string; summary?: string | null }
+  input: {
+    title: string;
+    url: string;
+    summary?: string | null;
+    categories?: string[];
+  }
 ): RssItemSkipReason | null {
   if (!isPrefilterSource(sourceKey)) return null;
 
@@ -152,6 +196,24 @@ export function getRssItemSkipReason(
     pathname = new URL(input.url).pathname;
   } catch {
     return null;
+  }
+
+  if (sourceKey === "tvchosun") {
+    if (rssCategoryIsSports(input.categories)) {
+      return {
+        code: "rss_category",
+        detail: "스포츠",
+        summary: 'RSS category is "스포츠"',
+      };
+    }
+    const broadcast = tvChosunBroadcastTitleMatch(input.title);
+    if (broadcast) {
+      return {
+        code: "broadcast_title",
+        detail: broadcast,
+        summary: `TV조선 broadcast/clip title (${broadcast})`,
+      };
+    }
   }
 
   const pathKeyword = pathHasNonArticleKeyword(pathname);

@@ -15,20 +15,27 @@ export const RSS_MAX_INSERTS_PER_FEED = 4;
  */
 export const RSS_FIRST_PASS_INSERTS_PER_FEED = 3;
 
-/** How many inserts a feed may still take in this pass. */
+/**
+ * How many inserts a feed/publisher may still take in this pass.
+ * `alreadyInserted` should be the publisher total when multiple category
+ * feeds share one sourceKey (조선일보/TV조선 ≤ 4/run combined).
+ */
 export function rssFeedInsertQuota(input: {
   pass: 1 | 2;
   alreadyInserted: number;
   runBudgetRemaining: number;
+  /** Default: RSS_MAX_INSERTS_PER_FEED (also used as per-publisher cap). */
+  maxInserts?: number;
 }): number {
-  const perFeedRoom = RSS_MAX_INSERTS_PER_FEED - input.alreadyInserted;
-  if (perFeedRoom <= 0 || input.runBudgetRemaining <= 0) return 0;
+  const maxInserts = input.maxInserts ?? RSS_MAX_INSERTS_PER_FEED;
+  const room = maxInserts - input.alreadyInserted;
+  if (room <= 0 || input.runBudgetRemaining <= 0) return 0;
   if (input.pass === 1) {
     const firstPassRoom = RSS_FIRST_PASS_INSERTS_PER_FEED - input.alreadyInserted;
     if (firstPassRoom <= 0) return 0;
-    return Math.min(firstPassRoom, perFeedRoom, input.runBudgetRemaining);
+    return Math.min(firstPassRoom, room, input.runBudgetRemaining);
   }
-  return Math.min(perFeedRoom, input.runBudgetRemaining);
+  return Math.min(room, input.runBudgetRemaining);
 }
 
 export type RssItemAgeDecision =

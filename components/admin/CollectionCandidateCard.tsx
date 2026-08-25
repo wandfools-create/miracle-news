@@ -12,6 +12,9 @@ const SOURCE_LABELS: Record<string, string> = {
   "fox-news": "Fox",
   "pbs-newshour": "PBS",
   csm: "CSM",
+  chosun: "조선일보",
+  tvchosun: "TV조선",
+  "yonhap-kr-radar": "연합뉴스 속보",
 };
 
 type CollectionCandidateCardProps = {

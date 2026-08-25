@@ -120,6 +120,8 @@ export async function fetchApNewsFeedItems(input: {
           : null,
       summary: promo.description?.trim() || null,
       guid: promo.id!.trim(),
+      thumbnailUrl: null,
+      categories: [],
     }));
 
     return { ok: true, items };

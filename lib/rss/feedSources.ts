@@ -1,6 +1,17 @@
 /** Primary RSS collection targets (ops v1 expansion). */
 export type RssFeedSourceCountry = "US" | "KR" | "GB";
 
+/** Desk category stored on collection_candidates.category when known. */
+export type RssFeedCategory =
+  | "politics"
+  | "economy"
+  | "society"
+  | "world"
+  | "science_tech"
+  | "religion"
+  | "major_issue"
+  | "other";
+
 export type RssFeedSource = {
   /** articles.source / collection_candidates.source key. */
   sourceKey: string;
@@ -8,9 +19,16 @@ export type RssFeedSource = {
   /** Human-readable source URL (RSS or API docs). */
   feedUrl: string;
   sourceCountry: RssFeedSourceCountry;
-  /** Default: standard RSS via `feedUrl`. AP uses GraphQL (feeds.apnews.com is defunct). */
-  fetchKind?: "rss" | "ap-graphql";
+  /** Default: standard RSS via `feedUrl`. AP uses GraphQL; Yonhap KR uses news sitemaps. */
+  fetchKind?: "rss" | "ap-graphql" | "yna-sitemap-radar";
   apCategoryPath?: string;
+  /**
+   * Per-publisher insert cap for this sourceKey (default RSS_MAX_INSERTS_PER_FEED).
+   * Yonhap KR radar uses 3 so it stays a small auxiliary budget.
+   */
+  maxInsertsPerRun?: number;
+  /** When set, used as candidate category (overrides title inference). */
+  category?: RssFeedCategory;
   /**
    * When false, cron/collect skips this feed (no new candidates).
    * Keep the row for future KR-native Yonhap etc. Default true.
@@ -80,11 +98,92 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     feedUrl: "https://www.sciencedaily.com/rss/all.xml",
     sourceCountry: "US",
   },
+  {
+    sourceKey: "chosun",
+    label: "조선일보",
+    feedUrl:
+      "https://www.chosun.com/arc/outboundfeeds/rss/category/politics/?outputType=xml",
+    sourceCountry: "KR",
+    category: "politics",
+  },
+  {
+    sourceKey: "chosun",
+    label: "조선일보",
+    feedUrl:
+      "https://www.chosun.com/arc/outboundfeeds/rss/category/economy/?outputType=xml",
+    sourceCountry: "KR",
+    category: "economy",
+  },
+  {
+    sourceKey: "chosun",
+    label: "조선일보",
+    feedUrl:
+      "https://www.chosun.com/arc/outboundfeeds/rss/category/national/?outputType=xml",
+    sourceCountry: "KR",
+    category: "society",
+  },
+  {
+    sourceKey: "chosun",
+    label: "조선일보",
+    feedUrl:
+      "https://www.chosun.com/arc/outboundfeeds/rss/category/international/?outputType=xml",
+    sourceCountry: "KR",
+    category: "world",
+  },
+  {
+    sourceKey: "tvchosun",
+    label: "TV조선",
+    feedUrl: "https://news.tvchosun.com/site/data/rss/politics.xml",
+    sourceCountry: "KR",
+    category: "politics",
+  },
+  {
+    sourceKey: "tvchosun",
+    label: "TV조선",
+    feedUrl: "https://news.tvchosun.com/site/data/rss/economy.xml",
+    sourceCountry: "KR",
+    category: "economy",
+  },
+  {
+    sourceKey: "tvchosun",
+    label: "TV조선",
+    feedUrl: "https://news.tvchosun.com/site/data/rss/national.xml",
+    sourceCountry: "KR",
+    category: "society",
+  },
+  {
+    sourceKey: "tvchosun",
+    label: "TV조선",
+    feedUrl: "https://news.tvchosun.com/site/data/rss/international.xml",
+    sourceCountry: "KR",
+    category: "world",
+  },
+  {
+    sourceKey: "yonhap-kr-radar",
+    label: "연합뉴스 속보",
+    /** Docs / primary sitemap; collector fetches all YONHAP_KR_RADAR_SITEMAPS. */
+    feedUrl: "https://www.yna.co.kr/news-sitemap6.xml",
+    fetchKind: "yna-sitemap-radar",
+    sourceCountry: "KR",
+    maxInsertsPerRun: 3,
+  },
 ];
 
 /** Feeds that cron/collect actually fetches. */
 export function getActiveRssFeedSources(): RssFeedSource[] {
   return RSS_FEED_SOURCES.filter((f) => f.enabled !== false);
+}
+
+/** Unique source keys among active feeds (multi-category publishers count once). */
+export function getActiveRssPublisherKeys(): string[] {
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  for (const feed of getActiveRssFeedSources()) {
+    if (seen.has(feed.sourceKey)) continue;
+    seen.add(feed.sourceKey);
+    keys.push(feed.sourceKey);
+  }
+  return keys;
 }
 
 export function isRssFeedSourceEnabled(sourceKey: string): boolean {

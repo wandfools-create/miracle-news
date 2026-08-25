@@ -27,9 +27,12 @@ const SOURCE_LABELS: Record<string, string> = {
   "pbs-newshour": "PBS",
   csm: "CSM",
   yonhap: "Yonhap",
+  "yonhap-kr-radar": "연합뉴스 속보",
   "korea-herald": "Korea Herald",
   bbc: "BBC",
   sciencedaily: "ScienceDaily",
+  chosun: "조선일보",
+  tvchosun: "TV조선",
 };
 
 export type ShortlistCard = {

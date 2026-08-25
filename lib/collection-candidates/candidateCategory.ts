@@ -83,13 +83,29 @@ const WORLD = [
 
 /**
  * Classify a candidate for admin list filtering only.
- * Ambiguous → other. Source hints only when text is weak.
+ * Stored feed category wins when present. Ambiguous → other.
  */
 export function classifyCandidateCategory(input: {
   source: string;
   rssTitle: string;
   rssSummary?: string | null;
+  /** Stored collection_candidates.category from feed mapping. */
+  category?: string | null;
 }): CandidateCategoryKey {
+  const stored = input.category?.trim().toLowerCase();
+  if (
+    stored === "politics" ||
+    stored === "economy" ||
+    stored === "society" ||
+    stored === "world" ||
+    stored === "religion" ||
+    stored === "science_tech" ||
+    stored === "major_issue" ||
+    stored === "other"
+  ) {
+    return stored;
+  }
+
   const source = (input.source || "").trim().toLowerCase();
   const text = `${input.rssTitle || ""}\n${input.rssSummary || ""}`.trim();
 

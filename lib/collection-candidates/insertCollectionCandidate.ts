@@ -18,6 +18,8 @@ export type InsertCollectionCandidateInput = {
   rssGuid?: string | null;
   customUniqueId?: string | null;
   collectionRunId?: string | null;
+  thumbnailUrl?: string | null;
+  category?: string | null;
 };
 
 export type InsertCollectionCandidateResult =
@@ -93,6 +95,8 @@ export async function insertCollectionCandidate(
     rss_published_at: input.rssPublishedAt?.trim() || null,
     rss_guid: input.rssGuid?.trim() || null,
     custom_unique_id: input.customUniqueId?.trim() || null,
+    thumbnail_url: input.thumbnailUrl?.trim() || null,
+    category: input.category?.trim() || null,
     status: "pending" as const,
     collection_run_id: input.collectionRunId ?? null,
   };

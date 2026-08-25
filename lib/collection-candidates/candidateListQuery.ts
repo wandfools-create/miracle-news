@@ -18,9 +18,12 @@ export const CANDIDATE_SOURCE_FILTERS = [
   { key: "pbs-newshour", label: "PBS" },
   { key: "csm", label: "CSM" },
   { key: "yonhap", label: "Yonhap (비활성)" },
+  { key: "yonhap-kr-radar", label: "연합뉴스 속보" },
   { key: "korea-herald", label: "Korea Herald" },
   { key: "bbc", label: "BBC" },
   { key: "sciencedaily", label: "ScienceDaily" },
+  { key: "chosun", label: "조선일보" },
+  { key: "tvchosun", label: "TV조선" },
 ] as const;
 
 export const CANDIDATE_DATE_FILTERS = [

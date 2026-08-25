@@ -7,6 +7,7 @@ import {
 import { findExistingArticleByOriginalUrl } from "@/lib/articles/findExistingArticleByOriginalUrl";
 import { resolveSubmittedUrl } from "@/lib/from-link/resolveSubmittedUrl";
 import { fetchApNewsFeedItems } from "@/lib/rss/fetchApNewsFeed";
+import { fetchYonhapKrRadarItems } from "@/lib/rss/fetchYonhapKrRadar";
 import { logRssCollectItemSkipped } from "@/lib/rss/logRssCollectFailure";
 import {
   formatRssItemSkipReason,
@@ -33,6 +34,10 @@ import {
   rssFeedInsertQuota,
 } from "@/lib/rss/rssItemFreshness";
 import { parseRssFeed, type ParsedRssItem } from "@/lib/rss/parseRssFeed";
+import {
+  YONHAP_KR_RADAR_MAX_INSERTS_PER_RUN,
+  YONHAP_KR_RADAR_SOURCE_KEY,
+} from "@/lib/rss/yonhapKrRadarPolicy";
 import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
@@ -284,6 +289,11 @@ async function processRssItem(
     return { kind: "would_insert" };
   }
 
+  const categoryFromItem =
+    item.categories.find((c) =>
+      ["politics", "economy", "society", "world"].includes(c)
+    ) ?? null;
+
   const result = await insertCollectionCandidate({
     source: feed.sourceKey,
     sourceCountry: feed.sourceCountry,
@@ -294,6 +304,8 @@ async function processRssItem(
     rssPublishedAt: item.publishedAt,
     rssGuid: item.guid,
     customUniqueId: rssCustomUniqueId(feed.sourceKey, link, item.guid),
+    thumbnailUrl: item.thumbnailUrl,
+    category: feed.category ?? categoryFromItem,
   });
 
   if (!result.ok) {
@@ -335,11 +347,28 @@ async function fetchFeedItems(
     return { ok: true, items: ap.items };
   }
 
+  if (feed.fetchKind === "yna-sitemap-radar") {
+    const radar = await fetchYonhapKrRadarItems();
+    if (!radar.ok) {
+      return { ok: false, error: radar.error };
+    }
+    return { ok: true, items: radar.items };
+  }
+
   const parsed = await parseRssFeed(feed.feedUrl);
   if (!parsed.ok) {
     return { ok: false, error: parsed.error };
   }
   return { ok: true, items: parsed.items };
+}
+
+function publisherMaxInserts(feed: RssFeedSource): number {
+  if (feed.sourceKey === YONHAP_KR_RADAR_SOURCE_KEY) {
+    return (
+      feed.maxInsertsPerRun ?? YONHAP_KR_RADAR_MAX_INSERTS_PER_RUN
+    );
+  }
+  return feed.maxInsertsPerRun ?? RSS_MAX_INSERTS_PER_FEED;
 }
 
 async function prefilterRssFeedItems(
@@ -361,6 +390,7 @@ async function prefilterRssFeedItems(
       title: item.title,
       url: resolved.href,
       summary: item.summary,
+      categories: item.categories,
     });
     if (skipReason) {
       skipped += 1;
@@ -433,7 +463,7 @@ async function prepareFeed(
 
 /**
  * Process up to `maxNewInserts` successful saves from this feed's queue.
- * Does not exceed per-feed cap or run budget (checked via caller quota).
+ * Does not exceed per-publisher cap or run budget (checked via caller quota).
  */
 async function drainFeedInsertQuota(
   prepared: PreparedFeed,
@@ -447,9 +477,7 @@ async function drainFeedInsertQuota(
   while (
     savedThisCall < maxNewInserts &&
     prepared.queue.length > 0 &&
-    (!ctx.options.save || ctx.remainingCandidateBudget.value > 0) &&
-    prepared.stats.inserted + (prepared.stats.wouldInsert ?? 0) <
-      RSS_MAX_INSERTS_PER_FEED
+    (!ctx.options.save || ctx.remainingCandidateBudget.value > 0)
   ) {
     const item = prepared.queue.shift()!;
     const outcome = await processRssItem(prepared.feed, item, seenUrls, ctx);
@@ -489,6 +517,20 @@ function feedSavedCount(stats: FeedCollectStats): number {
   return stats.inserted + (stats.wouldInsert ?? 0);
 }
 
+/** Sum inserts across all category feeds for one publisher (sourceKey). */
+function publisherSavedCount(
+  prepared: PreparedFeed[],
+  sourceKey: string
+): number {
+  let total = 0;
+  for (const p of prepared) {
+    if (p.feed.sourceKey === sourceKey) {
+      total += feedSavedCount(p.stats);
+    }
+  }
+  return total;
+}
+
 export async function collectRssToReviewQueue(
   optionsInput?: CollectRssOptions
 ): Promise<CollectRssResult> {
@@ -522,6 +564,12 @@ export async function collectRssToReviewQueue(
   }
 
   const activeFeeds = getActiveRssFeedSources();
+  const mainFeeds = activeFeeds.filter(
+    (f) => f.sourceKey !== YONHAP_KR_RADAR_SOURCE_KEY
+  );
+  const radarFeeds = activeFeeds.filter(
+    (f) => f.sourceKey === YONHAP_KR_RADAR_SOURCE_KEY
+  );
 
   console.info("[collectRss] run start (v5 candidates, fair pass, no OpenAI)", {
     mode: options.mode,
@@ -529,38 +577,64 @@ export async function collectRssToReviewQueue(
     maxCandidatesPerRun: options.maxCandidatesPerRun,
     maxInsertsPerFeed: RSS_MAX_INSERTS_PER_FEED,
     firstPassInsertsPerFeed: RSS_FIRST_PASS_INSERTS_PER_FEED,
+    yonhapKrRadarMax: YONHAP_KR_RADAR_MAX_INSERTS_PER_RUN,
     openaiCalls: 0,
     feedCount: activeFeeds.length,
     registeredFeedCount: RSS_FEED_SOURCES.length,
   });
 
   // 1) Prepare every active feed (fetch failures isolated per source).
+  //    Main publishers first; Yonhap KR radar last so it does not crowd pass-1.
   const prepared: PreparedFeed[] = [];
-  for (const feed of activeFeeds) {
+  for (const feed of [...mainFeeds, ...radarFeeds]) {
     prepared.push(await prepareFeed(feed, ctx));
   }
 
-  // 2) Fair pass 1 — each feed gets up to FIRST_PASS inserts.
-  for (const p of prepared) {
+  const mainPrepared = prepared.filter(
+    (p) => p.feed.sourceKey !== YONHAP_KR_RADAR_SOURCE_KEY
+  );
+  const radarPrepared = prepared.filter(
+    (p) => p.feed.sourceKey === YONHAP_KR_RADAR_SOURCE_KEY
+  );
+
+  // 2) Fair pass 1 — each main publisher gets up to FIRST_PASS inserts
+  //    shared across category feeds (조선일보/TV조선 ≤ 3 then ≤ 4).
+  for (const p of mainPrepared) {
     const quota = rssFeedInsertQuota({
       pass: 1,
-      alreadyInserted: feedSavedCount(p.stats),
+      alreadyInserted: publisherSavedCount(prepared, p.feed.sourceKey),
       runBudgetRemaining: ctx.options.save
         ? ctx.remainingCandidateBudget.value
         : Number.MAX_SAFE_INTEGER,
+      maxInserts: publisherMaxInserts(p.feed),
     });
     await drainFeedInsertQuota(p, seenUrls, ctx, quota);
   }
 
-  // 3) Fair pass 2 — leftover run budget, still capped at MAX per feed.
-  for (const p of prepared) {
+  // 3) Fair pass 2 — leftover run budget for main publishers.
+  for (const p of mainPrepared) {
     if (ctx.options.save && ctx.remainingCandidateBudget.value <= 0) break;
     const quota = rssFeedInsertQuota({
       pass: 2,
-      alreadyInserted: feedSavedCount(p.stats),
+      alreadyInserted: publisherSavedCount(prepared, p.feed.sourceKey),
       runBudgetRemaining: ctx.options.save
         ? ctx.remainingCandidateBudget.value
         : Number.MAX_SAFE_INTEGER,
+      maxInserts: publisherMaxInserts(p.feed),
+    });
+    await drainFeedInsertQuota(p, seenUrls, ctx, quota);
+  }
+
+  // 4) Yonhap KR radar — small auxiliary cap (≤3), only after main quotas.
+  for (const p of radarPrepared) {
+    if (ctx.options.save && ctx.remainingCandidateBudget.value <= 0) break;
+    const quota = rssFeedInsertQuota({
+      pass: 2,
+      alreadyInserted: publisherSavedCount(prepared, p.feed.sourceKey),
+      runBudgetRemaining: ctx.options.save
+        ? ctx.remainingCandidateBudget.value
+        : Number.MAX_SAFE_INTEGER,
+      maxInserts: publisherMaxInserts(p.feed),
     });
     await drainFeedInsertQuota(p, seenUrls, ctx, quota);
   }

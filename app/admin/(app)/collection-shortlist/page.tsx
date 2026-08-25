@@ -49,6 +49,7 @@ export default async function CollectionShortlistPage({
       source: c.source,
       rssTitle: c.rss_title,
       rssSummary: c.rss_summary,
+      category: c.category,
     }),
     aiRecommendGrade: normalizeAiRecommendGrade(c.ai_recommend_grade),
     aiRecommendScore:

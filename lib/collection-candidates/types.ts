@@ -43,6 +43,8 @@ export type CollectionCandidateRow = {
   ai_recommended_at: string | null;
   discord_brief_sent_at: string | null;
   discord_brief_message_id: string | null;
+  thumbnail_url: string | null;
+  category: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -70,6 +72,8 @@ export const COLLECTION_CANDIDATE_LIST_SELECT = `
   ai_recommended_at,
   discord_brief_sent_at,
   discord_brief_message_id,
+  thumbnail_url,
+  category,
   created_at,
   updated_at
 `;

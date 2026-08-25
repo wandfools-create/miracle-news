@@ -96,6 +96,22 @@ export const koreanSourceConfigs: SourceConfig[] = [
   },
 ];
 
+/** Desk-only / auxiliary collectors — not home source leads. */
+export const auxiliarySourceConfigs: SourceConfig[] = [
+  {
+    key: "yonhap-kr-radar",
+    label: "연합뉴스 속보",
+    aliases: [
+      "연합뉴스 속보",
+      "Yonhap KR Radar",
+      "Yonhap Radar",
+      "yonhap-kr-radar",
+    ],
+    description: "한국어 연합뉴스 속보·중요 이슈 탐지 (sitemap 메타만, 본문 미수집)",
+    excludeFromRecommendations: true,
+  },
+];
+
 /** Recognized for URL/label normalization only — not promoted on home. */
 export const legacySourceConfigs: SourceConfig[] = [
   {
@@ -107,14 +123,15 @@ export const legacySourceConfigs: SourceConfig[] = [
   },
 ];
 
-/** All known outlets (includes legacy). */
+/** All known outlets (includes auxiliary + legacy). */
 export const sourceConfigs: SourceConfig[] = [
   ...primaryForeignSourceConfigs,
   ...koreanSourceConfigs,
+  ...auxiliarySourceConfigs,
   ...legacySourceConfigs,
 ];
 
-/** Home UI: source pills, leads, filters — no legacy outlets. */
+/** Home UI: source pills, leads, filters — no legacy/auxiliary outlets. */
 export const featuredSourceConfigs: SourceConfig[] = [
   ...primaryForeignSourceConfigs,
   ...koreanSourceConfigs,

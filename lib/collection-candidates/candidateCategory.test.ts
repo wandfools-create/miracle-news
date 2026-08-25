@@ -64,6 +64,26 @@ describe("candidateCategory (rule-based, no OpenAI)", () => {
     );
   });
 
+  it("prefers stored feed category over title inference", () => {
+    assert.equal(
+      classifyCandidateCategory({
+        source: "chosun",
+        rssTitle: "Weekly roundup",
+        rssSummary: "Assorted notes",
+        category: "politics",
+      }),
+      "politics"
+    );
+    assert.equal(
+      classifyCandidateCategory({
+        source: "tvchosun",
+        rssTitle: "Fed holds interest rate",
+        category: "society",
+      }),
+      "society"
+    );
+  });
+
   it("parses category filter keys", () => {
     assert.equal(parseCandidateCategoryFilter("politics"), "politics");
     assert.equal(parseCandidateCategoryFilter("nope"), "all");

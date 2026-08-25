@@ -89,6 +89,7 @@ export default async function CollectionCandidatesPage({
       source: c.source,
       rssTitle: c.rss_title,
       rssSummary: c.rss_summary,
+      category: c.category,
     });
     const aiRecommendGrade = normalizeAiRecommendGrade(c.ai_recommend_grade);
     return {
