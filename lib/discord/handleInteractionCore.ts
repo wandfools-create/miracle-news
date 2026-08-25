@@ -11,6 +11,8 @@ import type { MorningBriefItem } from "@/lib/discord/morningBriefMessage";
 
 export type DiscordInteractionPayload = {
   type: number;
+  token?: string;
+  application_id?: string;
   data?: { custom_id?: string };
   member?: { user?: { id?: string } };
   user?: { id?: string };
@@ -23,7 +25,12 @@ export type InteractionHandlerResult =
   | { kind: "forbidden"; message: string }
   | { kind: "bad_request"; message: string }
   | { kind: "update_message"; data: { content: string; components: unknown[] } }
-  | { kind: "ephemeral"; message: string };
+  | { kind: "ephemeral"; message: string }
+  | {
+      kind: "deferred_update";
+      /** Runs after Discord receives type-5 ACK (promote + edit message). */
+      continueWork: () => Promise<void>;
+    };
 
 export type ShortlistFn = (input: {
   candidateIds: string[];
@@ -41,20 +48,36 @@ export type DismissFn = (input: {
   | { ok: false; error: string }
 >;
 
+export type MakeArticleFn = (input: {
+  candidateId: string;
+  selectedBy?: string | null;
+}) => Promise<
+  | { ok: true; articleId: string; alreadyEnriched?: boolean }
+  | { ok: false; error: string; step?: string }
+>;
+
+export type EditOriginalMessageFn = (input: {
+  content: string;
+  components: unknown[];
+}) => Promise<{ ok: true } | { ok: false; error: string }>;
+
 export type InteractionHandlerDeps = {
   allowedGuildId: string;
   allowedUserIds: Set<string>;
   dismiss: DismissFn;
   shortlist: ShortlistFn;
+  makeArticle?: MakeArticleFn;
+  editOriginalMessage?: EditOriginalMessageFn;
   fetchCandidate: (candidateId: string) => Promise<MorningBriefItem | null>;
   fetchStatus: (candidateId: string) => Promise<string | null>;
 };
 
 function buildUpdateResult(
   item: MorningBriefItem,
-  state: MorningBriefMessageState
+  state: MorningBriefMessageState,
+  extra?: { articleId?: string; error?: string }
 ): InteractionHandlerResult {
-  const payload = buildMorningBriefPayload(item, state);
+  const payload = buildMorningBriefPayload(item, state, extra);
   return {
     kind: "update_message",
     data: {
@@ -103,6 +126,57 @@ export async function handleDiscordComponentInteraction(
 
   const actor = `discord:${userId}`;
 
+  if (parsed.action === "make_article") {
+    if (!deps.makeArticle || !deps.editOriginalMessage) {
+      return {
+        kind: "ephemeral",
+        message: "기사 만들기 기능이 아직 연결되지 않았습니다.",
+      };
+    }
+
+    const makeArticle = deps.makeArticle;
+    const editOriginal = deps.editOriginalMessage;
+
+    return {
+      kind: "deferred_update",
+      continueWork: async () => {
+        try {
+          const result = await makeArticle({
+            candidateId: parsed.candidateId,
+            selectedBy: actor,
+          });
+
+          if (!result.ok) {
+            const failed = buildMorningBriefPayload(item, "article_failed", {
+              error: result.error,
+            });
+            await editOriginal({
+              content: failed.content,
+              components: failed.components,
+            });
+            return;
+          }
+
+          const created = buildMorningBriefPayload(item, "article_created", {
+            articleId: result.articleId,
+          });
+          await editOriginal({
+            content: created.content,
+            components: created.components,
+          });
+        } catch (err) {
+          const failed = buildMorningBriefPayload(item, "article_failed", {
+            error: String(err),
+          });
+          await editOriginal({
+            content: failed.content,
+            components: failed.components,
+          });
+        }
+      },
+    };
+  }
+
   if (parsed.action === "shortlist") {
     const result = await deps.shortlist({
       candidateIds: [parsed.candidateId],
@@ -116,6 +190,12 @@ export async function handleDiscordComponentInteraction(
       }
       if (current === "dismissed") {
         return buildUpdateResult(item, "dismissed");
+      }
+      if (current === "enriched") {
+        return {
+          kind: "ephemeral",
+          message: "이미 기사로 만들어진 후보입니다.",
+        };
       }
       return {
         kind: "ephemeral",

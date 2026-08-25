@@ -81,6 +81,7 @@ const aiReviewLabelMap: Record<string, string> = {
 
 const reviewStatusLabelMap: Record<string, string> = {
   pending: "검토 전",
+  quick_review: "빠른 검토",
   approved: "승인 완료",
   needs_revision: "수정 필요",
   on_hold: "보류",

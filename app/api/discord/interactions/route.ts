@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getDiscordEnv, getDiscordPublicKey } from "@/lib/discord/env";
@@ -6,6 +7,7 @@ import { verifyDiscordInteractionHeadersAsync } from "@/lib/discord/verifySignat
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 function pong(): NextResponse {
   return NextResponse.json({ type: 1 });
@@ -33,9 +35,17 @@ export async function POST(request: NextRequest) {
     return new NextResponse("invalid request signature", { status: 401 });
   }
 
-  let interaction: { type?: number };
+  let interaction: {
+    type?: number;
+    token?: string;
+    application_id?: string;
+    data?: { custom_id?: string };
+    member?: { user?: { id?: string } };
+    user?: { id?: string };
+    guild_id?: string;
+  };
   try {
-    interaction = JSON.parse(body) as { type?: number };
+    interaction = JSON.parse(body) as typeof interaction;
   } catch {
     return new NextResponse("invalid json", { status: 400 });
   }
@@ -75,6 +85,17 @@ export async function POST(request: NextRequest) {
         type: 7,
         data: result.data,
       });
+    case "deferred_update": {
+      // ACK immediately (Discord 3s limit), then promote + edit in background.
+      after(async () => {
+        try {
+          await result.continueWork();
+        } catch (err) {
+          console.error("[discord/interactions] deferred work failed", err);
+        }
+      });
+      return NextResponse.json({ type: 5 });
+    }
     default:
       return pong();
   }

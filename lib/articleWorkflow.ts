@@ -3,6 +3,16 @@ export const ARTICLE_WORKFLOW = {
     status: "ready_for_human_review",
     review_status: "pending",
   },
+  /**
+   * Discord/admin “빠른 발행” holding state — one human confirm before live.
+   * Same article.status as review queue; filtered by review_status only.
+   */
+  quickReview: {
+    status: "ready_for_human_review",
+    review_status: "quick_review",
+    revision_status: "none",
+    is_published: false,
+  },
   revision: {
     status: "needs_revision",
     review_status: "needs_revision",

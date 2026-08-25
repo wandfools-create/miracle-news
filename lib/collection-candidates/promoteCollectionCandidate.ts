@@ -60,6 +60,8 @@ async function markCandidateFailed(input: {
 export async function promoteCollectionCandidate(input: {
   candidateId: string;
   selectedBy?: string | null;
+  /** Discord 빠른 발행: land in quick_review instead of pending review. */
+  landingWorkflow?: "review" | "quick_review";
 }): Promise<PromoteCollectionCandidateResult> {
   const candidateId = input.candidateId.trim();
   if (!candidateId) {
@@ -91,6 +93,15 @@ export async function promoteCollectionCandidate(input: {
   }
 
   if (row.status === "enriched" && row.article_id) {
+    if (input.landingWorkflow === "quick_review") {
+      const { moveArticleToQuickReview } = await import(
+        "@/lib/articles/publishArticle"
+      );
+      const moved = await moveArticleToQuickReview(row.article_id);
+      if (!moved.ok) {
+        return { ok: false, error: moved.error, step: "move_quick_review" };
+      }
+    }
     return { ok: true, articleId: row.article_id, alreadyEnriched: true };
   }
 
@@ -197,6 +208,7 @@ export async function promoteCollectionCandidate(input: {
     topicKey: f.topicKey,
     topicLabel: f.topicLabel,
     editorialPriority: f.editorialPriority,
+    landingWorkflow: input.landingWorkflow ?? "review",
   });
 
   if (!inserted.ok) {
@@ -213,6 +225,13 @@ export async function promoteCollectionCandidate(input: {
           enrich_category: null,
         })
         .eq("id", candidateId);
+
+      if (input.landingWorkflow === "quick_review") {
+        const { moveArticleToQuickReview } = await import(
+          "@/lib/articles/publishArticle"
+        );
+        await moveArticleToQuickReview(inserted.duplicateArticleId);
+      }
 
       return {
         ok: true,

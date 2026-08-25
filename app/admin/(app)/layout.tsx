@@ -1,7 +1,11 @@
 import { supabase } from "@/lib/supabase";
-import { countActionableCollectionCandidates, countShortlistedCollectionCandidates } from "@/lib/admin/fetchCollectionCandidates";
+import {
+  countActionableCollectionCandidates,
+  countShortlistedCollectionCandidates,
+} from "@/lib/admin/fetchCollectionCandidates";
 import AdminQuickNav from "@/components/admin/AdminQuickNav";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { ARTICLE_WORKFLOW } from "@/lib/articleWorkflow";
 
 export default async function AdminDashboardLayout({
   children,
@@ -15,6 +19,7 @@ export default async function AdminDashboardLayout({
 
   const [
     { count: reviewCount },
+    { count: quickReviewCount },
     { count: onHoldCount },
     { count: revisionCount },
     { count: approvedCount },
@@ -28,6 +33,13 @@ export default async function AdminDashboardLayout({
       .select("*", { count: "exact", head: true })
       .eq("status", "ready_for_human_review")
       .eq("review_status", "pending"),
+
+    supabase
+      .from("articles")
+      .select("*", { count: "exact", head: true })
+      .eq("status", ARTICLE_WORKFLOW.quickReview.status)
+      .eq("review_status", ARTICLE_WORKFLOW.quickReview.review_status)
+      .eq("is_published", false),
 
     supabase
       .from("articles")
@@ -69,6 +81,7 @@ export default async function AdminDashboardLayout({
         userEmail={user?.email ?? null}
         counts={{
           review: reviewCount ?? 0,
+          quickReview: quickReviewCount ?? 0,
           collectionCandidates: collectionCandidatesCount,
           collectionShortlist: collectionShortlistCount,
           onHold: onHoldCount ?? 0,

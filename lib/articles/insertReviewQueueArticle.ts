@@ -61,6 +61,12 @@ export type InsertReviewQueueArticleInput = {
   skipOriginalUrlDuplicateCheck?: boolean;
   /** When true (default) and no thumbnail URL, generate AI editorial illustration. */
   autoGenerateAiThumbnail?: boolean;
+  /**
+   * Landing workflow after insert.
+   * - review (default): normal 검토 대기
+   * - quick_review: Discord/admin 빠른 발행 대기
+   */
+  landingWorkflow?: "review" | "quick_review";
 };
 
 export type InsertReviewQueueArticleResult =
@@ -245,6 +251,19 @@ export async function insertReviewQueueArticle(
 
   const thumbnailUrlForInsert = sanitizeThumbnailUrl(input.thumbnailUrl);
 
+  const landing =
+    input.landingWorkflow === "quick_review"
+      ? {
+          review_status: "quick_review" as const,
+          revision_status: "none" as const,
+          status: "ready_for_human_review" as const,
+        }
+      : {
+          review_status: "pending" as const,
+          revision_status: "none" as const,
+          status: "ready_for_human_review" as const,
+        };
+
   const articleInsert = {
     source,
     source_country: (input.sourceCountry || "KR").trim(),
@@ -273,9 +292,9 @@ export async function insertReviewQueueArticle(
     custom_unique_id: customUniqueId,
     ai_review_status: "pending",
     ai_review_notes: null,
-    review_status: "pending",
-    revision_status: "none",
-    status: "ready_for_human_review",
+    review_status: landing.review_status,
+    revision_status: landing.revision_status,
+    status: landing.status,
     is_published: false,
     // Site publish time is set on first admin publish only.
     published_at: null,

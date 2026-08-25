@@ -375,6 +375,14 @@ describe("Discord desk (fixture only, no OpenAI/Discord/RSS)", () => {
     );
     assert.ok(link && "url" in link);
     assert.equal(link.url, "https://apnews.com/x");
+    const makeBtn = payload.components[0]?.components.find(
+      (c) => "custom_id" in c && String(c.custom_id).startsWith("cc:mk:")
+    );
+    assert.ok(makeBtn);
+    assert.equal(
+      parseCandidateButtonCustomId(`cc:mk:${CANDIDATE_ID}`)?.action,
+      "make_article"
+    );
   });
 
   it("discord_brief_sent_at excludes re-send eligibility", () => {

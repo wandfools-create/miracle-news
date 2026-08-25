@@ -8,6 +8,7 @@ type AdminQuickNavProps = {
   userEmail?: string | null;
   counts: {
     review: number;
+    quickReview: number;
     collectionCandidates: number;
     collectionShortlist: number;
     onHold: number;
@@ -31,6 +32,7 @@ const navItems = [
     label: "편집 보관함",
     key: "collection-shortlist",
   },
+  { href: "/admin/quick-review", label: "빠른 검토", key: "quick-review" },
   { href: "/admin/review", label: "검토 대기", key: "review" },
   { href: "/admin/on-hold", label: "보류 기사", key: "on-hold" },
   { href: "/admin/revision", label: "수정 대기", key: "revision" },
@@ -46,6 +48,7 @@ export default function AdminQuickNav({ counts, userEmail }: AdminQuickNavProps)
 
   function getCount(key: string) {
     if (key === "review") return counts.review;
+    if (key === "quick-review") return counts.quickReview;
     if (key === "collection-candidates") return counts.collectionCandidates;
     if (key === "collection-shortlist") return counts.collectionShortlist;
     if (key === "on-hold") return counts.onHold;
