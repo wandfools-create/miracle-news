@@ -94,6 +94,16 @@ export default function AdminHomePage() {
           </Link>
 
           <Link
+            href="/admin/shorts"
+            className="rounded-2xl border p-6 shadow-sm hover:bg-gray-50"
+          >
+            <h2 className="text-xl font-semibold">Shorts 제작실</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              공개 기사에서 한눈 아침뉴스·저녁뉴스 제작 기사 선택
+            </p>
+          </Link>
+
+          <Link
             href="/admin/archive"
             className="rounded-2xl border p-6 shadow-sm hover:bg-gray-50"
           >
