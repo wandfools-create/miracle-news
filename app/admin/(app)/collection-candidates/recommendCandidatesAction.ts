@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -38,6 +39,7 @@ export async function recommendCandidatesAction(
 
   const result = await recommendUnevaluatedCollectionCandidates();
 
+  revalidateAdminNavCountsCache();
   revalidatePath("/admin/collection-candidates");
 
   if (!result.ok) {

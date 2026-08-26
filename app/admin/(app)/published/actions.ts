@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { ARTICLE_WORKFLOW } from "@/lib/articleWorkflow";
 import { supabase } from "../../../../lib/supabase";
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 
 function getArticleIdsFromFormData(formData: FormData) {
   return formData
@@ -12,6 +13,7 @@ function getArticleIdsFromFormData(formData: FormData) {
 }
 
 function revalidatePublishedPages() {
+  revalidateAdminNavCountsCache();
   revalidatePath("/");
   revalidatePath("/ko");
   revalidatePath("/en");

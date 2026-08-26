@@ -1,6 +1,7 @@
 import Link from "next/link";
 import AdminListPager from "@/components/admin/AdminListPager";
 import DiscardArticlesButton from "@/components/admin/DiscardArticlesButton";
+import { getAdminNavCounts } from "@/lib/admin/adminNavCounts";
 import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
 import {
   ADMIN_LIST_PAGE_SIZE,
@@ -46,10 +47,12 @@ export default async function AdminRejectedPage({
   const discardError = params.discardError?.trim();
   const { from, to } = adminListRange(page);
 
-  const { data: articles, error, count } = await supabase
-    .from("articles")
-    .select(
-      `
+  const [navCounts, listResult] = await Promise.all([
+    getAdminNavCounts(),
+    supabase
+      .from("articles")
+      .select(
+        `
       id,
       source,
       original_url,
@@ -64,16 +67,17 @@ export default async function AdminRejectedPage({
       status,
       review_status,
       updated_at
-    `,
-      { count: "exact" }
-    )
-    .eq("status", "rejected")
-    .eq("review_status", "rejected")
-    .order("updated_at", { ascending: false })
-    .range(from, to);
+    `
+      )
+      .eq("status", "rejected")
+      .eq("review_status", "rejected")
+      .order("updated_at", { ascending: false })
+      .range(from, to),
+  ]);
 
+  const { data: articles, error } = listResult;
   const rows = articles ?? [];
-  const totalCount = count ?? 0;
+  const totalCount = navCounts.rejected;
 
   return (
     <main className="min-h-screen bg-white text-black">

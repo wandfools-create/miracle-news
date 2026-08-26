@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -29,6 +30,7 @@ export async function shortlistCollectionCandidateAction(formData: FormData) {
     shortlistedBy: user.email ?? null,
   });
 
+  revalidateAdminNavCountsCache();
   revalidatePath("/admin/collection-candidates");
   revalidatePath("/admin/collection-shortlist");
 

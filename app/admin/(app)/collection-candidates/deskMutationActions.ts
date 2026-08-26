@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 import { revalidatePath } from "next/cache";
 
 import { isAllowedAdminEmail } from "@/lib/admin/adminEmails";
@@ -31,6 +32,7 @@ async function requireAdmin(): Promise<
 
 /** Shortlist page only — avoid revalidating the open candidates list (scroll jump). */
 function revalidateShortlistPage() {
+  revalidateAdminNavCountsCache();
   revalidatePath("/admin/collection-shortlist");
 }
 

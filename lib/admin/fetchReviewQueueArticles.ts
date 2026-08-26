@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getAdminNavCounts } from "@/lib/admin/adminNavCounts";
 import { supabase } from "@/lib/supabase";
 import {
   ADMIN_LIST_PAGE_SIZE,
@@ -7,7 +8,7 @@ import {
   parseAdminListPage,
 } from "@/lib/admin/listPagination";
 
-/** Columns that exist on `articles` (no `body_ko` — Korean body uses `body_translated`). */
+/** Detail / full review — includes body columns. */
 export const REVIEW_QUEUE_ARTICLE_SELECT = `
   id,
   source,
@@ -21,6 +22,30 @@ export const REVIEW_QUEUE_ARTICLE_SELECT = `
   summary_ko,
   body_original,
   body_translated,
+  category,
+  ai_review_status,
+  review_status,
+  status,
+  thumbnail_url,
+  published_at,
+  collected_at,
+  created_at,
+  ai_review_notes,
+  editorial_priority
+`;
+
+/** List cards — omit heavy body columns. */
+export const REVIEW_QUEUE_LIST_SELECT = `
+  id,
+  source,
+  source_section,
+  original_url,
+  title_original,
+  title_translated,
+  title_ko,
+  summary_original,
+  summary_translated,
+  summary_ko,
   category,
   ai_review_status,
   review_status,
@@ -66,15 +91,12 @@ export type ReviewQueueListQuery = {
 export type FetchReviewQueueResult = {
   articles: ReviewQueueFetchRow[];
   error: { code?: string; message: string; hint?: string | null } | null;
-  /** Page size actually used (50, or REVIEW_DEBUG_LIMIT when set). */
   pageSize: number;
   page: number;
   totalCount: number;
-  /** Present only when REVIEW_DEBUG_LIMIT env overrides page size. */
   debugLimitApplied: number | null;
 };
 
-/** Dev-only: optional smaller page size via REVIEW_DEBUG_LIMIT. */
 export function getReviewDebugLimit(): number | undefined {
   const raw = process.env.REVIEW_DEBUG_LIMIT?.trim();
   if (!raw) return undefined;
@@ -106,24 +128,21 @@ export async function fetchReviewQueueArticles(
     ? Math.min(debugLimit, ADMIN_LIST_PAGE_SIZE)
     : ADMIN_LIST_PAGE_SIZE;
   const { from, to } = adminListRange(query.page, pageSize);
-
-  console.info("[admin/review] fetch start", {
-    page: query.page,
-    pageSize,
-    q: query.q || null,
-    debugLimit: debugLimit ?? null,
-  });
+  const hasSearch = query.q.length > 0;
 
   let db = supabase
     .from("articles")
-    .select(REVIEW_QUEUE_ARTICLE_SELECT, { count: "exact" })
+    .select(
+      REVIEW_QUEUE_LIST_SELECT,
+      hasSearch ? { count: "exact" } : undefined
+    )
     .eq("status", "ready_for_human_review")
     .eq("review_status", "pending")
     .neq("status", "archived")
     .order("collected_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false, nullsFirst: false });
 
-  if (query.q) {
+  if (hasSearch) {
     const term = escapeIlike(query.q);
     if (term) {
       const pattern = `"%${term.replace(/"/g, "")}%"`;
@@ -143,13 +162,6 @@ export async function fetchReviewQueueArticles(
   const { data, error, count } = await db.range(from, to);
 
   if (error) {
-    console.error("[admin/review] supabase query failed", {
-      code: error.code,
-      message: error.message,
-      hint: error.hint,
-      details: error.details,
-      pageSize,
-    });
     return {
       articles: [],
       error: {
@@ -165,21 +177,16 @@ export async function fetchReviewQueueArticles(
   }
 
   const articles = (data ?? []) as ReviewQueueFetchRow[];
-
-  console.info("[admin/review] fetch ok", {
-    rowCount: articles.length,
-    totalCount: count ?? 0,
-    pageSize,
-    page: query.page,
-    sampleIds: articles.slice(0, 5).map((a) => a.id),
-  });
+  const totalCount = hasSearch
+    ? (count ?? 0)
+    : (await getAdminNavCounts()).review;
 
   return {
     articles,
     error: null,
     pageSize,
     page: query.page,
-    totalCount: count ?? 0,
+    totalCount,
     debugLimitApplied: debugLimit ?? null,
   };
 }

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { publishArticleToLive } from "@/lib/articles/publishArticle";
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 
 function getArticleIdsFromFormData(formData: FormData) {
   return formData
@@ -11,6 +12,7 @@ function getArticleIdsFromFormData(formData: FormData) {
 }
 
 function revalidatePublishPages() {
+  revalidateAdminNavCountsCache();
   revalidatePath("/admin/approved");
   revalidatePath("/admin/published");
   revalidatePath("/admin/review");

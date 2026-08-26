@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -35,10 +36,12 @@ export async function localizePendingCandidatesAction(
   const result = await localizeSelectedCollectionCandidates(candidateIds);
 
   if (!result.ok) {
+    revalidateAdminNavCountsCache();
     revalidatePath("/admin/collection-candidates");
     return { ok: false, error: result.error, step: result.step };
   }
 
+  revalidateAdminNavCountsCache();
   revalidatePath("/admin/collection-candidates");
   redirect(
     collectionCandidatesListPath(formData, {

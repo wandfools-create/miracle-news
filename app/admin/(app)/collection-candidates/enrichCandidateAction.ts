@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -13,6 +14,7 @@ export type EnrichCandidateActionState =
   | null;
 
 function revalidateCandidatePages(articleId?: string) {
+  revalidateAdminNavCountsCache();
   revalidatePath("/admin/collection-candidates");
   revalidatePath("/admin/review");
   if (articleId) {

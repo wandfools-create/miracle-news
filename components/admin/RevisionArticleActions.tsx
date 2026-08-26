@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
   runAiRevisionForArticle,
+  fetchRevisionArticleBody,
   saveManualRevisionEdit,
   sendBackToReview,
 } from "@/app/admin/(app)/revision/actions";
@@ -23,7 +24,6 @@ type Props = {
   aiReviewNotes: string | null;
   initialTitleKo: string;
   initialSummaryKo: string;
-  initialBodyKo: string;
 };
 
 export default function RevisionArticleActions({
@@ -35,7 +35,6 @@ export default function RevisionArticleActions({
   aiReviewNotes,
   initialTitleKo,
   initialSummaryKo,
-  initialBodyKo,
 }: Props) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +42,9 @@ export default function RevisionArticleActions({
   const [showManual, setShowManual] = useState(false);
   const [titleKo, setTitleKo] = useState(initialTitleKo);
   const [summaryKo, setSummaryKo] = useState(initialSummaryKo);
-  const [bodyKo, setBodyKo] = useState(initialBodyKo);
+  const [bodyKo, setBodyKo] = useState("");
+  const [bodyLoaded, setBodyLoaded] = useState(false);
+  const [bodyLoading, setBodyLoading] = useState(false);
   const [isAiPending, startAi] = useTransition();
   const [isSendPending, startSend] = useTransition();
   const [isManualPending, startManual] = useTransition();
@@ -87,6 +88,28 @@ export default function RevisionArticleActions({
         const text = err instanceof Error ? err.message : String(err);
         setError(text);
       }
+    });
+  }
+
+  function handleToggleManual() {
+    if (busy) return;
+    if (showManual) {
+      setShowManual(false);
+      return;
+    }
+    setError(null);
+    setShowManual(true);
+    if (bodyLoaded || bodyLoading) return;
+
+    setBodyLoading(true);
+    void fetchRevisionArticleBody(articleId).then((res) => {
+      setBodyLoading(false);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setBodyKo(res.bodyKo);
+      setBodyLoaded(true);
     });
   }
 
@@ -139,7 +162,7 @@ export default function RevisionArticleActions({
 
         <button
           type="button"
-          onClick={() => setShowManual((v) => !v)}
+          onClick={handleToggleManual}
           disabled={busy}
           className="w-full rounded-xl border border-gray-300 px-5 py-3 text-sm font-semibold text-gray-800 transition hover:bg-gray-100 disabled:opacity-50 sm:w-auto"
         >
@@ -172,6 +195,9 @@ export default function RevisionArticleActions({
           <p className="text-xs text-gray-500">
             OpenAI 없이 제목·요약·본문만 저장합니다.
           </p>
+          {bodyLoading ? (
+            <p className="text-sm text-gray-500">본문 불러오는 중…</p>
+          ) : null}
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-700">
               제목
@@ -203,7 +229,7 @@ export default function RevisionArticleActions({
               value={bodyKo}
               onChange={(e) => setBodyKo(e.target.value)}
               rows={10}
-              disabled={isManualPending}
+              disabled={isManualPending || bodyLoading}
               className="w-full rounded-xl border px-3 py-2 text-sm"
             />
           </div>

@@ -10,6 +10,7 @@ import {
 } from "@/lib/articles/publishArticle";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isAllowedAdminEmail } from "@/lib/admin/adminEmails";
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 
 async function requireAdmin() {
   const authClient = await createSupabaseServerClient();
@@ -23,6 +24,7 @@ async function requireAdmin() {
 }
 
 function revalidateQuickReviewPaths(articleId?: string) {
+  revalidateAdminNavCountsCache();
   revalidatePath("/admin/quick-review");
   revalidatePath("/admin/review");
   revalidatePath("/admin/approved");

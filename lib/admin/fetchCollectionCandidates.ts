@@ -12,7 +12,7 @@ import {
   type CandidateListQuery,
 } from "@/lib/collection-candidates/candidateListQuery";
 import {
-  checkSupabaseServiceEnvWithDns,
+  checkSupabaseServiceEnvWithDnsCached,
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/serviceRole";
 
@@ -55,7 +55,7 @@ export async function fetchCollectionCandidates(input?: {
     statusFilter = query.status as CollectionCandidateStatus;
   }
 
-  const envCheck = await checkSupabaseServiceEnvWithDns();
+  const envCheck = await checkSupabaseServiceEnvWithDnsCached();
   if (!envCheck.ok) {
     return {
       candidates: [],
@@ -128,7 +128,7 @@ export async function fetchCollectionCandidates(input?: {
 }
 
 export async function countActionableCollectionCandidates(): Promise<number> {
-  const envCheck = await checkSupabaseServiceEnvWithDns();
+  const envCheck = await checkSupabaseServiceEnvWithDnsCached();
   if (!envCheck.ok) {
     console.warn("[admin/collection-candidates] count skipped", envCheck.error);
     return 0;
@@ -152,7 +152,7 @@ export async function countActionableCollectionCandidates(): Promise<number> {
 }
 
 export async function countShortlistedCollectionCandidates(): Promise<number> {
-  const envCheck = await checkSupabaseServiceEnvWithDns();
+  const envCheck = await checkSupabaseServiceEnvWithDnsCached();
   if (!envCheck.ok) {
     console.warn("[admin/collection-shortlist] count skipped", envCheck.error);
     return 0;

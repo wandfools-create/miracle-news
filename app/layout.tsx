@@ -38,12 +38,6 @@ export default function RootLayout({
               >
                 English
               </Link>
-              <Link
-                href="/admin"
-                className="shrink-0 whitespace-nowrap py-1.5 text-white/70 hover:text-white sm:py-0"
-              >
-                관리자
-              </Link>
             </nav>
           </div>
         </header>

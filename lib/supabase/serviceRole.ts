@@ -189,6 +189,26 @@ export async function checkSupabaseServiceEnvWithDns(): Promise<SupabaseEnvCheck
   return base;
 }
 
+let dnsEnvCache: { checkedAt: number; result: SupabaseEnvCheck } | null = null;
+const DNS_ENV_CACHE_MS = 60_000;
+
+/** Reuse DNS/env validation within a short TTL (same request / nearby admin pages). */
+export async function checkSupabaseServiceEnvWithDnsCached(): Promise<SupabaseEnvCheck> {
+  const now = Date.now();
+  if (
+    dnsEnvCache &&
+    now - dnsEnvCache.checkedAt < DNS_ENV_CACHE_MS &&
+    dnsEnvCache.result.ok
+  ) {
+    return dnsEnvCache.result;
+  }
+  const result = await checkSupabaseServiceEnvWithDns();
+  if (result.ok) {
+    dnsEnvCache = { checkedAt: now, result };
+  }
+  return result;
+}
+
 function extractCauseMessage(cause: unknown): string | null {
   if (!cause || typeof cause !== "object") return null;
   const c = cause as { code?: string; message?: string; errno?: number };

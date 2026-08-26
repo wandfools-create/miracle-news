@@ -8,6 +8,7 @@ import {
   restoreDiscardedArticleCore,
 } from "@/lib/admin/discardArticlesCore";
 import { isAllowedAdminEmail } from "@/lib/admin/adminEmails";
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type DiscardArticlesActionResult = {
@@ -20,6 +21,7 @@ export type DiscardArticlesActionResult = {
 };
 
 function revalidateDiscardPaths(articleIds: string[] = []) {
+  revalidateAdminNavCountsCache();
   revalidatePath("/admin/on-hold");
   revalidatePath("/admin/revision");
   revalidatePath("/admin/rejected");

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { AdminAiActionResult } from "@/lib/admin/aiActionTypes";
 import { buildRequestRevisionArticlePatch } from "@/lib/admin/revisionAiPolicy";
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 import { supabase } from "../../../../../lib/supabase";
 
 function getArticleIdsFromFormData(formData: FormData) {
@@ -13,6 +14,7 @@ function getArticleIdsFromFormData(formData: FormData) {
 }
 
 function revalidateAdminPages(articleId?: string) {
+  revalidateAdminNavCountsCache();
   revalidatePath("/admin/review");
   revalidatePath("/admin/on-hold");
   revalidatePath("/admin/approved");

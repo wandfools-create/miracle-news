@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -23,6 +24,7 @@ async function requireAdmin(): Promise<
 }
 
 function revalidateCleanupPaths() {
+  revalidateAdminNavCountsCache();
   revalidatePath("/admin");
   revalidatePath("/admin/cleanup");
   revalidatePath("/admin/archive");

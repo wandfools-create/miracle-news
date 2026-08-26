@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabase } from "../../../../lib/supabase";
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 
 function getArticleIdsFromFormData(formData: FormData) {
   return formData
@@ -11,6 +12,7 @@ function getArticleIdsFromFormData(formData: FormData) {
 }
 
 function revalidateOnHoldPages(articleId?: string) {
+  revalidateAdminNavCountsCache();
   revalidatePath("/admin/on-hold");
   revalidatePath("/admin/review");
   revalidatePath("/admin");

@@ -2,6 +2,7 @@ import Link from "next/link";
 import RevisionArticleActions from "@/components/admin/RevisionArticleActions";
 import AdminListPager from "@/components/admin/AdminListPager";
 import DiscardArticlesButton from "@/components/admin/DiscardArticlesButton";
+import { getAdminNavCounts } from "@/lib/admin/adminNavCounts";
 import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
 import {
   ADMIN_LIST_PAGE_SIZE,
@@ -66,10 +67,12 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
   const page = parseAdminListPage(params.page);
   const { from, to } = adminListRange(page);
 
-  const { data: articles, error, count } = await supabase
-    .from("articles")
-    .select(
-      `
+  const [navCounts, listResult] = await Promise.all([
+    getAdminNavCounts(),
+    supabase
+      .from("articles")
+      .select(
+        `
       id,
       source,
       original_url,
@@ -79,8 +82,6 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
       summary_original,
       summary_translated,
       summary_ko,
-      body_translated,
-      body_original,
       revision_request,
       thumbnail_url,
       ai_review_status,
@@ -91,19 +92,20 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
         feedback_note,
         requested_at
       )
-    `,
-      { count: "exact" }
-    )
-    .eq("review_status", "needs_revision")
-    .eq("revision_status", "requested")
-    .order("requested_at", {
-      referencedTable: "article_revision_logs",
-      ascending: false,
-    })
-    .range(from, to);
+    `
+      )
+      .eq("review_status", "needs_revision")
+      .eq("revision_status", "requested")
+      .order("requested_at", {
+        referencedTable: "article_revision_logs",
+        ascending: false,
+      })
+      .range(from, to),
+  ]);
 
+  const { data: articles, error } = listResult;
   const rows = articles ?? [];
-  const totalCount = count ?? 0;
+  const totalCount = navCounts.revision;
 
   return (
     <main className="min-h-screen bg-white text-black">
@@ -277,11 +279,6 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
                             article.summary_ko ||
                             article.summary_translated ||
                             article.summary_original ||
-                            ""
-                          }
-                          initialBodyKo={
-                            article.body_translated ||
-                            article.body_original ||
                             ""
                           }
                         />

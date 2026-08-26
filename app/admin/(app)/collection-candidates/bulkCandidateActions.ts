@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -35,6 +36,12 @@ async function requireAdmin() {
   return user;
 }
 
+function revalidateCandidateQueues(extraPaths: string[] = []) {
+  revalidateAdminNavCountsCache();
+  revalidateCandidateQueues();
+  for (const p of extraPaths) revalidatePath(p);
+}
+
 /** Bulk dismiss — no OpenAI. */
 export async function bulkDismissCandidatesAction(formData: FormData) {
   const user = await requireAdmin();
@@ -47,7 +54,7 @@ export async function bulkDismissCandidatesAction(formData: FormData) {
     dismissedBy: user.email ?? null,
   });
 
-  revalidatePath("/admin/collection-candidates");
+  revalidateCandidateQueues();
 
   if (!result.ok || result.count === 0) {
     redirect(collectionCandidatesListPath(formData, { dismissError: "1" }));
@@ -67,7 +74,7 @@ export async function bulkExpireCandidatesAction(formData: FormData) {
     candidateIds: readIds(formData),
   });
 
-  revalidatePath("/admin/collection-candidates");
+  revalidateCandidateQueues();
 
   if (!result.ok || result.count === 0) {
     redirect(collectionCandidatesListPath(formData, { dismissError: "1" }));
@@ -88,8 +95,7 @@ export async function bulkShortlistCandidatesAction(formData: FormData) {
     shortlistedBy: user.email ?? null,
   });
 
-  revalidatePath("/admin/collection-candidates");
-  revalidatePath("/admin/collection-shortlist");
+  revalidateCandidateQueues(["/admin/collection-shortlist"]);
 
   if (!result.ok || result.count === 0) {
     redirect(collectionCandidatesListPath(formData, { dismissError: "1" }));
@@ -132,11 +138,10 @@ export async function bulkEnrichCandidatesAction(formData: FormData) {
     }
   }
 
-  revalidatePath("/admin/collection-candidates");
-  revalidatePath("/admin/review");
-  if (lastArticleId) {
-    revalidatePath(`/admin/review/${lastArticleId}`);
-  }
+  revalidateCandidateQueues([
+    "/admin/review",
+    ...(lastArticleId ? [`/admin/review/${lastArticleId}`] : []),
+  ]);
 
   const extra: Record<string, string> = { bulkMade: String(made) };
   if (lastArticleId) extra.made = lastArticleId;

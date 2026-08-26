@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -30,6 +31,7 @@ export async function dismissCollectionCandidateAction(formData: FormData) {
     dismissedBy,
   });
 
+  revalidateAdminNavCountsCache();
   revalidatePath("/admin/collection-candidates");
 
   if (!result.ok) {

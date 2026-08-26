@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -38,6 +39,12 @@ function readIds(formData: FormData): string[] {
   return many;
 }
 
+function revalidateShortlistQueues(extraPaths: string[] = []) {
+  revalidateAdminNavCountsCache();
+  revalidateShortlistQueues();
+  for (const p of extraPaths) revalidatePath(p);
+}
+
 /** Remove from shortlist → pending. No OpenAI. */
 export async function unshortlistFromShortlistAction(formData: FormData) {
   const user = await requireAdmin();
@@ -47,8 +54,7 @@ export async function unshortlistFromShortlistAction(formData: FormData) {
     candidateIds: readIds(formData),
   });
 
-  revalidatePath("/admin/collection-shortlist");
-  revalidatePath("/admin/collection-candidates");
+  revalidateShortlistQueues();
 
   if (!result.ok) redirect(shortlistPath({ error: "1" }));
   redirect(shortlistPath({ restored: String(result.count) }));
@@ -71,8 +77,7 @@ export async function dismissFromShortlistAction(formData: FormData) {
     if (result.ok) ok += 1;
   }
 
-  revalidatePath("/admin/collection-shortlist");
-  revalidatePath("/admin/collection-candidates");
+  revalidateShortlistQueues();
   redirect(shortlistPath({ dismissed: String(ok) }));
 }
 
@@ -106,11 +111,8 @@ export async function enrichFromShortlistAction(
     adminForceCreate: readAdminForceCreateFromFormData(formData),
   });
 
-  revalidatePath("/admin/collection-shortlist");
-  revalidatePath("/admin/collection-candidates");
-  revalidatePath("/admin/review");
-
   if (!result.ok) {
+    revalidateShortlistQueues();
     return {
       ok: false,
       error: result.error,
@@ -119,7 +121,10 @@ export async function enrichFromShortlistAction(
     };
   }
 
-  revalidatePath(`/admin/review/${result.articleId}`);
+  revalidateShortlistQueues([
+    "/admin/review",
+    `/admin/review/${result.articleId}`,
+  ]);
   redirect(shortlistPath({ made: result.articleId }));
 }
 
@@ -148,10 +153,10 @@ export async function bulkEnrichFromShortlistAction(formData: FormData) {
     }
   }
 
-  revalidatePath("/admin/collection-shortlist");
-  revalidatePath("/admin/collection-candidates");
-  revalidatePath("/admin/review");
-  if (lastId) revalidatePath(`/admin/review/${lastId}`);
+  revalidateShortlistQueues([
+    "/admin/review",
+    ...(lastId ? [`/admin/review/${lastId}`] : []),
+  ]);
 
   const extra: Record<string, string> = { bulkMade: String(made) };
   if (lastId) extra.made = lastId;

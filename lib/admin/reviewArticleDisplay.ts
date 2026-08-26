@@ -170,10 +170,21 @@ export function getReviewKoBody(article: ReviewQueueArticleRow): string {
 }
 
 function hasUsableBody(article: ReviewQueueArticleRow): boolean {
-  return (
-    getReviewKoBody(article).length > 0 ||
-    safeTrimmed(article.body_original).length > 0
-  );
+  const hasBodyFields =
+    article.body_translated !== undefined ||
+    article.body_original !== undefined;
+  if (hasBodyFields) {
+    return (
+      getReviewKoBody(article).length > 0 ||
+      safeTrimmed(article.body_original).length > 0
+    );
+  }
+  // List queries omit body — infer from summary length for badge only.
+  const summary =
+    safeTrimmed(article.summary_ko) ||
+    safeTrimmed(article.summary_translated) ||
+    safeTrimmed(article.summary_original);
+  return summary.length > 80;
 }
 
 export function buildReviewArticleDisplay(

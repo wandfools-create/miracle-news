@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 import { reviseArticleWithFeedback } from "@/lib/articles/ai/reviseArticleWithFeedback";
 import { runEditorialReview } from "@/lib/articles/ai/runEditorialReview";
 import type { AdminAiActionResult } from "@/lib/admin/aiActionTypes";
@@ -9,9 +10,35 @@ import { isAiRevisionProcessingStatus } from "@/lib/admin/revisionAiPolicy";
 import { supabase } from "../../../../lib/supabase";
 
 function revalidateRevisionPages(articleId: string) {
+  revalidateAdminNavCountsCache();
   revalidatePath("/admin/revision");
   revalidatePath("/admin/review");
   revalidatePath(`/admin/review/${articleId}`);
+}
+
+/** Lazy-load body for manual edit (list queries omit body columns). */
+export async function fetchRevisionArticleBody(
+  articleId: string
+): Promise<{ ok: true; bodyKo: string } | { ok: false; error: string }> {
+  const { data, error } = await supabase
+    .from("articles")
+    .select("body_translated, body_original")
+    .eq("id", articleId)
+    .maybeSingle();
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  if (!data) {
+    return { ok: false, error: "기사를 찾을 수 없습니다." };
+  }
+
+  const bodyKo =
+    (data.body_translated ?? "").trim() ||
+    (data.body_original ?? "").trim() ||
+    "";
+
+  return { ok: true, bodyKo };
 }
 
 /**

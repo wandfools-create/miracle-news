@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import AdminListPager from "@/components/admin/AdminListPager";
+import { getAdminNavCounts } from "@/lib/admin/adminNavCounts";
 import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
 import {
   ADMIN_LIST_PAGE_SIZE,
@@ -19,25 +20,18 @@ type PageProps = {
   searchParams: Promise<{ page?: string; error?: string }>;
 };
 
-function previewParagraphs(body: string | null, max = 3): string {
-  if (!body?.trim()) return "";
-  const parts = body
-    .trim()
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-  return parts.slice(0, max).join("\n\n");
-}
 
 export default async function AdminQuickReviewPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const page = parseAdminListPage(params.page);
   const { from, to } = adminListRange(page);
 
-  const { data: articles, error, count } = await supabase
-    .from("articles")
-    .select(
-      `
+  const [navCounts, listResult] = await Promise.all([
+    getAdminNavCounts(),
+    supabase
+      .from("articles")
+      .select(
+        `
       id,
       source,
       original_url,
@@ -47,8 +41,6 @@ export default async function AdminQuickReviewPage({ searchParams }: PageProps) 
       summary_original,
       summary_translated,
       summary_ko,
-      body_translated,
-      body_original,
       category,
       status,
       review_status,
@@ -56,16 +48,17 @@ export default async function AdminQuickReviewPage({ searchParams }: PageProps) 
       collected_at,
       ai_review_status,
       ai_review_notes
-    `,
-      { count: "exact" }
-    )
-    .eq("review_status", ARTICLE_WORKFLOW.quickReview.review_status)
-    .eq("status", ARTICLE_WORKFLOW.quickReview.status)
-    .eq("is_published", false)
-    .order("collected_at", { ascending: false })
-    .range(from, to);
+    `
+      )
+      .eq("review_status", ARTICLE_WORKFLOW.quickReview.review_status)
+      .eq("status", ARTICLE_WORKFLOW.quickReview.status)
+      .eq("is_published", false)
+      .order("collected_at", { ascending: false })
+      .range(from, to),
+  ]);
 
-  const totalCount = count ?? 0;
+  const { data: articles, error } = listResult;
+  const totalCount = navCounts.quickReview;
   const rows = articles ?? [];
 
   return (
@@ -112,9 +105,6 @@ export default async function AdminQuickReviewPage({ searchParams }: PageProps) 
                 article.summary_translated ||
                 article.summary_original ||
                 "";
-              const bodyPreview = previewParagraphs(
-                article.body_translated || article.body_original
-              );
 
               return (
                 <article
@@ -152,13 +142,8 @@ export default async function AdminQuickReviewPage({ searchParams }: PageProps) 
                         <p className="mt-3 text-sm text-gray-700 line-clamp-3">
                           {summary}
                         </p>
-                      ) : null}
-                      {bodyPreview ? (
-                        <pre className="mt-3 whitespace-pre-wrap font-sans text-sm text-gray-600 line-clamp-6">
-                          {bodyPreview}
-                        </pre>
                       ) : (
-                        <p className="mt-3 text-sm text-red-600">본문 없음</p>
+                        <p className="mt-3 text-sm text-gray-500">요약 없음</p>
                       )}
                       {article.original_url ? (
                         <p className="mt-3 truncate text-xs text-blue-700">

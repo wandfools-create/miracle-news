@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { normalizeEditorialPriority } from "@/lib/admin/editorialPriority";
+import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 import { supabase } from "@/lib/supabase";
 
 function revalidateEditorialPriorityPages(articleId?: string) {
+  revalidateAdminNavCountsCache();
   revalidatePath("/admin/review");
   revalidatePath("/admin/approved");
   revalidatePath("/admin/published");
