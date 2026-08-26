@@ -15,6 +15,10 @@ import {
   formatSupplementalMaterialBlock,
   normalizeSupplementalText,
 } from "./supplementalText";
+import {
+  formatManualPrimaryMaterialBlock,
+  manualBodyClearsExtractionGate,
+} from "./adminManualPromote";
 import { KOREAN_EDITOR_JSON_SYSTEM_PROMPT } from "@/lib/articles/ai/editorPrompt";
 import { parseEditorTaxonomy } from "@/lib/articles/articleTaxonomy";
 import { chatCompletionJson } from "@/lib/openai/chatCompletionJson";
@@ -63,10 +67,13 @@ async function buildSourceMaterial(
   linkType: LinkType,
   pageUrl: string,
   extracted: ExtractedPreview,
-  supplementalText: string | null
+  supplementalText: string | null,
+  preferManualSourceBody = false
 ): Promise<{ material: string; usedTranscript: boolean }> {
   const supplementalBlock = supplementalText
-    ? formatSupplementalMaterialBlock(supplementalText)
+    ? preferManualSourceBody
+      ? formatManualPrimaryMaterialBlock(supplementalText)
+      : formatSupplementalMaterialBlock(supplementalText)
     : null;
 
   if (linkType === "youtube") {
@@ -95,6 +102,24 @@ async function buildSourceMaterial(
 
   let articleBody = extracted.articleBodyPlain?.trim() ?? "";
   const extractMethod = extracted.articleBodyExtractMethod ?? "unknown";
+
+  // Manual primary: skip refetch noise; use paste as the main material.
+  if (preferManualSourceBody && supplementalText) {
+    const extractedRef =
+      articleBody.length >= MIN_USABLE_BODY_CHARS
+        ? `[참고·자동추출 — 수동 원문 우선]\n${articleBody.slice(0, 4000)}`
+        : null;
+    return {
+      usedTranscript: false,
+      material: joinMaterial([
+        `SOURCE_URL_FIXED: ${extracted.submittedOriginalUrl}`,
+        extracted.title ? `제목(참고): ${extracted.title}` : null,
+        supplementalBlock,
+        extractedRef,
+        extracted.author ? `작성/채널: ${extracted.author}` : null,
+      ]).trim(),
+    };
+  }
 
   if (
     (linkType === "article" ||
@@ -125,7 +150,7 @@ async function buildSourceMaterial(
     }
   }
 
-  let material = joinMaterial([
+  const material = joinMaterial([
     `SOURCE_URL_FIXED: ${extracted.submittedOriginalUrl}`,
     extracted.title ? `제목(참고): ${extracted.title}` : null,
     articleBody.length >= 200
@@ -348,20 +373,26 @@ export type SummarizeForArticleOptions = {
    * Does not invent content or length-expand.
    */
   allowShortSourceMaterial?: boolean;
+  /** Explicit admin force — short manual paste may clear extraction gate. */
+  adminForceCreate?: boolean;
+  /** Prefer pasted body over auto-extracted text in AI material. */
+  preferManualSourceBody?: boolean;
 };
 
 export async function measureFromLinkSourceMaterial(
   linkType: LinkType,
   pageUrl: string,
   extracted: ExtractedPreview,
-  supplementalTextRaw?: string | null
+  supplementalTextRaw?: string | null,
+  preferManualSourceBody = false
 ): Promise<number> {
   const supplementalText = normalizeSupplementalText(supplementalTextRaw);
   const { material } = await buildSourceMaterial(
     linkType,
     pageUrl,
     extracted,
-    supplementalText
+    supplementalText,
+    preferManualSourceBody
   );
   return material.length;
 }
@@ -377,6 +408,10 @@ export async function summarizeForArticle(
     options?.supplementalTextRaw
   );
   const allowShortSourceMaterial = options?.allowShortSourceMaterial === true;
+  const adminForceCreate = options?.adminForceCreate === true;
+  const preferManualSourceBody =
+    options?.preferManualSourceBody === true ||
+    (Boolean(supplementalText) && adminForceCreate);
   if (linkType === "video") {
     return {
       ok: false,
@@ -395,7 +430,11 @@ export async function summarizeForArticle(
   ) {
     const extractionOk =
       isSuccessfulBodyExtraction(extracted) ||
-      (supplementalText?.length ?? 0) >= MIN_USABLE_BODY_CHARS ||
+      manualBodyClearsExtractionGate({
+        manualBodyChars: supplementalText?.length ?? 0,
+        adminForceCreate,
+        minUsableChars: MIN_USABLE_BODY_CHARS,
+      }) ||
       (allowShortSourceMaterial && isAdminUsableBodyExtraction(extracted));
     if (!extractionOk) {
       console.warn("[from-link/summarize] blocked — body extraction failed", {
@@ -406,6 +445,7 @@ export async function summarizeForArticle(
         extractSuccess: extracted.articleBodyExtractSuccess,
         supplementalLength: supplementalText?.length ?? 0,
         allowShortSourceMaterial,
+        adminForceCreate,
       });
       return {
         ok: false,
@@ -438,7 +478,8 @@ export async function summarizeForArticle(
     linkType,
     pageUrl,
     extracted,
-    supplementalText
+    supplementalText,
+    preferManualSourceBody
   );
 
   const materialChars = material.length;

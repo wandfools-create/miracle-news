@@ -144,6 +144,13 @@ export default async function AdminQuickReviewDetailPage({
     article.body_translated || article.body_original,
     3
   );
+  const notes = article.ai_review_notes?.trim() || "";
+  const manualSource =
+    notes.includes("관리자 수동 원문 사용") ||
+    notes.includes("manual_source_body_used=true");
+  const forceCreate =
+    notes.includes("관리자 강제 기사화") ||
+    notes.includes("admin_force_create=true");
 
   return (
     <main className="min-h-screen bg-white text-black">
@@ -157,6 +164,20 @@ export default async function AdminQuickReviewDetailPage({
           {getCategoryLabel(article.category)} ·{" "}
           {formatDateTimeKo(article.collected_at)}
         </p>
+        {(manualSource || forceCreate) ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {manualSource ? (
+              <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-900">
+                수동 원문 사용
+              </span>
+            ) : null}
+            {forceCreate ? (
+              <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-900">
+                강제 기사화
+              </span>
+            ) : null}
+          </div>
+        ) : null}
 
         {errorParam ? (
           <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">

@@ -213,6 +213,16 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
                 짧은 기사 · 최종 검토 필요
               </span>
             ) : null}
+            {display.manualSourceBodyUsed ? (
+              <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-900">
+                수동 원문 사용
+              </span>
+            ) : null}
+            {display.adminForceCreate ? (
+              <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-900">
+                강제 기사화
+              </span>
+            ) : null}
           </div>
 
           {display.shortArticleReviewRecommended ? (

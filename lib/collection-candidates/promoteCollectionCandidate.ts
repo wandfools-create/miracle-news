@@ -64,6 +64,10 @@ export async function promoteCollectionCandidate(input: {
   selectedBy?: string | null;
   /** Discord 빠른 발행: land in quick_review instead of pending review. */
   landingWorkflow?: "review" | "quick_review";
+  /** Admin-pasted source body (preferred over auto-extract). */
+  supplementalText?: string | null;
+  /** Explicit force: allow short paste / length soft-save. Admin UI only. */
+  adminForceCreate?: boolean;
 }): Promise<PromoteCollectionCandidateResult> {
   const candidateId = input.candidateId.trim();
   if (!candidateId) {
@@ -183,14 +187,30 @@ export async function promoteCollectionCandidate(input: {
   const { runRssFromLinkPipeline } = await import(
     "@/lib/rss/runRssFromLinkPipeline"
   );
+  const { buildManualPromoteNoteLines } = await import(
+    "@/lib/from-link/adminManualPromote"
+  );
+  const { normalizeSupplementalText } = await import(
+    "@/lib/from-link/supplementalText"
+  );
+
+  const manualBody = normalizeSupplementalText(input.supplementalText);
+  const adminForceCreate = input.adminForceCreate === true;
 
   const pipeline = await runRssFromLinkPipeline({
     originalUrl: row.original_url,
     adminArticleCreate: true,
+    supplementalText: manualBody,
+    adminForceCreate,
     aiReviewNotes: [
       RSS_AI_REVIEW_NOTE_CANDIDATE,
       `[후보 ID] ${candidateId}`,
       `[선택] ${input.selectedBy ?? "admin"} · ${now}`,
+      ...buildManualPromoteNoteLines({
+        manualSourceBodyUsed: Boolean(manualBody),
+        adminForceCreate,
+        manualBodyChars: manualBody?.length,
+      }),
     ].join("\n"),
   });
 

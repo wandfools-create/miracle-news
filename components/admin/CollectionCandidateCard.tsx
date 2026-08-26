@@ -141,10 +141,12 @@ export default function CollectionCandidateCard({
         {canMakeArticle ? (
           <EnrichCandidateForm
             candidateId={id}
+            originalUrl={originalUrl}
             status={statusFilter}
             source={sourceFilter}
             date={dateFilter}
             retry={status === "enrich_failed" || status === "enriching"}
+            showManualByDefault={status === "enrich_failed"}
           />
         ) : null}
         {status === "enriched" && articleId ? (

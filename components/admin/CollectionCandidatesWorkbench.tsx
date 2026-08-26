@@ -472,6 +472,7 @@ export default function CollectionCandidatesWorkbench({
                     {canMakeArticle ? (
                       <EnrichCandidateForm
                         candidateId={c.id}
+                        originalUrl={c.originalUrl}
                         view={viewFilter}
                         status={statusFilter}
                         source={sourceFilter}
@@ -481,6 +482,7 @@ export default function CollectionCandidatesWorkbench({
                         retry={
                           c.status === "enrich_failed" || c.status === "enriching"
                         }
+                        showManualByDefault={c.status === "enrich_failed"}
                         compact
                       />
                     ) : null}

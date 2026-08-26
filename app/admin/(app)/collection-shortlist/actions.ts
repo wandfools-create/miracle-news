@@ -78,9 +78,9 @@ export async function dismissFromShortlistAction(formData: FormData) {
 
 /** Enrich from shortlist page — OpenAI via promote. */
 export async function enrichFromShortlistAction(
-  _prev: { ok: false; error: string } | null,
+  _prev: { ok: false; error: string; step?: string; categoryLabel?: string } | null,
   formData: FormData
-): Promise<{ ok: false; error: string } | null> {
+): Promise<{ ok: false; error: string; step?: string; categoryLabel?: string } | null> {
   const candidateId = String(formData.get("candidateId") ?? "").trim();
   if (!candidateId) {
     return { ok: false, error: "후보 ID가 없습니다." };
@@ -94,10 +94,16 @@ export async function enrichFromShortlistAction(
   const { promoteCollectionCandidate } = await import(
     "@/lib/collection-candidates/promoteCollectionCandidate"
   );
+  const {
+    readAdminForceCreateFromFormData,
+    readManualBodyFromFormData,
+  } = await import("@/lib/from-link/adminManualPromote");
 
   const result = await promoteCollectionCandidate({
     candidateId,
     selectedBy: user.email ?? null,
+    supplementalText: readManualBodyFromFormData(formData),
+    adminForceCreate: readAdminForceCreateFromFormData(formData),
   });
 
   revalidatePath("/admin/collection-shortlist");
@@ -105,7 +111,12 @@ export async function enrichFromShortlistAction(
   revalidatePath("/admin/review");
 
   if (!result.ok) {
-    return { ok: false, error: result.error };
+    return {
+      ok: false,
+      error: result.error,
+      step: result.step,
+      categoryLabel: result.categoryLabel,
+    };
   }
 
   revalidatePath(`/admin/review/${result.articleId}`);

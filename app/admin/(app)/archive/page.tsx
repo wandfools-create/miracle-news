@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import AdminListPager from "@/components/admin/AdminListPager";
+import { restoreDiscardedArticleAction } from "@/app/admin/(app)/discard/actions";
 import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
 import {
   ADMIN_LIST_PAGE_SIZE,
@@ -24,13 +25,18 @@ export const revalidate = 0;
 export const dynamic = "force-dynamic";
 
 type PageProps = {
-  searchParams: Promise<{ tab?: string; page?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    page?: string;
+    restoreError?: string;
+  }>;
 };
 
 export default async function AdminArchivePage({ searchParams }: PageProps) {
   const params = await searchParams;
   const tab = params.tab === "candidates" ? "candidates" : "articles";
   const page = parseAdminListPage(params.page);
+  const restoreError = params.restoreError?.trim();
   const { from, to } = adminListRange(page);
 
   if (tab === "articles") {
@@ -62,13 +68,13 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
     const totalCount = count ?? 0;
 
     return (
-      <ArchiveShell tab={tab}>
+      <ArchiveShell tab={tab} restoreError={restoreError}>
         {error ? (
           <p className="mt-6 text-sm text-red-700">조회 실패: {error.message}</p>
         ) : null}
         {!error && rows.length === 0 ? (
           <p className="mt-6 rounded-2xl border p-5 text-sm text-gray-600">
-            보관된 기사가 없습니다.
+            폐기·보관된 기사가 없습니다.
           </p>
         ) : null}
         {!error && rows.length > 0 ? (
@@ -80,7 +86,7 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
                     source: article.source,
                     original_url: article.original_url,
                   })}{" "}
-                  · {getCategoryLabel(article.category)} · archived
+                  · {getCategoryLabel(article.category)} · 폐기(archived)
                 </p>
                 <h2 className="mt-2 text-lg font-semibold">
                   {article.title_ko ||
@@ -91,12 +97,23 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
                 <p className="mt-2 text-xs text-gray-500">
                   갱신: {formatDateTimeKo(article.updated_at)}
                 </p>
-                <Link
-                  href={`/admin/review/${article.id}`}
-                  className="mt-3 inline-block text-sm text-blue-600 underline"
-                >
-                  상세
-                </Link>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <Link
+                    href={`/admin/review/${article.id}`}
+                    className="text-sm text-blue-600 underline"
+                  >
+                    상세
+                  </Link>
+                  <form action={restoreDiscardedArticleAction}>
+                    <input type="hidden" name="articleId" value={article.id} />
+                    <button
+                      type="submit"
+                      className="rounded-xl border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-100"
+                    >
+                      ↩ 복구
+                    </button>
+                  </form>
+                </div>
               </article>
             ))}
             <AdminListPager
@@ -115,7 +132,7 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
   const envCheck = await checkSupabaseServiceEnvWithDns();
   if (!envCheck.ok) {
     return (
-      <ArchiveShell tab={tab}>
+      <ArchiveShell tab={tab} restoreError={restoreError}>
         <p className="mt-6 text-sm text-red-700">{envCheck.error}</p>
       </ArchiveShell>
     );
@@ -133,7 +150,7 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
   const totalCount = count ?? 0;
 
   return (
-    <ArchiveShell tab={tab}>
+    <ArchiveShell tab={tab} restoreError={restoreError}>
       {error ? (
         <p className="mt-6 text-sm text-red-700">조회 실패: {error.message}</p>
       ) : null}
@@ -176,9 +193,11 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
 function ArchiveShell({
   tab,
   children,
+  restoreError,
 }: {
   tab: "articles" | "candidates";
   children: ReactNode;
+  restoreError?: string;
 }) {
   return (
     <main className="min-h-screen bg-white text-black">
@@ -187,12 +206,19 @@ function ArchiveShell({
           관리자 / 보관함
         </p>
         <h1 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">
-          보관함
+          보관함 · 폐기된 기사
         </h1>
         <p className="mt-3 text-sm text-gray-600">
-          archived 기사와 expired 후보만 표시합니다. 일반 목록·상단 카운트에는
-          포함되지 않습니다. 기본 {ADMIN_LIST_PAGE_SIZE}건씩 조회합니다.
+          관리자가 폐기한 기사와 정리로 보관된 기사(archived), 만료된 수집
+          후보(expired)를 봅니다. 일반 작업 목록·상단 카운트·공개 사이트에는
+          포함되지 않습니다. 복구 시 검토 대기로 돌아가며 자동 공개되지 않습니다.
+          기본 {ADMIN_LIST_PAGE_SIZE}건씩 조회합니다.
         </p>
+        {restoreError ? (
+          <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            {restoreError}
+          </p>
+        ) : null}
         <div className="mt-5 flex flex-wrap gap-2">
           <Link
             href="/admin/archive?tab=articles"
@@ -202,7 +228,7 @@ function ArchiveShell({
                 : "border-gray-300 bg-white text-gray-800"
             }`}
           >
-            보관 기사
+            폐기·보관 기사
           </Link>
           <Link
             href="/admin/archive?tab=candidates"

@@ -8,6 +8,10 @@ import {
   type ParsedRssEnrichFailure,
 } from "@/lib/rss/enrichFailure";
 import { SHORT_ARTICLE_REVIEW_NOTE } from "@/lib/from-link/validateArticleQuality";
+import {
+  notesIndicateAdminForceCreate,
+  notesIndicateManualSourceBody,
+} from "@/lib/from-link/adminManualPromote";
 import { normalizeEditorialPriority } from "@/lib/admin/editorialPriority";
 
 export type ReviewQueueArticleRow = {
@@ -60,6 +64,8 @@ export type ReviewArticleDisplay = {
   isRssEnriched: boolean;
   enrichFailure: ParsedRssEnrichFailure | null;
   shortArticleReviewRecommended: boolean;
+  manualSourceBodyUsed: boolean;
+  adminForceCreate: boolean;
   editorialPriority: string;
 };
 
@@ -211,6 +217,8 @@ export function buildReviewArticleDisplay(
   const isRssEnriched = isRssEnrichedArticle(article.source_section);
   const notes = safeTrimmed(article.ai_review_notes);
   const shortArticleReviewRecommended = notes.includes(SHORT_ARTICLE_REVIEW_NOTE);
+  const manualSourceBodyUsed = notesIndicateManualSourceBody(notes);
+  const adminForceCreate = notesIndicateAdminForceCreate(notes);
 
   return {
     id: article.id,
@@ -239,6 +247,8 @@ export function buildReviewArticleDisplay(
     isRssEnriched,
     enrichFailure,
     shortArticleReviewRecommended,
+    manualSourceBodyUsed,
+    adminForceCreate,
     editorialPriority: normalizeEditorialPriority(article.editorial_priority),
   };
 }

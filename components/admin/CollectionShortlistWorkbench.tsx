@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
 import {
   bulkEnrichFromShortlistAction,
@@ -8,6 +8,8 @@ import {
   enrichFromShortlistAction,
   unshortlistFromShortlistAction,
 } from "@/app/admin/(app)/collection-shortlist/actions";
+import EnrichCandidateForm from "@/components/admin/EnrichCandidateForm";
+import type { EnrichCandidateActionState } from "@/app/admin/(app)/collection-candidates/enrichCandidateAction";
 import {
   AI_RECOMMEND_BEST_SUBLABEL,
   AI_RECOMMEND_GRADE_LABELS,
@@ -77,10 +79,6 @@ export default function CollectionShortlistWorkbench({
 }) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkPending, startBulk] = useTransition();
-  const [enrichState, enrichAction, enrichPending] = useActionState(
-    enrichFromShortlistAction,
-    null
-  );
 
   useEffect(() => {
     restoreScroll();
@@ -108,6 +106,22 @@ export default function CollectionShortlistWorkbench({
       return next;
     });
   }, []);
+
+  async function shortlistEnrichAction(
+    _prev: EnrichCandidateActionState,
+    formData: FormData
+  ): Promise<EnrichCandidateActionState> {
+    const result = await enrichFromShortlistAction(null, formData);
+    if (result && !result.ok) {
+      return {
+        ok: false,
+        error: result.error,
+        step: result.step,
+        categoryLabel: result.categoryLabel,
+      };
+    }
+    return null;
+  }
 
   function runBulk(
     action: (formData: FormData) => Promise<void>,
@@ -144,10 +158,6 @@ export default function CollectionShortlistWorkbench({
           {candidates.length}건 · 선택 {selectedCount}
         </span>
       </div>
-
-      {enrichState && !enrichState.ok ? (
-        <p className="mb-2 text-xs text-red-700">{enrichState.error}</p>
-      ) : null}
 
       <div className="space-y-2.5">
         {candidates.map((c) => {
@@ -226,16 +236,15 @@ export default function CollectionShortlistWorkbench({
                     >
                       원문 보기
                     </a>
-                    <form action={enrichAction} className="inline-flex">
-                      <input type="hidden" name="candidateId" value={c.id} />
-                      <button
-                        type="submit"
-                        disabled={enrichPending}
-                        className="rounded-md bg-black px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
-                      >
-                        {enrichPending ? "기사 만드는 중…" : "기사 만들기"}
-                      </button>
-                    </form>
+                    <EnrichCandidateForm
+                      candidateId={c.id}
+                      originalUrl={c.originalUrl}
+                      status="all"
+                      source="all"
+                      date="all"
+                      compact
+                      formActionOverride={shortlistEnrichAction}
+                    />
                     <form action={unshortlistFromShortlistAction} className="inline-flex">
                       <input type="hidden" name="candidateId" value={c.id} />
                       <button

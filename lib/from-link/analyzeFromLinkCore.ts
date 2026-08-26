@@ -26,18 +26,27 @@ import {
   isShortArticleRecommendedReview,
   validateFromLinkDraftQuality,
 } from "@/lib/from-link/validateArticleQuality";
+import {
+  canAllowAdminForceCreateSave,
+  manualBodyClearsExtractionGate,
+} from "@/lib/from-link/adminManualPromote";
 import type { AnalyzeFromLinkOptions, AnalyzeFromLinkResult } from "@/lib/from-link/actionTypes";
 import type { ArticleDraftPayload, ExtractedPreview } from "@/lib/from-link/types";
 
 function bodyExtractionGateCheck(
   extracted: ExtractedPreview,
   supplementalChars: number,
-  adminArticleCreate: boolean
+  adminArticleCreate: boolean,
+  adminForceCreate: boolean
 ): FromLinkQualityCheckItem {
   const bodyLen = extracted.articleBodyPlain?.length ?? 0;
   const passed =
     isSuccessfulBodyExtraction(extracted) ||
-    supplementalChars >= MIN_USABLE_BODY_CHARS ||
+    manualBodyClearsExtractionGate({
+      manualBodyChars: supplementalChars,
+      adminForceCreate,
+      minUsableChars: MIN_USABLE_BODY_CHARS,
+    }) ||
     (adminArticleCreate && isAdminUsableBodyExtraction(extracted));
   return {
     id: "body_extraction",
@@ -62,6 +71,10 @@ export async function analyzeFromLinkCore(
   const supplementalChars = supplementalText?.length ?? 0;
   const allowShortSourceDraft = options?.allowShortSourceDraft === true;
   const adminArticleCreate = options?.adminArticleCreate === true;
+  const adminForceCreate = options?.adminForceCreate === true;
+  const preferManualSourceBody =
+    options?.preferManualSourceBody === true ||
+    (Boolean(supplementalText) && (adminForceCreate || adminArticleCreate));
   const resolved = resolveSubmittedUrl(urlRaw);
   if (!resolved.ok) {
     return { ok: false, error: resolved.error };
@@ -119,7 +132,12 @@ export async function analyzeFromLinkCore(
         supplementalChars,
         finalMaterialChars: materialChars,
         extraChecks: [
-          bodyExtractionGateCheck(extracted, supplementalChars, adminArticleCreate),
+          bodyExtractionGateCheck(
+            extracted,
+            supplementalChars,
+            adminArticleCreate,
+            adminForceCreate
+          ),
           {
             id: "cnn_body_access",
             label: "CNN 본문 추출 성공 필수",
@@ -132,10 +150,16 @@ export async function analyzeFromLinkCore(
     };
   }
 
+  const manualClearsGate = manualBodyClearsExtractionGate({
+    manualBodyChars: supplementalChars,
+    adminForceCreate,
+    minUsableChars: MIN_USABLE_BODY_CHARS,
+  });
+
   if (
     needsArticleBody &&
     !isSuccessfulBodyExtraction(extracted) &&
-    supplementalChars < MIN_USABLE_BODY_CHARS &&
+    !manualClearsGate &&
     !(adminArticleCreate && isAdminUsableBodyExtraction(extracted))
   ) {
     const materialChars = await measureFromLinkSourceMaterial(
@@ -157,7 +181,12 @@ export async function analyzeFromLinkCore(
         supplementalChars,
         finalMaterialChars: materialChars,
         extraChecks: [
-          bodyExtractionGateCheck(extracted, supplementalChars, adminArticleCreate),
+          bodyExtractionGateCheck(
+            extracted,
+            supplementalChars,
+            adminArticleCreate,
+            adminForceCreate
+          ),
         ],
       }),
     };
@@ -170,7 +199,9 @@ export async function analyzeFromLinkCore(
     label,
     {
       supplementalTextRaw: supplementalText,
-      allowShortSourceMaterial: adminArticleCreate,
+      allowShortSourceMaterial: adminArticleCreate || adminForceCreate,
+      adminForceCreate,
+      preferManualSourceBody,
     }
   );
   if (!summary.ok) {
@@ -267,6 +298,48 @@ export async function analyzeFromLinkCore(
         generatedBodyKoLength: summary.bodyKo.trim().length,
         failedCheckIds: quality.failedCheckIds ?? [],
         materialChars: summary.materialChars,
+      });
+      const candidates = await proposeCandidates(
+        extracted,
+        label,
+        summary.bodyKo,
+        supplementalText
+      );
+
+      const articleDraft: ArticleDraftPayload = {
+        synthesizedBodyKo: summary.bodyKo,
+        titleKo: summary.titleKo,
+        summaryKo: summary.summaryKo,
+        bodyOriginal: summary.bodyOriginal,
+        summaryOriginal: summary.summaryOriginal,
+        contentLanguage: summary.contentLanguage,
+        category: summary.category,
+        topicKey: summary.topicKey,
+        topicLabel: summary.topicLabel,
+        editorialPriority: summary.editorialPriority,
+        shortSourceDraft: true,
+        shortArticleReview: true,
+      };
+
+      return {
+        ok: true,
+        linkType,
+        linkTypeLabel: label,
+        extracted,
+        transcript,
+        articleDraft,
+        candidates,
+        diagnostics,
+      };
+    }
+
+    if (adminForceCreate && canAllowAdminForceCreateSave(quality, summary.bodyKo)) {
+      console.info("[from-link/analyze] admin force-create soft-save", {
+        url: submittedOriginalUrl,
+        generatedBodyKoLength: summary.bodyKo.trim().length,
+        failedCheckIds: quality.failedCheckIds ?? [],
+        materialChars: summary.materialChars,
+        note: "no length regeneration",
       });
       const candidates = await proposeCandidates(
         extracted,

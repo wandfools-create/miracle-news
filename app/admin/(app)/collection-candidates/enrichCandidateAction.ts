@@ -46,10 +46,16 @@ export async function enrichCollectionCandidateAction(
   const { promoteCollectionCandidate } = await import(
     "@/lib/collection-candidates/promoteCollectionCandidate"
   );
+  const {
+    readAdminForceCreateFromFormData,
+    readManualBodyFromFormData,
+  } = await import("@/lib/from-link/adminManualPromote");
 
   const result = await promoteCollectionCandidate({
     candidateId,
     selectedBy: user.email ?? null,
+    supplementalText: readManualBodyFromFormData(formData),
+    adminForceCreate: readAdminForceCreateFromFormData(formData),
   });
 
   if (!result.ok) {

@@ -20,6 +20,16 @@ export type AnalyzeFromLinkOptions = {
    * soft-fail length/thin density → review queue with warnings (RSS auto stays strict).
    */
   adminArticleCreate?: boolean;
+  /**
+   * Explicit admin force: allow short manual paste past extraction floors;
+   * soft-save length fails. Never invents facts / never length-expands.
+   * Must not be set by RSS auto.
+   */
+  adminForceCreate?: boolean;
+  /**
+   * Prefer pasted manual body over auto-extracted article text as AI material.
+   */
+  preferManualSourceBody?: boolean;
 };
 
 export type AnalyzeFromLinkResult =

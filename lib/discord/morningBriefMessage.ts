@@ -89,7 +89,8 @@ export function formatMorningBriefMessageContent(
   } else if (state === "article_failed") {
     lines.push(
       "",
-      `❌ 기사 생성 실패${extra?.error ? `: ${extra.error.slice(0, 180)}` : ""}`
+      `❌ 기사 생성 실패${extra?.error ? `: ${extra.error.slice(0, 180)}` : ""}`,
+      "관리자에서 원문 직접 입력 가능"
     );
   }
 
@@ -115,6 +116,13 @@ export type DiscordActionRow = {
   type: 1;
   components: DiscordMessageComponent[];
 };
+
+export function candidateManualPromoteAdminUrl(candidateId: string): string {
+  const id = candidateId.trim();
+  return absoluteUrl(
+    `/admin/collection-candidates?status=enrich_failed&highlight=${encodeURIComponent(id)}`
+  );
+}
 
 export function buildMorningBriefComponents(
   candidateId: string,
@@ -148,6 +156,22 @@ export function buildMorningBriefComponents(
             style: 5,
             label: "기존 공개 기사 열기",
             url: absoluteUrl(`/admin/review/${extra.sameEventArticleId}`),
+          },
+        ],
+      },
+    ];
+  }
+
+  if (state === "article_failed") {
+    return [
+      {
+        type: 1,
+        components: [
+          {
+            type: 2,
+            style: 5,
+            label: "관리자에서 원문 직접 입력",
+            url: candidateManualPromoteAdminUrl(candidateId),
           },
         ],
       },

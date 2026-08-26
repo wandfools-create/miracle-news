@@ -86,6 +86,16 @@ export default function ReviewArticleCard({ display }: Props) {
                 짧은 기사 · 최종 검토 필요
               </span>
             ) : null}
+            {display.manualSourceBodyUsed ? (
+              <span className="rounded-full bg-sky-50 px-3 py-1 text-[11px] font-semibold text-sky-900 sm:text-xs">
+                수동 원문 사용
+              </span>
+            ) : null}
+            {display.adminForceCreate ? (
+              <span className="rounded-full bg-orange-50 px-3 py-1 text-[11px] font-semibold text-orange-900 sm:text-xs">
+                강제 기사화
+              </span>
+            ) : null}
           </div>
 
           {display.shortArticleReviewRecommended && !display.enrichFailure ? (

@@ -60,13 +60,25 @@ export async function runRssFromLinkPipeline(input: {
    * Soft-fails length-only quality; RSS auto must leave this false.
    */
   adminArticleCreate?: boolean;
+  /** Pasted source body (admin manual). Prefer over auto-extract when set. */
+  supplementalText?: string | null;
+  /**
+   * Explicit admin force: short paste + length soft-save.
+   * Never set by RSS auto. No length regeneration.
+   */
+  adminForceCreate?: boolean;
 }): Promise<RssFromLinkPipelineResult> {
   const originalUrl = input.originalUrl.trim();
   const adminArticleCreate = input.adminArticleCreate === true;
+  const adminForceCreate = input.adminForceCreate === true;
+  const supplementalText = input.supplementalText ?? null;
+  const preferManualSourceBody = Boolean(supplementalText?.trim());
 
-  const analyzed = await analyzeFromLinkCore(originalUrl, null, {
+  const analyzed = await analyzeFromLinkCore(originalUrl, supplementalText, {
     allowShortSourceDraft: false,
-    adminArticleCreate,
+    adminArticleCreate: adminArticleCreate || adminForceCreate,
+    adminForceCreate,
+    preferManualSourceBody,
   });
 
   if (!analyzed.ok) {
