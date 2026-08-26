@@ -44,6 +44,26 @@ export function isAmericaNewYorkHour(
   return getAmericaNewYorkParts(now).hour === hour;
 }
 
+/** YYYY-MM-DD in America/New_York (Shorts edit date; DST-safe). */
+export function formatAmericaNewYorkDateKey(
+  value: string | Date | null | undefined,
+  now: Date = new Date()
+): string {
+  const date =
+    value instanceof Date
+      ? value
+      : value
+        ? new Date(value)
+        : now;
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: CRON_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
 /**
  * Hobby-safe: one UTC cron per desk (2 total). No dual EST/EDT slots.
  * ±1h ET drift across DST is accepted.

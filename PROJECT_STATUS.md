@@ -298,6 +298,15 @@ Shorts 1단계:
 - 초기에는 영상 자동 생성·자동 게시까지 진행하지 않는다.
 - 기존 Miracle News source/DB를 이동·복제하지 않고 `published` 기사만 사용한다.
 
+## 12A. Miracle News Shorts Studio Phase 1
+
+- **상태:** 개발/검증 중
+- **작업 브랜치:** `feature/miracle-news-shorts-studio-v1`
+- **범위:** `published + approved + is_published=true` 공개 기사 조회, America/New_York 기준 날짜 선택, 오전(US/International)·저녁(Korea) 회차, 기사 3~5개 선택
+- **Desk 분류:** `lib/rss/collectRegions.ts` source key 기준 — Korea Herald(`korea-herald`)는 US/International(아침), Korea Desk는 `chosun`·`tvchosun`·`yonhap-kr-radar`·`insight`·`joongang`(예약)
+- **미구현:** AI 대본·자막·화면 구성안 생성, 자동 영상 제작, YouTube/Instagram/Facebook 업로드
+- **운영 원칙:** 사람 검토 원칙 유지, 자동 공개·Production DB write·schema 변경 없음
+
 ## 13. 문서 관리 규칙
 
 - 모든 Miracle News 작업은 최신 GitHub `main`과 이 문서를 먼저 확인한다.
@@ -316,5 +325,6 @@ Shorts 1단계:
 - **SAME EVENT:** 판정·공개 차단 유지; `/admin/approved` 차단 안내·명시적 override 배포 완료
 - **Digest 272674686:** 정상 SAME EVENT 차단을 throw로 처리하던 UX 문제 — PR #4로 해소, 데이터 손상 없음
 - **Operational Validation:** IN PROGRESS
-- **Current Priority:** 2~3일 운영 안정성 검증
+- **Shorts Studio Phase 1:** 개발/검증 중 (`feature/miracle-news-shorts-studio-v1`)
+- **Current Priority:** 2~3일 운영 안정성 검증 + Shorts Phase 1 main 통합
 - **Next Review:** 실제 승인→공개, SAME EVENT 차단 안내, 명시적 override가 필요한 사례 확인 후
