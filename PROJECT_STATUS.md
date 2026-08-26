@@ -17,7 +17,7 @@
 | Vercel project name | 확인 필요 |
 | Supabase project name / ref | 저장소에 비밀값 없는 식별자가 없어 확인 필요 |
 | Stack | Next.js 16.1.7, React 19.2.3, TypeScript 5, Tailwind CSS 4, Supabase JS/SSR, Vercel, OpenAI, Discord, RSS Parser, Playwright |
-| Production main commit | `97121d28719c6101a4810a96f35fb3f7becf141e` — `Merge pull request #4 from wandfools-create/fix/approved-same-event-ux` |
+| Production main commit | `e8474c3226215b6f14973d17120739ca862495df` — `Merge pull request #1` (Shorts Studio Phase 1) |
 | Vercel Production | 배포 성공 (`https://www.hannoon.co`) |
 
 비밀번호, API key, bot token, service-role key, webhook secret 등은 이 문서에 기록하지 않는다.
@@ -30,7 +30,7 @@ GitHub main
    ▼
 Vercel Production ── https://www.hannoon.co
    ├─ 공개 사이트 /ko, /en
-   ├─ 관리자 /admin/*
+   ├─ 관리자 /admin/* (Shorts 제작실 `/admin/shorts` 포함)
    ├─ API/Discord interactions
    └─ Vercel Cron: /api/cron/desk-us, /api/cron/desk-kr
             │
@@ -45,7 +45,7 @@ Vercel Production ── https://www.hannoon.co
 - **Supabase:** 기사, 수집 후보, 상태, 검토 및 운영 로그의 데이터 계층이다.
 - **Vercel:** Next.js Production과 두 지역 Desk cron을 실행한다.
 - **GitHub:** `main`이 배포 및 기술 상태의 공식 코드 기준이다.
-- **Production SHA:** `97121d28719c6101a4810a96f35fb3f7becf141e` — Vercel Production 배포 성공.
+- **Production SHA:** `e8474c3226215b6f14973d17120739ca862495df` — Vercel Production 배포 성공 (PR #1 Shorts Studio Phase 1 포함).
 - **Discord workflow:** `기사 만들기 → quick_review → 사람 확인 → 공개` (PR #3 복구 완료)
 - **SAME EVENT:** 판정 및 공개 차단 유지. `/admin/approved` 차단 시 Application error 대신 안내·override UX (PR #4 배포 완료)
 - **직접 공개 workflow:** 비활성/제거 완료 (PR #3)
@@ -208,7 +208,8 @@ Git history와 현재 코드에서 확인:
 - Discord 빠른 기사 생성/검토 workflow
 - Discord quick_review Production 복구 완료 (PR #3)
 - `/admin/approved` SAME EVENT 공개 차단 UX 배포 완료 (PR #4) — Digest `272674686` 원인(throw 처리) 해소
-- 알려진 인계 결과: `npm test` 195 tests 통과, build 성공 (현재 GitHub 환경에서 재실행하지 않음)
+- Miracle News Shorts Studio Phase 1 Production 배포 완료 (PR #1) — `/admin/shorts`
+- 알려진 인계 결과: `npm test` 199 tests 통과, build 성공
 
 ## 9. 현재 미해결 문제
 
@@ -230,7 +231,7 @@ Git history와 현재 코드에서 확인:
 
 ### Planned
 
-- 운영 안정성 확인 후 Miracle News Shorts AI 1단계
+- Shorts Studio AI 제작 패키지 2단계 (Hook·대본·나레이션·자막·화면 구성안)
 - Vercel project name, Supabase project ref를 비밀값 없이 문서에 확정
 
 ### Legacy / no longer applicable
@@ -273,38 +274,44 @@ Git history와 현재 코드에서 확인:
 | 항목 | 값 |
 |---|---|
 | Branch | `main` |
-| Production main commit | `97121d28719c6101a4810a96f35fb3f7becf141e` |
+| Production main commit | `e8474c3226215b6f14973d17120739ca862495df` |
 | Vercel Production | 배포 성공 |
 | Production URL | https://www.hannoon.co |
 | Discord workflow | 기사 만들기 → `quick_review` → 사람 확인 → 공개 |
 | SAME EVENT | 판정·공개 차단 유지; `/admin/approved` 차단 안내·명시적 override |
 | 직접 공개 workflow | 비활성/제거 완료 |
 | Restore PRs | #3 Discord quick_review · #4 approved SAME EVENT UX — merged |
-| Production = main | 예 — `97121d2` 배포 성공 |
+| Shorts Studio | PR #1 merged — Phase 1 Production 반영 |
+| Production = main | 예 — `e8474c3` 배포 성공 |
 
 ## 12. 다음 최우선 작업
 
 1. 2~3일 Operational Validation을 진행하고 날짜별 결과를 이 문서에 기록한다.
-2. 실제 승인→공개, SAME EVENT 차단 안내, 명시적 override가 필요한 사례를 확인한다.
-3. Discord `기사 만들기 → quick_review → 사람 확인 → 공개` 실제 운영 결과를 확인한다.
-4. 안정성 확인 후 신규 하위 작업 **Miracle News Shorts AI** 1단계를 시작한다.
-
-Shorts 1단계:
-
-`published 기사 → 중요 뉴스 3~5개 선정 → 오전/저녁 Shorts 대본 → 나레이션 → 자막 → 화면 구성안 → 사람 검토`
-
-- 오전: 미국·국제 중심 **한눈 아침뉴스**
-- 오후/저녁: 한국 중심 **한눈 저녁뉴스**
-- 초기에는 영상 자동 생성·자동 게시까지 진행하지 않는다.
-- 기존 Miracle News source/DB를 이동·복제하지 않고 `published` 기사만 사용한다.
+2. Shorts Studio Phase 1(`/admin/shorts`) 실제 운영 확인 — published 기사 조회·날짜·Desk 분류·기사 선택.
+3. AI 제작 패키지 2단계 준비 — Hook·대본·나레이션·자막·화면 구성안 (사람 검토 원칙 유지).
+4. 실제 승인→공개, SAME EVENT 차단 안내, 명시적 override가 필요한 사례를 확인한다.
 
 ## 12A. Miracle News Shorts Studio Phase 1
 
-- **상태:** 개발/검증 중
-- **작업 브랜치:** `feature/miracle-news-shorts-studio-v1`
-- **범위:** `published + approved + is_published=true` 공개 기사 조회, America/New_York 기준 날짜 선택, 오전(US/International)·저녁(Korea) 회차, 기사 3~5개 선택
-- **Desk 분류:** `lib/rss/collectRegions.ts` source key 기준 — Korea Herald(`korea-herald`)는 US/International(아침), Korea Desk는 `chosun`·`tvchosun`·`yonhap-kr-radar`·`insight`·`joongang`(예약)
-- **미구현:** AI 대본·자막·화면 구성안 생성, 자동 영상 제작, YouTube/Instagram/Facebook 업로드
+- **상태:** **Production 반영 완료** (PR #1 merged, Vercel Production SUCCESS)
+- **Production URL:** https://www.hannoon.co/admin/shorts (비로그인 시 `/admin/login?next=/admin/shorts` redirect — 정상)
+- **Production commit:** `e8474c3226215b6f14973d17120739ca862495df`
+- **검증:** `npm test` 199/199 PASS · `npm run build` SUCCESS
+
+**현재 가능한 기능**
+
+- `published + approved + is_published=true` 공개 기사 조회
+- America/New_York 날짜 기준 선택 (DST 포함)
+- 오전 US/International · 저녁 Korea Desk 분류 (`lib/rss/collectRegions.ts` source key)
+- 기사 3~5개 선택 (클라이언트 UI)
+
+**아직 미구현**
+
+- 선택 저장 (서버 persist 없음)
+- AI Hook·대본·나레이션·자막·화면 구성안 생성
+- 영상 제작·YouTube/Instagram/Facebook 업로드
+
+- **Desk 분류:** Korea Herald(`korea-herald`)는 US/International(아침), Korea Desk는 `chosun`·`tvchosun`·`yonhap-kr-radar`·`insight`·`joongang`(예약)
 - **운영 원칙:** 사람 검토 원칙 유지, 자동 공개·Production DB write·schema 변경 없음
 
 ## 13. 문서 관리 규칙
@@ -318,13 +325,14 @@ Shorts 1단계:
 
 ---
 
-- **Last Updated:** 2026-08-26 UTC
-- **Production main commit:** `97121d28719c6101a4810a96f35fb3f7becf141e`
+- **Last Updated:** 2026-08-27 UTC
+- **Latest Commit:** `e8474c3226215b6f14973d17120739ca862495df`
+- **Production main commit:** `e8474c3226215b6f14973d17120739ca862495df`
 - **Vercel Production:** 배포 성공 (`https://www.hannoon.co`)
 - **Discord workflow:** 기사 만들기 → quick_review → 사람 확인 → 공개
 - **SAME EVENT:** 판정·공개 차단 유지; `/admin/approved` 차단 안내·명시적 override 배포 완료
 - **Digest 272674686:** 정상 SAME EVENT 차단을 throw로 처리하던 UX 문제 — PR #4로 해소, 데이터 손상 없음
 - **Operational Validation:** IN PROGRESS
-- **Shorts Studio Phase 1:** 개발/검증 중 (`feature/miracle-news-shorts-studio-v1`)
-- **Current Priority:** 2~3일 운영 안정성 검증 + Shorts Phase 1 main 통합
-- **Next Review:** 실제 승인→공개, SAME EVENT 차단 안내, 명시적 override가 필요한 사례 확인 후
+- **Shorts Studio Phase 1:** Production 반영 완료 (`/admin/shorts`, PR #1)
+- **Current Priority:** Shorts Studio 실제 운영 확인 및 AI 제작 패키지 2단계 준비
+- **Next Review:** Shorts Phase 1 운영 확인 및 Operational Validation 날짜별 기록 후
