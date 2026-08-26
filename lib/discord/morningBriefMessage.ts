@@ -23,7 +23,9 @@ export type MorningBriefMessageState =
   | "shortlisted"
   | "dismissed"
   | "article_created"
+  | "article_published"
   | "article_failed"
+  | "publish_failed"
   | "same_event_blocked";
 
 function formatPublishedAtKo(iso: string | null): string {
@@ -78,6 +80,17 @@ export function formatMorningBriefMessageContent(
     if (extra?.articleId) {
       lines.push(`기사 ID: ${extra.articleId}`);
     }
+  } else if (state === "article_published") {
+    lines.push("", "✅ 기사 생성 및 공개 완료");
+    if (extra?.articleId) lines.push(`기사 ID: ${extra.articleId}`);
+  } else if (state === "publish_failed") {
+    lines.push(
+      "",
+      `⚠️ 기사는 생성했지만 공개하지 못했습니다${
+        extra?.error ? `: ${extra.error.slice(0, 180)}` : ""
+      }`,
+      "빠른 검토에서 확인할 수 있습니다"
+    );
   } else if (state === "same_event_blocked") {
     lines.push(
       "",
@@ -130,6 +143,38 @@ export function buildMorningBriefComponents(
   state: MorningBriefMessageState = "active",
   extra?: { articleId?: string; sameEventArticleId?: string }
 ): DiscordActionRow[] {
+  if (state === "article_published" && extra?.articleId) {
+    return [
+      {
+        type: 1,
+        components: [
+          {
+            type: 2,
+            style: 5,
+            label: "공개 기사 확인·수정",
+            url: absoluteUrl(`/admin/review/${extra.articleId}`),
+          },
+        ],
+      },
+    ];
+  }
+
+  if (state === "publish_failed" && extra?.articleId) {
+    return [
+      {
+        type: 1,
+        components: [
+          {
+            type: 2,
+            style: 5,
+            label: "빠른 검토 열기",
+            url: quickReviewAdminUrl(extra.articleId),
+          },
+        ],
+      },
+    ];
+  }
+
   if (state === "article_created" && extra?.articleId) {
     return [
       {

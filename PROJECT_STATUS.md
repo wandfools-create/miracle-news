@@ -51,15 +51,15 @@ Vercel Production ── https://www.hannoon.co
 
 ### 전체 흐름
 
-`뉴스 수집 → AI 중요도 평가 → Discord Brief → 명시적 기사 만들기 → 사람 검토 → 공개`
+`뉴스 수집 → AI 중요도 평가 → Discord Brief → 사람의 명시적 기사 만들기 → 안전 검사 → 공개`
 
 1. Vercel Cron이 지역별 Desk endpoint를 호출한다.
 2. RSS/HTML/Radar/AP GraphQL source에서 후보를 수집해 `collection_candidates`에 저장한다.
 3. OpenAI가 아직 평가되지 않은 후보의 중요도를 평가한다.
 4. BEST/priority 후보를 Discord Brief로 보낸다.
-5. Discord의 **기사 만들기** 또는 관리자 조작으로만 from-link/OpenAI 기사 생성이 실행된다.
-6. 생성 기사는 `quick_review` 또는 일반 검토 대기에 들어간다.
-7. 사람이 확인한 뒤에만 승인·공개한다.
+5. 허용된 운영자가 Discord의 **기사 만들기**를 누르면 from-link/OpenAI 기사 생성이 실행된다.
+6. 제목·본문·요약 및 SAME EVENT 검사를 통과하면 그 명시적 버튼 조작을 공개 승인으로 보고 즉시 공개한다.
+7. 자동 수집·AI 추천만으로는 공개하지 않는다. Discord 이외의 생성 경로는 기존 검토 workflow를 유지한다.
 
 각 Desk의 collect/recommend/Discord 단계는 독립적으로 예외 처리된다. 앞 단계의 성공은 뒤 단계 실패로 rollback되지 않는다. system alert 실패도 Desk 실행 결과를 실패시키지 않는다.
 
@@ -70,7 +70,7 @@ Vercel Production ── https://www.hannoon.co
 | US / International Desk | 미국·국제 source 수집, AI 평가, Discord Brief | 활성 |
 | Korea Desk | 한국 source 수집, AI 평가, Discord Brief | 활성 |
 | Discord | Morning Brief, 후보 제외/선정, 기사 만들기, system alerts | 활성 |
-| OpenAI | 후보 중요도 평가, 명시적 기사 생성, 명시적 AI 수정 | 활성; 자동 공개 금지 |
+| OpenAI | 후보 중요도 평가, 명시적 기사 생성, 명시적 AI 수정 | 활성; AI 단독 공개 금지 |
 | Supabase | 후보·기사·workflow·로그 저장 | 활성 |
 | Vercel Cron | `desk-us`, `desk-kr` 지역별 orchestration | 활성 |
 | Make | 현재 `main`의 Desk 핵심 경로에서 참조 확인 안 됨 | 현재 비활성/legacy 여부 확인 필요 |
@@ -118,8 +118,8 @@ Vercel Production ── https://www.hannoon.co
 
 ## 5. 변경하면 안 되는 운영 원칙
 
-- AI만으로 기사를 자동 공개하지 않는다.
-- 최종 공개는 반드시 사람 확인을 거친다.
+- AI 판단만으로 기사를 자동 공개하지 않는다.
+- Discord의 **기사 만들기**는 허용된 사람의 명시적 생성·공개 명령으로 취급한다. 자동 수집이나 AI 추천은 이 동작을 대신할 수 없다.
 - 수정 대기 진입만으로 OpenAI를 실행하지 않는다.
 - AI 수정은 사용자가 **AI로 수정**을 명시적으로 눌렀을 때만 실행한다.
 - 수동 원문 입력을 허용한다.
@@ -132,13 +132,13 @@ Vercel Production ── https://www.hannoon.co
 - system alert 전송 실패가 Desk 실행을 실패시키면 안 된다.
 - secret/token/key/password의 값 또는 원문을 로그에 출력하지 않는다.
 - 수집·추천·Discord 실패는 단계별로 격리하고 이전 단계 성공을 rollback하지 않는다.
-- Discord **기사 만들기**는 OpenAI를 한 번 호출할 수 있으나 `quick_review`에만 두고 자동 공개하지 않는다.
+- Discord **기사 만들기**는 OpenAI를 한 번 호출한 뒤 필수 내용 및 SAME EVENT 검사를 통과한 기사만 즉시 공개한다. 검사 실패 시 공개하지 않고 `quick_review`에 남긴다.
 
 ## 6. Discord 구조
 
 - **Morning Brief:** 지역별 BEST/priority 후보를 지정 채널에 전송한다.
-- **기사 만들기:** 허용 사용자 버튼 조작으로 후보를 기사화하고 `quick_review`에 둔다.
-- **빠른 검토 연결:** 사람의 최종 확인 한 번 전까지 공개되지 않는다.
+- **기사 만들기:** 허용 사용자 버튼 조작을 명시적 공개 승인으로 보고 기사 생성 후 안전 검사를 거쳐 공개한다.
+- **빠른 검토 연결:** 공개 검사 실패 시에만 복구·수정을 위해 연결한다.
 - **System alerts:** Desk 이상을 별도 alerts 채널로 보내며 전송 실패는 무시된다.
 - **Channel fallback:** `DISCORD_SYSTEM_ALERTS_CHANNEL_ID`가 없으면 Morning Brief 채널을 사용한다.
 - **보안:** interaction signature를 검증하고 guild/user allowlist를 적용한다.
@@ -174,7 +174,7 @@ Vercel Production ── https://www.hannoon.co
 | 단계 | 역할 / 이동 조건 |
 |---|---|
 | 수집 후보 | source 수집 결과. AI 평가 후 shortlist/제외/기사 만들기 가능 |
-| 빠른 검토 | Discord 또는 관리자의 빠른 기사 생성 결과. `ready_for_human_review + quick_review` |
+| 빠른 검토 | Discord 직접 공개가 안전 검사에서 실패했거나 관리자가 빠른 생성한 기사. `ready_for_human_review + quick_review` |
 | 검토 대기 | 일반 기사 초안. `ready_for_human_review + pending` |
 | 보류 | 당장 처리하지 않는 기사. 사람 조작으로 이동 |
 | 수정 대기 | `needs_revision`; 진입 시 내용 보존, OpenAI 자동 실행 없음 |
@@ -202,6 +202,7 @@ Git history와 현재 코드에서 확인:
 - Insight 한국 뉴스 수집
 - US/International Desk와 Korea Desk 분리
 - Discord 빠른 기사 생성/검토 workflow
+- Discord `기사 만들기`의 안전 검사 후 직접 공개 workflow
 - 알려진 인계 결과: `npm test` 191 tests 통과, build 성공 (현재 GitHub 환경에서 재실행하지 않음)
 
 ## 9. 현재 미해결 문제
@@ -297,7 +298,8 @@ Shorts 1단계:
 ---
 
 - **Last Updated:** 2026-08-26 UTC
-- **Latest Commit:** audited code `98b23271abedb4d5ed6763e6c96009d5addf4b3b`; PROJECT_STATUS 생성 커밋은 이후
+- **Latest Main Commit:** `73aa3f60494990f5c8df52ae40815196981cc9d5` — `Add Miracle News technical project status`
+- **Pending Deployment:** `fix/discord-direct-publish` — Discord 기사 만들기 직접 공개 전환
 - **Production Status:** 운영 중, 배포 SHA 일치 여부 확인 필요
-- **Current Priority:** 2~3일 Operational Validation
+- **Current Priority:** Discord 직접 공개 workflow 반영 후 2~3일 Operational Validation
 - **Next Review:** 운영 검증 결과가 추가될 때 또는 다음 Miracle News 작업 완료 시
