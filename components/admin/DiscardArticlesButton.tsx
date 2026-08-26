@@ -6,9 +6,11 @@ import { useTransition, type MouseEvent } from "react";
 import { discardArticlesByIdsAction } from "@/app/admin/(app)/discard/actions";
 import { discardConfirmMessage } from "@/lib/admin/discardArticles";
 
+type DiscardFrom = "on_hold" | "revision" | "rejected";
+
 type Props = {
-  /** on_hold | revision */
-  from: "on_hold" | "revision";
+  /** on_hold | revision | rejected */
+  from: DiscardFrom;
   /** Checkbox name to collect (default articleIds). */
   checkboxName?: string;
   /** Optional single article id (individual discard). */
@@ -18,8 +20,10 @@ type Props = {
   className?: string;
 };
 
-function returnPath(from: "on_hold" | "revision"): string {
-  return from === "revision" ? "/admin/revision" : "/admin/on-hold";
+function returnPath(from: DiscardFrom): string {
+  if (from === "revision") return "/admin/revision";
+  if (from === "rejected") return "/admin/rejected";
+  return "/admin/on-hold";
 }
 
 /**

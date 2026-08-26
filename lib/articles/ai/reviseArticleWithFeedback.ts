@@ -335,7 +335,7 @@ export async function reviseArticleWithFeedback(
         parsed.contentLanguage === "en" && parsed.article_body_original
           ? parsed.article_body_original
           : article.body_original,
-      ai_review_status: "pending",
+      ai_review_status: "pass",
       ai_review_notes: nowNote,
       revision_status: "requested",
     })

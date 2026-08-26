@@ -1,5 +1,5 @@
 /**
- * Soft-discard articles (on_hold / needs_revision) → archived.
+ * Soft-discard articles (on_hold / needs_revision / rejected) → archived.
  * Uses service role so RLS cannot silently no-op updates.
  * No DELETE. No OpenAI.
  */
@@ -35,7 +35,11 @@ export type RestoreDiscardedCoreResult =
   | { ok: true; articleId: string }
   | { ok: false; error: string; step: string };
 
-const DISCARDABLE_REVIEW = ["on_hold", "needs_revision"] as const;
+const DISCARDABLE_REVIEW = [
+  "on_hold",
+  "needs_revision",
+  "rejected",
+] as const;
 
 function uniqueIds(ids: string[]): string[] {
   return [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
@@ -129,7 +133,7 @@ export async function discardArticlesCore(
         ? "공개 기사는 폐기할 수 없습니다."
         : topStoryBlocked.length > 0
           ? "메인 탑스토리 기사는 폐기할 수 없습니다."
-          : "폐기할 수 있는 기사가 없습니다. (보류/수정 대기만 가능)";
+          : "폐기할 수 있는 기사가 없습니다. (보류/수정 대기/반려만 가능)";
     return {
       ok: false,
       discardedIds: [],

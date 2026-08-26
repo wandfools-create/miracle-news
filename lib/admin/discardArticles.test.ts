@@ -56,6 +56,58 @@ describe("admin article discard (fixture only)", () => {
     assert.equal(isExcludedFromWorkQueues(after), true);
   });
 
+  it("discards rejected article to archived", () => {
+    const rejected = {
+      id: "rej-1",
+      status: "rejected",
+      review_status: "rejected",
+      is_published: false,
+    };
+    assert.equal(evaluateDiscardEligibility(rejected).ok, true);
+    const after = { ...rejected, ...buildDiscardArticleUpdate() };
+    assert.equal(after.status, "archived");
+    assert.equal(after.review_status, "archived");
+    assert.equal(after.is_published, false);
+    assert.equal(isExcludedFromWorkQueues(after), true);
+    assert.equal(isVisibleOnPublishedList(after), false);
+  });
+
+  it("bulk partition: rejected rows discardable + published/approved blocked", () => {
+    const rows = [
+      ...Array.from({ length: 3 }, (_, i) => ({
+        id: `rej-${i}`,
+        status: "rejected",
+        review_status: "rejected" as const,
+        is_published: false,
+      })),
+      {
+        id: "pub-1",
+        status: "published",
+        review_status: "approved",
+        is_published: true,
+      },
+      {
+        id: "appr-1",
+        status: "approved",
+        review_status: "approved",
+        is_published: false,
+      },
+    ];
+    const { discardable, blocked } = partitionDiscardCandidates(rows);
+    assert.equal(discardable.length, 3);
+    assert.equal(blocked.length, 2);
+    assert.ok(
+      blocked.some(
+        (b) => b.id === "pub-1" && b.blockReason.reason === "published"
+      )
+    );
+    assert.ok(
+      blocked.some(
+        (b) => b.id === "appr-1" && b.blockReason.reason === "approved"
+      )
+    );
+  });
+
   it("bulk partition: 7 discardable + published blocked", () => {
     const rows = [
       ...Array.from({ length: 7 }, (_, i) => ({
@@ -128,7 +180,7 @@ describe("admin article discard (fixture only)", () => {
     assert.notEqual(restored.review_status, "approved");
   });
 
-  it("blocks discard of published articles", () => {
+  it("blocks discard of published and approved articles", () => {
     const published = {
       id: "p1",
       status: "published",
@@ -146,6 +198,16 @@ describe("admin article discard (fixture only)", () => {
       is_published: false,
     };
     assert.equal(evaluateDiscardEligibility(statusOnly).ok, false);
+
+    const approved = {
+      id: "a1",
+      status: "approved",
+      review_status: "approved",
+      is_published: false,
+    };
+    const approvedResult = evaluateDiscardEligibility(approved);
+    assert.equal(approvedResult.ok, false);
+    if (!approvedResult.ok) assert.equal(approvedResult.reason, "approved");
   });
 
   it("confirm message mentions count once", () => {
@@ -165,6 +227,7 @@ describe("admin article discard (fixture only)", () => {
     assert.match(core, /archived/);
     assert.match(core, /on_hold/);
     assert.match(core, /needs_revision/);
+    assert.match(core, /rejected/);
 
     const actions = readFileSync(
       join(process.cwd(), "app/admin/(app)/discard/actions.ts"),
@@ -173,6 +236,7 @@ describe("admin article discard (fixture only)", () => {
     assert.match(actions, /discardArticlesCore/);
     assert.match(actions, /isAllowedAdminEmail/);
     assert.match(actions, /articleIdsCsv/);
+    assert.match(actions, /\/admin\/rejected/);
 
     const button = readFileSync(
       join(process.cwd(), "components/admin/DiscardArticlesButton.tsx"),
@@ -181,5 +245,16 @@ describe("admin article discard (fixture only)", () => {
     assert.match(button, /discardArticlesByIdsAction/);
     assert.match(button, /articleIdsCsv/);
     assert.match(button, /router\.refresh/);
+    assert.match(button, /rejected/);
+
+    const rejectedPage = readFileSync(
+      join(process.cwd(), "app/admin/(app)/rejected/page.tsx"),
+      "utf8"
+    );
+    assert.match(rejectedPage, /DiscardArticlesButton/);
+    assert.match(rejectedPage, /from="rejected"/);
+    assert.match(rejectedPage, /mode="bulk"/);
+    assert.match(rejectedPage, /mode="single"/);
+    assert.doesNotMatch(rejectedPage, /\.delete\(/);
   });
 });

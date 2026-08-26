@@ -79,6 +79,8 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
       summary_original,
       summary_translated,
       summary_ko,
+      body_translated,
+      body_original,
       revision_request,
       thumbnail_url,
       ai_review_status,
@@ -116,8 +118,9 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
 
         <p className="mt-3 text-sm leading-6 text-gray-600 sm:mt-4 sm:text-base">
           수정 요청이 들어간 기사입니다. 기본 {ADMIN_LIST_PAGE_SIZE}건씩 불러옵니다.
-          목록에 들어오면 from-link와 동일한 OpenAI 로직으로 본문을 자동 수정합니다.
-          더 이상 필요 없는 기사는 폐기할 수 있으며,{" "}
+          페이지를 열거나 새로고침해도 OpenAI는 호출되지 않습니다. AI 재작성은
+          「AI로 수정」버튼을 눌렀을 때만 실행됩니다. 더 이상 필요 없는 기사는
+          폐기할 수 있으며,{" "}
           <Link href="/admin/archive?tab=articles" className="underline">
             보관함
           </Link>
@@ -264,6 +267,23 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
                           }
                           aiReviewStatus={article.ai_review_status}
                           aiReviewNotes={article.ai_review_notes}
+                          initialTitleKo={
+                            article.title_ko ||
+                            article.title_translated ||
+                            article.title_original ||
+                            ""
+                          }
+                          initialSummaryKo={
+                            article.summary_ko ||
+                            article.summary_translated ||
+                            article.summary_original ||
+                            ""
+                          }
+                          initialBodyKo={
+                            article.body_translated ||
+                            article.body_original ||
+                            ""
+                          }
                         />
 
                         <div className="mt-3">

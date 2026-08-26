@@ -1,5 +1,5 @@
 /**
- * Admin soft-discard for on-hold / revision queue articles.
+ * Admin soft-discard for on-hold / revision / rejected queue articles.
  * Reuses status/review_status = archived (no hard DELETE, no migration).
  */
 
@@ -9,6 +9,7 @@ import { ARTICLE_WORKFLOW } from "@/lib/articleWorkflow";
 export const DISCARDABLE_REVIEW_STATUSES = [
   "on_hold",
   "needs_revision",
+  "rejected",
 ] as const;
 
 export type DiscardableReviewStatus =
@@ -23,7 +24,14 @@ export type DiscardEligibilityInput = {
 
 export type DiscardEligibility =
   | { ok: true }
-  | { ok: false; reason: "published" | "not_discardable_queue" | "already_archived" };
+  | {
+      ok: false;
+      reason:
+        | "published"
+        | "approved"
+        | "not_discardable_queue"
+        | "already_archived";
+    };
 
 export type RestoreEligibility =
   | { ok: true }
@@ -33,7 +41,9 @@ export function isDiscardableReviewStatus(
   reviewStatus: string | null | undefined
 ): reviewStatus is DiscardableReviewStatus {
   return (
-    reviewStatus === "on_hold" || reviewStatus === "needs_revision"
+    reviewStatus === "on_hold" ||
+    reviewStatus === "needs_revision" ||
+    reviewStatus === "rejected"
   );
 }
 
@@ -65,6 +75,12 @@ export function evaluateDiscardEligibility(
 ): DiscardEligibility {
   if (article.is_published === true || article.status === "published") {
     return { ok: false, reason: "published" };
+  }
+  if (
+    article.status === "approved" ||
+    article.review_status === "approved"
+  ) {
+    return { ok: false, reason: "approved" };
   }
   if (
     article.status === "archived" &&

@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { reviseArticleWithFeedback } from "@/lib/articles/ai/reviseArticleWithFeedback";
 import type { AdminAiActionResult } from "@/lib/admin/aiActionTypes";
+import { buildRequestRevisionArticlePatch } from "@/lib/admin/revisionAiPolicy";
 import { supabase } from "../../../../../lib/supabase";
 
 function getArticleIdsFromFormData(formData: FormData) {
@@ -229,17 +229,10 @@ export async function requestRevision(
     throw new Error(logError.message);
   }
 
+  // Status-only move into revision queue — never call OpenAI or rewrite content.
   const { error: articleError } = await supabase
     .from("articles")
-    .update({
-      status: "needs_revision",
-      review_status: "needs_revision",
-      revision_status: "requested",
-      revision_request: trimmedNote,
-      is_published: false,
-      ai_review_status: "pending",
-      ai_review_notes: "수정 요청 접수 — AI 수정 대기",
-    })
+    .update(buildRequestRevisionArticlePatch(trimmedNote))
     .eq("id", articleId);
 
   if (articleError) {
@@ -250,17 +243,17 @@ export async function requestRevision(
   return { revisionLogId: logRow?.id ?? null };
 }
 
-/** 수정 요청 저장 후 from-link와 동일한 OpenAI 기사 생성 로직으로 초안을 갱신합니다. */
+/**
+ * @deprecated AI rewrite is no longer coupled to revision entry.
+ * Saves status only; use runAiRevisionForArticle from the revision queue.
+ */
 export async function requestRevisionWithAi(
   articleId: string,
   feedbackType: string,
   feedbackNote: string
 ): Promise<AdminAiActionResult> {
-  let revisionLogId: string | null = null;
-
   try {
-    const saved = await requestRevision(articleId, feedbackType, feedbackNote);
-    revisionLogId = saved.revisionLogId;
+    await requestRevision(articleId, feedbackType, feedbackNote);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[requestRevisionWithAi] save failed", message);
@@ -271,33 +264,10 @@ export async function requestRevisionWithAi(
     };
   }
 
-  const ai = await reviseArticleWithFeedback({
-    articleId,
-    feedbackType,
-    feedbackNote,
-    revisionLogId,
-  });
-
-  revalidateAdminPages(articleId);
-  revalidatePath("/admin/revision");
-
-  if (!ai.ok) {
-    console.error("[requestRevisionWithAi] AI failed", ai);
-    await supabase
-      .from("articles")
-      .update({
-        ai_review_status: "fail",
-        ai_review_notes: ai.uiMessage,
-      })
-      .eq("id", articleId);
-
-    return { ok: false, step: ai.step, error: ai.uiMessage };
-  }
-
-  const thumbNote = ai.thumbnailRegenerated ? " (썸네일 AI 재생성)" : "";
   return {
     ok: true,
-    message: `수정 요청을 저장하고 AI가 본문을 갱신했습니다.${thumbNote}`,
+    message:
+      "수정 대기로 이동했습니다. 기사 내용은 그대로입니다. AI 수정은「수정 대기」의「AI로 수정」버튼에서 실행하세요.",
   };
 }
 

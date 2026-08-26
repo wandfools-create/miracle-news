@@ -22,6 +22,7 @@ export type DiscardArticlesActionResult = {
 function revalidateDiscardPaths(articleIds: string[] = []) {
   revalidatePath("/admin/on-hold");
   revalidatePath("/admin/revision");
+  revalidatePath("/admin/rejected");
   revalidatePath("/admin/review");
   revalidatePath("/admin/approved");
   revalidatePath("/admin/published");
@@ -35,6 +36,7 @@ function revalidateDiscardPaths(articleIds: string[] = []) {
 
 function getReturnPath(from: string): string {
   if (from === "revision") return "/admin/revision";
+  if (from === "rejected") return "/admin/rejected";
   if (from === "archive") return "/admin/archive?tab=articles";
   return "/admin/on-hold";
 }

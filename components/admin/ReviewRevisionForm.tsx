@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { requestRevisionWithAi } from "@/app/admin/(app)/review/[id]/actions";
+import { requestRevision } from "@/app/admin/(app)/review/[id]/actions";
 
 type Props = {
   articleId: string;
@@ -16,11 +16,11 @@ export default function ReviewRevisionForm({ articleId }: Props) {
 
   return (
     <div className="mt-6 rounded-2xl border bg-gray-50 p-4 sm:mt-8 sm:p-5">
-      <h4 className="text-base font-semibold">수정 요청 보내기</h4>
+      <h4 className="text-base font-semibold">수정 대기로 보내기</h4>
       <p className="mt-2 text-sm leading-6 text-gray-600">
-        저장 시 from-link와 동일한 OpenAI 기사 생성 로직으로 한글 제목·요약·본문을
-        수정 메모에 맞게 다시 작성합니다. 완료 후「수정 대기」목록에서 확인할 수
-        있습니다.
+        상태만 변경합니다. 제목·요약·본문·썸네일은 그대로 보존되며 OpenAI는
+        호출되지 않습니다. AI 재작성은「수정 대기」목록의「AI로 수정」에서
+        실행하세요.
       </p>
 
       {error ? (
@@ -47,18 +47,16 @@ export default function ReviewRevisionForm({ articleId }: Props) {
           const feedbackNote = String(fd.get("feedbackNote") || "");
 
           startTransition(async () => {
-            const res = await requestRevisionWithAi(
-              articleId,
-              feedbackType,
-              feedbackNote
-            );
-            if (!res.ok) {
-              setError(res.error);
-              return;
+            try {
+              await requestRevision(articleId, feedbackType, feedbackNote);
+              setSuccess(
+                "수정 대기로 이동했습니다. 기사 내용은 변경되지 않았습니다."
+              );
+              router.refresh();
+              router.push("/admin/revision");
+            } catch (err) {
+              setError(err instanceof Error ? err.message : String(err));
             }
-            setSuccess(res.message);
-            router.refresh();
-            router.push("/admin/revision");
           });
         }}
       >
@@ -102,7 +100,7 @@ export default function ReviewRevisionForm({ articleId }: Props) {
           disabled={isPending}
           className="w-full rounded-xl border border-gray-300 px-5 py-3 text-sm font-semibold text-gray-800 transition hover:bg-gray-100 disabled:opacity-50 sm:w-auto"
         >
-          {isPending ? "AI 수정 적용 중… (최대 2분)" : "수정 요청 + AI 수정 적용"}
+          {isPending ? "수정 대기로 이동 중…" : "수정 대기로 보내기"}
         </button>
       </form>
     </div>
