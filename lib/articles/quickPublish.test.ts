@@ -159,57 +159,8 @@ describe("quick publish flow (fixture only, no OpenAI/Discord/publish)", () => {
     if (result.kind !== "deferred_update") return;
     await result.continueWork();
     assert.equal(promoted, true);
-    const completedMessage = edited as { content: string } | null;
-    assert.ok(completedMessage?.content.includes("기사 생성 및 공개 완료"));
-  });
-
-  it("Discord publish failure leaves a quick-review recovery link", async () => {
-    let edited: { content: string; components: unknown[] } | null = null;
-    const result = await handleDiscordComponentInteraction(
-      {
-        type: 3,
-        guild_id: GUILD_ID,
-        member: { user: { id: USER_ID } },
-        data: { custom_id: `cc:mk:${CANDIDATE_ID}` },
-      },
-      {
-        allowedGuildId: GUILD_ID,
-        allowedUserIds: new Set([USER_ID]),
-        shortlist: async () => ({ ok: false, error: "unused" }),
-        dismiss: async () => ({ ok: false, error: "unused" }),
-        fetchCandidate: async () => ({
-          id: CANDIDATE_ID,
-          source: "ap",
-          feedLabel: "AP",
-          title: "Test headline",
-          originalUrl: "https://apnews.com/x",
-          rssPublishedAt: null,
-          aiRecommendGrade: "best",
-          aiRecommendScore: 90,
-          aiRecommendReason: null,
-        }),
-        fetchStatus: async () => "pending",
-        makeArticle: async () => ({
-          ok: false,
-          error: "본문이 비어 있습니다.",
-          step: "publish_content_guard",
-          articleId: ARTICLE_ID,
-        }),
-        editOriginalMessage: async ({ content, components }) => {
-          edited = { content, components };
-          return { ok: true };
-        },
-      }
-    );
-    assert.equal(result.kind, "deferred_update");
-    if (result.kind !== "deferred_update") return;
-    await result.continueWork();
-    const failedMessage = edited as {
-      content: string;
-      components: unknown[];
-    } | null;
-    assert.ok(failedMessage?.content.includes("공개하지 못했습니다"));
-    assert.match(JSON.stringify(failedMessage?.components), /quick-review/);
+    assert.ok(edited?.content.includes("기사 생성 완료"));
+    assert.ok(edited?.content.includes("빠른 검토"));
   });
 
   it("article_created payload exposes quick review link button", () => {

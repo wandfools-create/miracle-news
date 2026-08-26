@@ -57,7 +57,6 @@ export type MakeArticleFn = (input: {
       ok: false;
       error: string;
       step?: string;
-      articleId?: string;
       sameEventArticleId?: string;
       sameEventTitle?: string;
     }
@@ -170,17 +169,6 @@ export async function handleDiscordComponentInteraction(
               });
               return;
             }
-            if (result.articleId && result.step?.startsWith("publish_")) {
-              const failed = buildMorningBriefPayload(item, "publish_failed", {
-                articleId: result.articleId,
-                error: result.error,
-              });
-              await editOriginal({
-                content: failed.content,
-                components: failed.components,
-              });
-              return;
-            }
             const failed = buildMorningBriefPayload(item, "article_failed", {
               error: result.error,
             });
@@ -191,7 +179,7 @@ export async function handleDiscordComponentInteraction(
             return;
           }
 
-          const created = buildMorningBriefPayload(item, "article_published", {
+          const created = buildMorningBriefPayload(item, "article_created", {
             articleId: result.articleId,
           });
           await editOriginal({
