@@ -305,7 +305,8 @@ Shorts 1단계:
 
 ---
 
-- **Last Updated:** 2026-08-26 UTC\n- **Shorts Development:** `feature/miracle-news-shorts-studio-v1` — Phase 1 foundation
+- **Last Updated:** 2026-08-26 UTC
+- **Shorts Development:** `feature/miracle-news-shorts-studio-v1` — Phase 1 foundation
 - **Latest Commit:** audited code `98b23271abedb4d5ed6763e6c96009d5addf4b3b`; PROJECT_STATUS 생성 커밋은 이후
 - **Production Status:** 운영 중, 배포 SHA 일치 여부 확인 필요
 - **Current Priority:** 2~3일 Operational Validation
