@@ -16,6 +16,8 @@ import HomeNewsSearch, {
 } from "@/components/home/HomeNewsSearch";
 import NewsThumbnail, {
   newsThumbFrameClass,
+  newsThumbFrameForVariant,
+  type NewsThumbVariant,
 } from "@/components/home/NewsThumbnail";
 import {
   newsMainGrid,
@@ -165,6 +167,7 @@ function ArticleThumb({
   className = "",
   sizes = "100vw",
   objectFit = "contain",
+  variant,
 }: {
   article: HomeArticleCard;
   noImageLabel: string;
@@ -172,6 +175,7 @@ function ArticleThumb({
   className?: string;
   sizes?: string;
   objectFit?: "contain" | "cover";
+  variant?: NewsThumbVariant;
 }) {
   return (
     <NewsThumbnail
@@ -181,6 +185,7 @@ function ArticleThumb({
       className={className}
       sizes={sizes}
       objectFit={objectFit}
+      variant={variant}
     />
   );
 }
@@ -662,11 +667,12 @@ function CategoryCard({
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-xl border border-neutral-200/90 bg-white">
-      <Link href={href} className="block bg-white">
-        <div className={`${newsThumbFrameClass} aspect-video w-full`}>
+      <Link href={href} className="block shrink-0 bg-white">
+        <div className={newsThumbFrameForVariant("categoryCard")}>
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
+            variant="categoryCard"
             sizes="(max-width: 640px) 100vw, (max-width: 1280px) 33vw, 25vw"
           />
         </div>
@@ -752,13 +758,12 @@ function SourceLeadMini({
 
   return (
     <article className="flex flex-col bg-white">
-      <Link href={href} className="block bg-white">
-        <div
-          className={`${newsThumbFrameClass} aspect-[16/10] w-full min-h-[168px] sm:min-h-[190px] lg:min-h-[210px]`}
-        >
+      <Link href={href} className="block shrink-0 bg-white">
+        <div className={newsThumbFrameForVariant("sourceCard")}>
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
+            variant="sourceCard"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           />
         </div>

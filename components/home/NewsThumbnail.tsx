@@ -3,6 +3,40 @@ import type { ReactNode } from "react";
 
 import type { HomeArticleCard } from "@/lib/home/types";
 
+/** Fixed thumbnail frame: keep card layout size; white letterbox; center child. */
+export const newsThumbFrameClass =
+  "relative overflow-hidden bg-white flex items-center justify-center";
+
+/**
+ * Layout / crop policy for home thumbnails.
+ * - hero: full photo, letterbox (contain)
+ * - sourceCard / categoryCard / listThumb: uniform 16:10 cover crop
+ */
+export type NewsThumbVariant =
+  | "hero"
+  | "sourceCard"
+  | "categoryCard"
+  | "listThumb";
+
+export function newsThumbFitForVariant(
+  variant: NewsThumbVariant
+): "contain" | "cover" {
+  return variant === "hero" ? "contain" : "cover";
+}
+
+/** Outer frame class per variant — width 100%, no per-card min/max height. */
+export function newsThumbFrameForVariant(variant: NewsThumbVariant): string {
+  switch (variant) {
+    case "hero":
+      return `${newsThumbFrameClass} aspect-video w-full`;
+    case "sourceCard":
+    case "categoryCard":
+      return `${newsThumbFrameClass} aspect-[16/10] w-full`;
+    case "listThumb":
+      return `${newsThumbFrameClass} aspect-[16/10] h-full w-full`;
+  }
+}
+
 type Props = {
   article: Pick<HomeArticleCard, "thumbnail_url" | "title">;
   noImageLabel: string;
@@ -13,13 +47,16 @@ type Props = {
   useNextImage?: boolean;
   /**
    * contain (default): show full photo, letterbox on white — Hero / large cards.
-   * cover: fill fixed frame, center-crop — list thumbnails for visual uniformity.
+   * cover: fill fixed frame, center-crop — repeating card / list thumbs.
+   * Ignored when `variant` is set (variant wins).
    */
   objectFit?: "contain" | "cover";
+  /** Preferred: picks object-fit from the home thumbnail policy. */
+  variant?: NewsThumbVariant;
 };
 
 /**
- * Thumbnail inside a sized frame (`newsThumbFrameClass` + aspect/size on parent).
+ * Thumbnail inside a sized frame (`newsThumbFrameForVariant` / `newsThumbFrameClass`).
  * contain: flex-centered letterbox. cover: absolute fill + center crop.
  */
 export default function NewsThumbnail({
@@ -30,7 +67,12 @@ export default function NewsThumbnail({
   sizes = "100vw",
   useNextImage = true,
   objectFit = "contain",
+  variant,
 }: Props) {
+  const resolvedFit = variant
+    ? newsThumbFitForVariant(variant)
+    : objectFit;
+
   if (!article.thumbnail_url) {
     return (
       <div
@@ -44,7 +86,7 @@ export default function NewsThumbnail({
     );
   }
 
-  const isCover = objectFit === "cover";
+  const isCover = resolvedFit === "cover";
   const imgClass = isCover
     ? "absolute inset-0 h-full w-full object-cover object-center"
     : "h-auto max-h-full w-auto max-w-full object-contain object-center";
@@ -101,7 +143,3 @@ export default function NewsThumbnail({
     </div>
   );
 }
-
-/** Fixed thumbnail frame: keep card layout size; white letterbox; center child. */
-export const newsThumbFrameClass =
-  "relative overflow-hidden bg-white flex items-center justify-center";
