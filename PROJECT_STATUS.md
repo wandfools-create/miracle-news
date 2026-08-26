@@ -17,8 +17,8 @@
 | Vercel project name | 확인 필요 |
 | Supabase project name / ref | 저장소에 비밀값 없는 식별자가 없어 확인 필요 |
 | Stack | Next.js 16.1.7, React 19.2.3, TypeScript 5, Tailwind CSS 4, Supabase JS/SSR, Vercel, OpenAI, Discord, RSS Parser, Playwright |
-| Latest audited code commit | `98b23271abedb4d5ed6763e6c96009d5addf4b3b` |
-| Commit message/date | `Optimize admin performance and clean up public navigation` — 2026-08-26 04:30:14 UTC |
+| Production main commit | `97121d28719c6101a4810a96f35fb3f7becf141e` — `Merge pull request #4 from wandfools-create/fix/approved-same-event-ux` |
+| Vercel Production | 배포 성공 (`https://www.hannoon.co`) |
 
 비밀번호, API key, bot token, service-role key, webhook secret 등은 이 문서에 기록하지 않는다.
 
@@ -45,7 +45,10 @@ Vercel Production ── https://www.hannoon.co
 - **Supabase:** 기사, 수집 후보, 상태, 검토 및 운영 로그의 데이터 계층이다.
 - **Vercel:** Next.js Production과 두 지역 Desk cron을 실행한다.
 - **GitHub:** `main`이 배포 및 기술 상태의 공식 코드 기준이다.
-- **Production SHA:** Vercel 계정/배포 메타데이터 접근이 없어 현재 `main`과의 일치 여부는 확인 필요.
+- **Production SHA:** `97121d28719c6101a4810a96f35fb3f7becf141e` — Vercel Production 배포 성공.
+- **Discord workflow:** `기사 만들기 → quick_review → 사람 확인 → 공개` (PR #3 복구 완료)
+- **SAME EVENT:** 판정 및 공개 차단 유지. `/admin/approved` 차단 시 Application error 대신 안내·override UX (PR #4 배포 완료)
+- **직접 공개 workflow:** 비활성/제거 완료 (PR #3)
 
 ## 3. 현재 자동화 구조
 
@@ -133,6 +136,7 @@ Vercel Production ── https://www.hannoon.co
 - secret/token/key/password의 값 또는 원문을 로그에 출력하지 않는다.
 - 수집·추천·Discord 실패는 단계별로 격리하고 이전 단계 성공을 rollback하지 않는다.
 - Discord **기사 만들기**는 OpenAI를 한 번 호출할 수 있으나 `quick_review`에만 두고 자동 공개하지 않는다.
+- `/admin/approved` SAME EVENT 차단은 redirect 안내로 표시하며, 「그래도 공개」 명시적 override만 허용한다.
 
 ## 6. Discord 구조
 
@@ -202,7 +206,9 @@ Git history와 현재 코드에서 확인:
 - Insight 한국 뉴스 수집
 - US/International Desk와 Korea Desk 분리
 - Discord 빠른 기사 생성/검토 workflow
-- 알려진 인계 결과: `npm test` 191 tests 통과, build 성공 (현재 GitHub 환경에서 재실행하지 않음)
+- Discord quick_review Production 복구 완료 (PR #3)
+- `/admin/approved` SAME EVENT 공개 차단 UX 배포 완료 (PR #4) — Digest `272674686` 원인(throw 처리) 해소
+- 알려진 인계 결과: `npm test` 195 tests 통과, build 성공 (현재 GitHub 환경에서 재실행하지 않음)
 
 ## 9. 현재 미해결 문제
 
@@ -213,6 +219,8 @@ Git history와 현재 코드에서 확인:
 
 ### Needs monitoring
 
+- 승인→공개, SAME EVENT 차단 안내, 명시적 override가 필요한 실제 운영 사례
+- Discord `기사 만들기 → quick_review → 사람 확인 → 공개` 실제 운영 경로
 - 2~3일 지역별 Desk 실제 실행 안정성
 - Korea source별 실제 유입량과 HTML/Radar parser 안정성
 - SAME EVENT가 중복은 억제하면서 UPDATE / DIFFERENT ANGLE을 과도하게 차단하지 않는지
@@ -227,6 +235,8 @@ Git history와 현재 코드에서 확인:
 
 ### Legacy / no longer applicable
 
+- Discord `기사 만들기` 직접 공개 workflow: PR #3로 제거·비활성 완료
+- `/admin/approved` SAME EVENT 차단 Application error (Digest `272674686`): PR #4로 redirect 안내·override UX 배포 완료. 정상 차단을 throw로 처리하던 UX 문제였으며 데이터 손상 없음
 - 수정 대기 진입 시 OpenAI 자동 실행 문제: 해결됨
 - 기사 hard delete 전제: 현재 soft archive로 대체됨
 - 단일/옛 자동화와 Make 경로: 현행 regional Desk 핵심 코드에서 확인되지 않음; 실제 외부 Make scenario 활성 여부 확인 필요
@@ -236,7 +246,7 @@ Git history와 현재 코드에서 확인:
 
 **Status: IN PROGRESS**
 
-현재 Miracle News는 2~3일 실제 운영하면서 안정성을 확인하는 단계다. 완료 증거가 기록되기 전에는 **검증 완료**로 변경하지 않는다.
+현재 Miracle News는 2~3일 실제 운영하면서 안정성을 확인하는 단계다. 완료 증거가 기록되기 전에는 **검증 완료**로 변경하지 않는다. Discord quick_review 복구와 `/admin/approved` SAME EVENT UX 배포가 Production에 반영됐으며, 실제 승인→공개·차단 안내·override 운영 결과 확인이 남아 있다.
 
 검증 항목:
 
@@ -248,6 +258,7 @@ Git history와 현재 코드에서 확인:
 - SAME EVENT 중복 억제
 - 시스템 장애 알림
 - 빠른 기사 생성/검토/공개
+- 승인→공개 및 SAME EVENT 차단 안내·override
 - 관리자 속도
 - 모바일 화면
 
@@ -261,20 +272,22 @@ Git history와 현재 코드에서 확인:
 
 | 항목 | 값 |
 |---|---|
-| Audited branch | `main` |
-| Latest code SHA at audit start | `98b23271abedb4d5ed6763e6c96009d5addf4b3b` |
-| Commit | `Optimize admin performance and clean up public navigation` |
-| Commit date | 2026-08-26 04:30:14 UTC |
-| origin/main SHA | GitHub `main` 기준 위 SHA로 조사 시작 |
-| PROJECT_STATUS commit | 이 문서 생성 커밋은 위 코드 SHA 이후 |
+| Branch | `main` |
+| Production main commit | `97121d28719c6101a4810a96f35fb3f7becf141e` |
+| Vercel Production | 배포 성공 |
 | Production URL | https://www.hannoon.co |
-| Production = main | 확인 필요 — Vercel deployment SHA 조회 권한/메타데이터 없음 |
+| Discord workflow | 기사 만들기 → `quick_review` → 사람 확인 → 공개 |
+| SAME EVENT | 판정·공개 차단 유지; `/admin/approved` 차단 안내·명시적 override |
+| 직접 공개 workflow | 비활성/제거 완료 |
+| Restore PRs | #3 Discord quick_review · #4 approved SAME EVENT UX — merged |
+| Production = main | 예 — `97121d2` 배포 성공 |
 
 ## 12. 다음 최우선 작업
 
-1. 대규모 기능 추가보다 2~3일 Operational Validation을 완료한다.
-2. 날짜별 결과와 발견 문제를 이 문서에 기록한다.
-3. 안정성 확인 후 신규 하위 작업 **Miracle News Shorts AI** 1단계를 시작한다.
+1. 2~3일 Operational Validation을 진행하고 날짜별 결과를 이 문서에 기록한다.
+2. 실제 승인→공개, SAME EVENT 차단 안내, 명시적 override가 필요한 사례를 확인한다.
+3. Discord `기사 만들기 → quick_review → 사람 확인 → 공개` 실제 운영 결과를 확인한다.
+4. 안정성 확인 후 신규 하위 작업 **Miracle News Shorts AI** 1단계를 시작한다.
 
 Shorts 1단계:
 
@@ -285,14 +298,14 @@ Shorts 1단계:
 - 초기에는 영상 자동 생성·자동 게시까지 진행하지 않는다.
 - 기존 Miracle News source/DB를 이동·복제하지 않고 `published` 기사만 사용한다.
 
-## 12A. Miracle News Shorts AI 개발 현황
+## 12A. Miracle News Shorts Studio Phase 1
 
-- **상태:** Phase 1 기반 개발 진행 중
+- **상태:** 개발/검증 중
 - **작업 브랜치:** `feature/miracle-news-shorts-studio-v1`
-- **현재 구현:** `/admin/shorts` 제작실, 공개 기사 조회, 아침/저녁 회차 선택, 날짜 선택, 기사 3~5개 제한
-- **보안/운영:** `published + approved + is_published=true` 기사만 조회하며 자동 공개·영상 렌더링·외부 업로드 없음
-- **다음 구현:** 선택 기사에서 제목·Hook·60~90초 나레이션·장면별 자막·화면 구성안을 생성하고 초안으로 저장
-- **장기 목표:** 클라우드 영상 렌더링·영구 저장·사람 승인 후 YouTube/Instagram/Facebook 업로드. 로컬 Mac이 꺼져 있어도 동작하는 구조
+- **범위:** `published + approved + is_published=true` 공개 기사 조회, America/New_York 기준 날짜 선택, 오전(US/International)·저녁(Korea) 회차, 기사 3~5개 선택
+- **Desk 분류:** `lib/rss/collectRegions.ts` source key 기준 — Korea Herald(`korea-herald`)는 US/International(아침), Korea Desk는 `chosun`·`tvchosun`·`yonhap-kr-radar`·`insight`·`joongang`(예약)
+- **미구현:** AI 대본·자막·화면 구성안 생성, 자동 영상 제작, YouTube/Instagram/Facebook 업로드
+- **운영 원칙:** 사람 검토 원칙 유지, 자동 공개·Production DB write·schema 변경 없음
 
 ## 13. 문서 관리 규칙
 
@@ -306,8 +319,12 @@ Shorts 1단계:
 ---
 
 - **Last Updated:** 2026-08-26 UTC
-- **Shorts Development:** `feature/miracle-news-shorts-studio-v1` — Phase 1 foundation
-- **Latest Commit:** audited code `98b23271abedb4d5ed6763e6c96009d5addf4b3b`; PROJECT_STATUS 생성 커밋은 이후
-- **Production Status:** 운영 중, 배포 SHA 일치 여부 확인 필요
-- **Current Priority:** 2~3일 Operational Validation
-- **Next Review:** 운영 검증 결과가 추가될 때 또는 다음 Miracle News 작업 완료 시
+- **Production main commit:** `97121d28719c6101a4810a96f35fb3f7becf141e`
+- **Vercel Production:** 배포 성공 (`https://www.hannoon.co`)
+- **Discord workflow:** 기사 만들기 → quick_review → 사람 확인 → 공개
+- **SAME EVENT:** 판정·공개 차단 유지; `/admin/approved` 차단 안내·명시적 override 배포 완료
+- **Digest 272674686:** 정상 SAME EVENT 차단을 throw로 처리하던 UX 문제 — PR #4로 해소, 데이터 손상 없음
+- **Operational Validation:** IN PROGRESS
+- **Shorts Studio Phase 1:** 개발/검증 중 (`feature/miracle-news-shorts-studio-v1`)
+- **Current Priority:** 2~3일 운영 안정성 검증 + Shorts Phase 1 main 통합
+- **Next Review:** 실제 승인→공개, SAME EVENT 차단 안내, 명시적 override가 필요한 사례 확인 후

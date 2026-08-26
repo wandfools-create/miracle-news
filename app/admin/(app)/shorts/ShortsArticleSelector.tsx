@@ -2,6 +2,10 @@
 
 import { useMemo, useState } from "react";
 import {
+  formatAmericaNewYorkDateKey,
+  CRON_TIMEZONE,
+} from "@/lib/cron/americaNewYork";
+import {
   isArticleRecommendedForDesk,
   SHORTS_MAX_ARTICLES,
   validateShortsArticleCount,
@@ -20,18 +24,8 @@ export type ShortsPublishedArticle = {
   published_at: string | null;
 };
 
-function localDateKey(iso: string | null): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function todayKey(): string {
-  return localDateKey(new Date().toISOString());
+function todayEditDateKey(): string {
+  return formatAmericaNewYorkDateKey(new Date());
 }
 
 export default function ShortsArticleSelector({
@@ -40,12 +34,15 @@ export default function ShortsArticleSelector({
   articles: ShortsPublishedArticle[];
 }) {
   const [desk, setDesk] = useState<ShortsDesk>("morning");
-  const [date, setDate] = useState(todayKey);
+  const [date, setDate] = useState(todayEditDateKey);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showAllDesks, setShowAllDesks] = useState(false);
 
   const dated = useMemo(
-    () => articles.filter((article) => localDateKey(article.published_at) === date),
+    () =>
+      articles.filter(
+        (article) => formatAmericaNewYorkDateKey(article.published_at) === date
+      ),
     [articles, date]
   );
   const visible = useMemo(
@@ -85,7 +82,7 @@ export default function ShortsArticleSelector({
           </select>
         </label>
         <label className="text-sm font-medium">
-          기사 날짜
+          기사 날짜 ({CRON_TIMEZONE})
           <input
             type="date"
             value={date}
@@ -110,33 +107,56 @@ export default function ShortsArticleSelector({
         <p className="text-sm text-gray-600">
           선택 {selectedIds.length}/{SHORTS_MAX_ARTICLES} · 권장 3~5개
         </p>
-        <button
-          type="button"
-          disabled={!validation.ok}
-          title="다음 단계에서 AI 제작 패키지 생성 기능을 연결합니다."
-          className="rounded-xl bg-black px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-300"
-        >
-          제작안 생성 준비
-        </button>
       </div>
       {!validation.ok ? (
         <p className="mt-2 text-sm text-amber-700">{validation.message}</p>
       ) : (
         <p className="mt-2 text-sm text-green-700">
-          기사 선택이 완료되었습니다. AI 제작 패키지 연결 준비 상태입니다.
+          기사 {selectedIds.length}개 선택 완료. (Phase 1 — 선택만 저장되며 서버에 기록되지 않습니다.)
         </p>
       )}
+
+      <div
+        className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-700"
+        role="status"
+      >
+        <p className="font-semibold text-gray-900">AI 대본 생성 — 다음 단계</p>
+        <p className="mt-1">
+          Phase 1에서는 공개 기사 조회와 3~5개 선택만 제공합니다. Hook·나레이션·자막·화면
+          구성안 AI 생성은 아직 연결되지 않았습니다.
+        </p>
+        <button
+          type="button"
+          disabled
+          aria-disabled="true"
+          title="AI 대본 생성은 다음 단계에서 연결됩니다."
+          className="mt-3 cursor-not-allowed rounded-xl bg-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-600"
+        >
+          AI 대본 생성 (다음 단계)
+        </button>
+      </div>
 
       <div className="mt-6 space-y-4">
         {visible.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">
-            선택한 날짜와 회차에 맞는 공개 기사가 없습니다. 다른 Desk 기사 표시를 켜거나 날짜를 바꿔보세요.
+            선택한 날짜와 회차에 맞는 공개 기사가 없습니다. 다른 Desk 기사 표시를 켜거나
+            날짜를 바꿔보세요.
           </div>
         ) : (
           visible.map((article) => {
             const selected = selectedIds.includes(article.id);
             const title = article.title_ko || article.title_original || "제목 없음";
             const summary = article.summary_ko || article.summary_original || "요약 없음";
+            const publishedLabel = article.published_at
+              ? new Intl.DateTimeFormat("ko-KR", {
+                  timeZone: CRON_TIMEZONE,
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }).format(new Date(article.published_at))
+              : "발행 시각 없음";
             return (
               <article
                 key={article.id}
@@ -158,7 +178,7 @@ export default function ShortsArticleSelector({
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs text-gray-500">
-                        {article.source || "출처 미상"} · {article.published_at ? new Date(article.published_at).toLocaleString("ko-KR") : "발행 시각 없음"}
+                        {article.source || "출처 미상"} · {publishedLabel} ({CRON_TIMEZONE})
                       </p>
                       <h2 className="mt-1 text-lg font-semibold">{title}</h2>
                       <p className="mt-2 line-clamp-2 text-sm text-gray-600">{summary}</p>
