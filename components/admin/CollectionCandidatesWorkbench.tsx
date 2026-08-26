@@ -43,6 +43,7 @@ const SOURCE_LABELS: Record<string, string> = {
   sciencedaily: "ScienceDaily",
   chosun: "조선일보",
   tvchosun: "TV조선",
+  insight: "인사이트",
 };
 
 export type WorkbenchCandidate = {

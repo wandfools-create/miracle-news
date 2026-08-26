@@ -1,66 +1,13 @@
-/** Cheap, non-AI title overlap for same-event RSS duplicates. */
+/**
+ * Title similarity for RSS same-run / lookback dedupe.
+ * Korean tokens use min length 2; English keeps min length 4.
+ */
 
-const STOPWORDS = new Set([
-  "a",
-  "an",
-  "the",
-  "of",
-  "in",
-  "on",
-  "to",
-  "for",
-  "and",
-  "or",
-  "with",
-  "as",
-  "at",
-  "by",
-  "from",
-  "after",
-  "over",
-  "under",
-  "into",
-  "about",
-  "new",
-  "says",
-  "said",
-  "say",
-  "report",
-  "reports",
-  "latest",
-  "update",
-  "updates",
-  "breaking",
-  "watch",
-  "here",
-  "how",
-  "why",
-  "what",
-  "who",
-  "his",
-  "her",
-  "its",
-  "their",
-  "this",
-  "that",
-  "will",
-  "has",
-  "have",
-  "been",
-  "are",
-  "was",
-  "were",
-]);
+import { significantStoryTokens } from "@/lib/same-event/tokens";
 
+/** @deprecated Prefer significantStoryTokens — kept for callers. */
 export function significantTitleTokens(title: string): string[] {
-  const tokens = title
-    .toLowerCase()
-    .replace(/['’]/g, "")
-    .split(/[^a-z0-9가-힣]+/i)
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 4 && !STOPWORDS.has(t));
-
-  return [...new Set(tokens)];
+  return significantStoryTokens(title);
 }
 
 function jaccard(a: Set<string>, b: Set<string>): number {
@@ -73,19 +20,27 @@ function jaccard(a: Set<string>, b: Set<string>): number {
   return union === 0 ? 0 : shared / union;
 }
 
-/** Returns a previously seen title if this looks like the same story. */
+/**
+ * Returns a previously seen title if this looks like the same story.
+ * Korean: requires ≥2 significant tokens (names like 오세훈 count).
+ * English: still requires ≥4 tokens (unchanged strictness).
+ */
 export function findVerySimilarTitle(
   title: string,
   existingTitles: Iterable<string>
 ): string | null {
-  const tokens = significantTitleTokens(title);
-  if (tokens.length < 4) return null;
+  const tokens = significantStoryTokens(title);
+  const hangulHeavy = /[가-힣]/.test(title);
+  const minTokens = hangulHeavy ? 2 : 4;
+  if (tokens.length < minTokens) return null;
 
   const incoming = new Set(tokens);
 
   for (const existing of existingTitles) {
-    const otherTokens = significantTitleTokens(existing);
-    if (otherTokens.length < 4) continue;
+    const otherTokens = significantStoryTokens(existing);
+    const otherHangul = /[가-힣]/.test(existing);
+    const otherMin = otherHangul ? 2 : 4;
+    if (otherTokens.length < otherMin) continue;
 
     const other = new Set(otherTokens);
     let shared = 0;
@@ -95,9 +50,16 @@ export function findVerySimilarTitle(
 
     const score = jaccard(incoming, other);
     const subset =
-      shared === Math.min(incoming.size, other.size) && shared >= 5;
+      shared === Math.min(incoming.size, other.size) &&
+      shared >= (hangulHeavy || otherHangul ? 2 : 5);
 
-    if (score >= 0.72 || (shared >= 5 && score >= 0.55) || subset) {
+    const krHit =
+      (hangulHeavy || otherHangul) &&
+      (shared >= 2 && score >= 0.4 || shared >= 3 && score >= 0.28);
+    const enHit =
+      score >= 0.72 || (shared >= 5 && score >= 0.55) || subset;
+
+    if (krHit || enHit) {
       return existing;
     }
   }

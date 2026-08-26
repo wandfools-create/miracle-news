@@ -31,8 +31,8 @@ export type RssFeedSource = {
    * us-intl = 08:00 ET; korea = 20:00 ET.
    */
   collectRegion: CollectRegion;
-  /** Default: standard RSS via `feedUrl`. AP uses GraphQL; Yonhap KR uses news sitemaps. */
-  fetchKind?: "rss" | "ap-graphql" | "yna-sitemap-radar";
+  /** Default: standard RSS via `feedUrl`. AP GraphQL; Yonhap KR sitemaps; Insight HTML lists. */
+  fetchKind?: "rss" | "ap-graphql" | "yna-sitemap-radar" | "insight-section-list";
   apCategoryPath?: string;
   /**
    * Per-publisher insert cap for this sourceKey (default RSS_MAX_INSERTS_PER_FEED).
@@ -196,6 +196,46 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     sourceCountry: "KR",
     collectRegion: COLLECT_REGION_KOREA,
     maxInsertsPerRun: 3,
+  },
+  /**
+   * Insight Korea — no public RSS (403/404). Section HTML NewsArticle cards only.
+   * Soft/entertainment desks (/enter, /life, /trend) intentionally omitted.
+   */
+  {
+    sourceKey: "insight",
+    label: "인사이트",
+    feedUrl: "https://www.insight.co.kr/politics",
+    fetchKind: "insight-section-list",
+    sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_KOREA,
+    category: "politics",
+  },
+  {
+    sourceKey: "insight",
+    label: "인사이트",
+    feedUrl: "https://www.insight.co.kr/economy",
+    fetchKind: "insight-section-list",
+    sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_KOREA,
+    category: "economy",
+  },
+  {
+    sourceKey: "insight",
+    label: "인사이트",
+    feedUrl: "https://www.insight.co.kr/national",
+    fetchKind: "insight-section-list",
+    sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_KOREA,
+    category: "society",
+  },
+  {
+    sourceKey: "insight",
+    label: "인사이트",
+    feedUrl: "https://www.insight.co.kr/global",
+    fetchKind: "insight-section-list",
+    sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_KOREA,
+    category: "world",
   },
 ];
 

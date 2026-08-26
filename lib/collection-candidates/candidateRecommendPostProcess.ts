@@ -23,21 +23,11 @@ export type AiRecommendPostProcessOutput = AiRecommendPostProcessInput & {
   postProcessNote?: string;
 };
 
+import { SAME_EVENT_SOURCE_TRUST } from "@/lib/same-event/sourceTrust";
+
 /** Desk trust — higher keeps BEST when same-event cluster ties. */
 const SOURCE_TRUST_SCORE: Record<string, number> = {
-  ap: 100,
-  bbc: 98,
-  "pbs-newshour": 96,
-  csm: 94,
-  cnn: 90,
-  "fox-news": 88,
-  yonhap: 92,
-  "korea-herald": 90,
-  chosun: 88,
-  joongang: 88,
-  tvchosun: 86,
-  insight: 82,
-  sciencedaily: 84,
+  ...SAME_EVENT_SOURCE_TRUST,
 };
 
 const STOPWORDS = new Set([

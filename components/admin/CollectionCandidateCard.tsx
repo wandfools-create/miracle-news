@@ -14,6 +14,7 @@ const SOURCE_LABELS: Record<string, string> = {
   csm: "CSM",
   chosun: "조선일보",
   tvchosun: "TV조선",
+  insight: "인사이트",
   "yonhap-kr-radar": "연합뉴스 속보",
 };
 

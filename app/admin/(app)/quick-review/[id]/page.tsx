@@ -19,11 +19,19 @@ import {
   validateQuickPublishContent,
   type PublishArticleFields,
 } from "@/lib/articles/quickPublishGuards";
+import { previewPublishedSameEventForArticle } from "@/lib/same-event/previewPublishedSameEvent";
 import { supabase } from "@/lib/supabase";
 
 type PageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    sameEvent?: string;
+    matchId?: string;
+    matchTitle?: string;
+    matchSource?: string;
+    matchPublishedAt?: string;
+  }>;
 };
 
 function previewParagraphs(body: string | null, max = 3): string {
@@ -41,7 +49,8 @@ export default async function AdminQuickReviewDetailPage({
   searchParams,
 }: PageProps) {
   const { id } = await params;
-  const { error: errorParam } = await searchParams;
+  const search = await searchParams;
+  const { error: errorParam } = search;
 
   const { data: article, error } = await supabase
     .from("articles")
@@ -99,6 +108,27 @@ export default async function AdminQuickReviewDetailPage({
 
   const fields = article as PublishArticleFields;
   const contentCheck = validateQuickPublishContent(fields);
+  const sameEventPreview = await previewPublishedSameEventForArticle(id);
+  const sameEventFromRedirect =
+    search.sameEvent === "1" && search.matchId
+      ? {
+          id: search.matchId,
+          title: search.matchTitle || "(제목 없음)",
+          source: search.matchSource || "?",
+          publishedAt: search.matchPublishedAt || null,
+        }
+      : null;
+  const sameEventBlock =
+    sameEventFromRedirect ||
+    (sameEventPreview.blocked && sameEventPreview.match
+      ? {
+          id: sameEventPreview.match.id,
+          title: sameEventPreview.match.title,
+          source: sameEventPreview.match.source,
+          publishedAt: sameEventPreview.match.publishedAt,
+        }
+      : null);
+  const softWarning = sameEventPreview.softWarning;
   const titleKo =
     article.title_ko ||
     article.title_translated ||
@@ -123,7 +153,7 @@ export default async function AdminQuickReviewDetailPage({
         </p>
         <h1 className="mt-4 text-3xl font-bold tracking-tight">빠른 검토</h1>
         <p className="mt-2 text-sm text-gray-500">
-          {getArticleSourceLabel(article.source)} ·{" "}
+          {getArticleSourceLabel({ source: article.source })} ·{" "}
           {getCategoryLabel(article.category)} ·{" "}
           {formatDateTimeKo(article.collected_at)}
         </p>
@@ -132,6 +162,41 @@ export default async function AdminQuickReviewDetailPage({
           <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             {decodeURIComponent(errorParam)}
           </p>
+        ) : null}
+
+        {sameEventBlock ? (
+          <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <p className="font-semibold">유사한 공개 기사가 있습니다</p>
+            <p className="mt-2">{sameEventBlock.title}</p>
+            <p className="mt-1 text-amber-900/80">
+              {getArticleSourceLabel({ source: sameEventBlock.source })}
+              {sameEventBlock.publishedAt
+                ? ` · ${formatDateTimeKo(sameEventBlock.publishedAt)}`
+                : ""}
+            </p>
+            <Link
+              href={`/admin/review/${sameEventBlock.id}`}
+              className="mt-3 inline-flex text-sm font-medium underline"
+            >
+              기존 기사 확인
+            </Link>
+          </div>
+        ) : null}
+
+        {!sameEventBlock && softWarning ? (
+          <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+            <p className="font-medium">참고: 관련 공개 기사가 있을 수 있습니다</p>
+            <p className="mt-1">{softWarning.title}</p>
+            <p className="mt-1 text-xs text-gray-500">
+              {getArticleSourceLabel({ source: softWarning.source })}
+            </p>
+            <Link
+              href={`/admin/review/${softWarning.id}`}
+              className="mt-2 inline-flex text-sm underline"
+            >
+              기사 열기
+            </Link>
+          </div>
         ) : null}
 
         {!contentCheck.ok ? (
@@ -198,16 +263,30 @@ export default async function AdminQuickReviewDetailPage({
         ) : null}
 
         <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <form action={quickPublishFromForm}>
-            <input type="hidden" name="articleId" value={article.id} />
-            <button
-              type="submit"
-              disabled={!contentCheck.ok}
-              className="w-full rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-300 sm:w-auto"
-            >
-              ✅ 확인 후 바로 공개
-            </button>
-          </form>
+          {!sameEventBlock ? (
+            <form action={quickPublishFromForm}>
+              <input type="hidden" name="articleId" value={article.id} />
+              <button
+                type="submit"
+                disabled={!contentCheck.ok}
+                className="w-full rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-300 sm:w-auto"
+              >
+                ✅ 확인 후 바로 공개
+              </button>
+            </form>
+          ) : (
+            <form action={quickPublishFromForm}>
+              <input type="hidden" name="articleId" value={article.id} />
+              <input type="hidden" name="allowSameEventOverride" value="1" />
+              <button
+                type="submit"
+                disabled={!contentCheck.ok}
+                className="w-full rounded-xl border border-amber-600 bg-amber-600 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-300 sm:w-auto"
+              >
+                그래도 공개 (관리자 override)
+              </button>
+            </form>
+          )}
 
           <form action={sendQuickReviewToQueueFromForm}>
             <input type="hidden" name="articleId" value={article.id} />

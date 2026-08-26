@@ -27,6 +27,8 @@ export type PromoteCollectionCandidateResult =
       step: string;
       category?: RssEnrichFailureCategory;
       categoryLabel?: string;
+      sameEventArticleId?: string;
+      sameEventTitle?: string;
     };
 
 async function markCandidateFailed(input: {
@@ -78,7 +80,7 @@ export async function promoteCollectionCandidate(input: {
   const { data: existing, error: fetchError } = await client
     .from("collection_candidates")
     .select(
-      "id, source, original_url, rss_title, rss_guid, custom_unique_id, rss_published_at, status, article_id, enrich_attempt_count"
+      "id, source, original_url, rss_title, rss_summary, rss_title_ko, rss_summary_ko, rss_guid, custom_unique_id, rss_published_at, status, article_id, enrich_attempt_count, thumbnail_url"
     )
     .eq("id", candidateId)
     .maybeSingle();
@@ -90,6 +92,36 @@ export async function promoteCollectionCandidate(input: {
   const row = existing as CollectionCandidateRow | null;
   if (!row) {
     return { ok: false, error: "후보를 찾을 수 없습니다.", step: "fetch_candidate" };
+  }
+
+  // Block clear same-event before OpenAI enrich (Discord quick make + admin).
+  {
+    const { evaluatePublishedSameEventGuard, loadRecentPublishedForSameEvent } =
+      await import("@/lib/same-event/sameEventLookback");
+    const published = await loadRecentPublishedForSameEvent();
+    const guard = evaluatePublishedSameEventGuard(
+      {
+        title: row.rss_title,
+        summary: row.rss_summary,
+        titleAlt: row.rss_title_ko,
+        summaryAlt: row.rss_summary_ko,
+        source: row.source,
+        publishedAt: row.rss_published_at,
+        hasThumbnail: Boolean(
+          (row as { thumbnail_url?: string | null }).thumbnail_url?.trim()
+        ),
+      },
+      published
+    );
+    if (guard.blocked) {
+      return {
+        ok: false,
+        error: `⚠️ 이미 유사한 공개 기사가 있습니다: ${guard.match.title.slice(0, 120)}`,
+        step: "same_event_published",
+        sameEventArticleId: guard.match.id,
+        sameEventTitle: guard.match.title,
+      };
+    }
   }
 
   if (row.status === "enriched" && row.article_id) {

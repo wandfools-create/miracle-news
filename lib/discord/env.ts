@@ -59,6 +59,8 @@ export function getDiscordEnv(): DiscordEnv | null {
   };
 }
 
+export { getDiscordSystemAlertsChannelId } from "@/lib/discord/systemAlertsChannel";
+
 /** Interactions PING only needs the public key. */
 export function getDiscordPublicKey(): string | null {
   const raw = process.env.DISCORD_PUBLIC_KEY?.trim()

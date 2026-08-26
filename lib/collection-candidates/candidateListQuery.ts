@@ -24,6 +24,7 @@ export const CANDIDATE_SOURCE_FILTERS = [
   { key: "sciencedaily", label: "ScienceDaily" },
   { key: "chosun", label: "조선일보" },
   { key: "tvchosun", label: "TV조선" },
+  { key: "insight", label: "인사이트" },
 ] as const;
 
 export const CANDIDATE_DATE_FILTERS = [

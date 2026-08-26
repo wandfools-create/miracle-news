@@ -22,6 +22,8 @@ export type MorningBriefDiscordResult = {
   errors: string[];
   dryRun?: boolean;
   region?: CollectRegion | null;
+  /** best/priority items selected for brief (before send). */
+  briefEligibleCount: number;
 };
 
 export type MorningBriefCronResult = {
@@ -68,6 +70,7 @@ export async function runMorningBriefDiscord(options?: {
       errors: ["discord:env_not_configured"],
       dryRun: options?.dryRun,
       region,
+      briefEligibleCount: 0,
     };
   }
 
@@ -85,6 +88,7 @@ export async function runMorningBriefDiscord(options?: {
         errors: [`fetch:${itemsResult.error}`],
         dryRun: options?.dryRun,
         region,
+        briefEligibleCount: 0,
       };
     }
   } catch (err) {
@@ -95,8 +99,11 @@ export async function runMorningBriefDiscord(options?: {
       errors: [`fetch:exception:${String(err)}`],
       dryRun: options?.dryRun,
       region,
+      briefEligibleCount: 0,
     };
   }
+
+  const briefEligibleCount = itemsResult.items.length;
 
   for (const item of itemsResult.items) {
     const payload = buildMorningBriefPayload(item, "active");
@@ -149,6 +156,7 @@ export async function runMorningBriefDiscord(options?: {
     errors,
     dryRun: options?.dryRun,
     region,
+    briefEligibleCount,
   };
 }
 
@@ -190,6 +198,7 @@ export async function runMorningBriefCron(options?: {
       errors: [`discord:exception:${String(err)}`],
       dryRun: options?.dryRun,
       region,
+      briefEligibleCount: 0,
     };
     errors.push(...discord.errors);
   }

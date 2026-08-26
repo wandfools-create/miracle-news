@@ -23,7 +23,7 @@ export const US_INTL_SOURCE_KEYS = [
   "korea-herald",
 ] as const;
 
-/** Source keys for Korea evening desk (future: joongang, insight). */
+/** Source keys for Korea evening desk (joongang reserved — not collected yet). */
 export const KOREA_SOURCE_KEYS = [
   "chosun",
   "tvchosun",

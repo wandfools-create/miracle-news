@@ -23,7 +23,8 @@ export type MorningBriefMessageState =
   | "shortlisted"
   | "dismissed"
   | "article_created"
-  | "article_failed";
+  | "article_failed"
+  | "same_event_blocked";
 
 function formatPublishedAtKo(iso: string | null): string {
   if (!iso?.trim()) return "발행시각 없음";
@@ -52,7 +53,12 @@ export function quickReviewAdminUrl(articleId: string): string {
 export function formatMorningBriefMessageContent(
   item: MorningBriefItem,
   state: MorningBriefMessageState = "active",
-  extra?: { articleId?: string; error?: string }
+  extra?: {
+    articleId?: string;
+    error?: string;
+    sameEventArticleId?: string;
+    sameEventTitle?: string;
+  }
 ): string {
   const badge =
     item.aiRecommendGrade === "best" ? "⭐ BEST" : "🔥 우선 검토";
@@ -72,6 +78,14 @@ export function formatMorningBriefMessageContent(
     if (extra?.articleId) {
       lines.push(`기사 ID: ${extra.articleId}`);
     }
+  } else if (state === "same_event_blocked") {
+    lines.push(
+      "",
+      "⚠️ 이미 유사한 공개 기사가 있습니다",
+      extra?.sameEventTitle?.trim()
+        ? extra.sameEventTitle.trim().slice(0, 160)
+        : extra?.error?.replace(/^⚠️\s*/, "").slice(0, 160) || ""
+    );
   } else if (state === "article_failed") {
     lines.push(
       "",
@@ -106,7 +120,7 @@ export function buildMorningBriefComponents(
   candidateId: string,
   originalUrl: string,
   state: MorningBriefMessageState = "active",
-  extra?: { articleId?: string }
+  extra?: { articleId?: string; sameEventArticleId?: string }
 ): DiscordActionRow[] {
   if (state === "article_created" && extra?.articleId) {
     return [
@@ -118,6 +132,22 @@ export function buildMorningBriefComponents(
             style: 5,
             label: "빠른 검토 열기",
             url: quickReviewAdminUrl(extra.articleId),
+          },
+        ],
+      },
+    ];
+  }
+
+  if (state === "same_event_blocked" && extra?.sameEventArticleId) {
+    return [
+      {
+        type: 1,
+        components: [
+          {
+            type: 2,
+            style: 5,
+            label: "기존 공개 기사 열기",
+            url: absoluteUrl(`/admin/review/${extra.sameEventArticleId}`),
           },
         ],
       },
@@ -166,7 +196,12 @@ export function buildMorningBriefComponents(
 export function buildMorningBriefPayload(
   item: MorningBriefItem,
   state: MorningBriefMessageState = "active",
-  extra?: { articleId?: string; error?: string }
+  extra?: {
+    articleId?: string;
+    error?: string;
+    sameEventArticleId?: string;
+    sameEventTitle?: string;
+  }
 ): { content: string; components: DiscordActionRow[] } {
   return {
     content: formatMorningBriefMessageContent(item, state, extra),

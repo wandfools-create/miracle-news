@@ -32,7 +32,12 @@ describe("regional desk orchestrator cron (fixture only)", () => {
     assert.ok(isSourceInCollectRegion("korea-herald", COLLECT_REGION_US_INTL));
     assert.ok(!isSourceInCollectRegion("korea-herald", COLLECT_REGION_KOREA));
 
-    for (const key of ["chosun", "tvchosun", "yonhap-kr-radar"] as const) {
+    for (const key of [
+      "chosun",
+      "tvchosun",
+      "yonhap-kr-radar",
+      "insight",
+    ] as const) {
       assert.ok(isSourceInCollectRegion(key, COLLECT_REGION_KOREA));
       assert.ok(
         RSS_FEED_SOURCES.filter((f) => f.sourceKey === key).every(
@@ -48,13 +53,14 @@ describe("regional desk orchestrator cron (fixture only)", () => {
     const us = getActiveRssFeedSources(COLLECT_REGION_US_INTL);
     const kr = getActiveRssFeedSources(COLLECT_REGION_KOREA);
     assert.equal(us.length, 7);
-    assert.equal(kr.length, 9);
+    assert.equal(kr.length, 13);
     assert.deepEqual(
       getActiveRssPublisherKeys(COLLECT_REGION_US_INTL).sort(),
       [...US_INTL_SOURCE_KEYS].sort()
     );
     assert.deepEqual(getActiveRssPublisherKeys(COLLECT_REGION_KOREA).sort(), [
       "chosun",
+      "insight",
       "tvchosun",
       "yonhap-kr-radar",
     ]);
@@ -131,6 +137,7 @@ describe("regional desk orchestrator cron (fixture only)", () => {
     assert.match(orch, /runRegionalCollect/);
     assert.match(orch, /runMorningBriefRecommend/);
     assert.match(orch, /runMorningBriefDiscord/);
+    assert.match(orch, /maybeSendDeskSystemAlert/);
     assert.match(orch, /order:\s*\["collect",\s*"recommend",\s*"discord"\]/);
     assert.equal((orch.match(/try \{/g) ?? []).length >= 3, true);
     assert.doesNotMatch(orch, /from ["']@\/lib\/openai/);

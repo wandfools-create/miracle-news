@@ -8,6 +8,11 @@ import {
   type PublishArticleFields,
 } from "@/lib/articles/quickPublishGuards";
 import {
+  evaluatePublishedSameEventGuard,
+  loadRecentPublishedForSameEvent,
+  type SameEventPublishedRow,
+} from "@/lib/same-event/sameEventLookback";
+import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/serviceRole";
@@ -33,6 +38,7 @@ function slugify(value: string, fallback: string) {
 
 const PUBLISH_SELECT = `
   id,
+  source,
   published_at,
   title_original,
   body_original,
@@ -46,8 +52,36 @@ const PUBLISH_SELECT = `
   status,
   is_published,
   ai_review_status,
-  ai_review_notes
+  ai_review_notes,
+  thumbnail_url
 `;
+
+export type PublishArticleFieldsWithMeta = PublishArticleFields & {
+  source?: string | null;
+  thumbnail_url?: string | null;
+};
+
+export type SameEventPublishMatch = {
+  id: string;
+  source: string;
+  title: string;
+  publishedAt: string | null;
+};
+
+export type PublishArticleToLiveResult =
+  | {
+      ok: true;
+      publishedAt: string;
+      firstPublish: boolean;
+      softSameEventWarning?: SameEventPublishMatch;
+    }
+  | {
+      ok: false;
+      error: string;
+      step: string;
+      sameEventMatch?: SameEventPublishMatch;
+      softSameEventWarning?: SameEventPublishMatch;
+    };
 
 async function upsertLocalizations(
   client: ReturnType<typeof createServiceRoleSupabaseClient>["client"],
@@ -121,20 +155,27 @@ async function upsertLocalizations(
   }
 }
 
-export type PublishArticleToLiveResult =
-  | { ok: true; publishedAt: string; firstPublish: boolean }
-  | { ok: false; error: string; step: string };
+function toSameEventMatch(row: SameEventPublishedRow): SameEventPublishMatch {
+  return {
+    id: row.id,
+    source: row.source,
+    title: row.title,
+    publishedAt: row.published_at,
+  };
+}
 
 /**
  * Shared publish core (approved queue + quick review).
- * Order: localizations first → then published flags (avoids partial live state).
- * Never calls OpenAI.
+ * Order: same-event guard → localizations → published flags.
+ * Never calls OpenAI. Never deletes existing published articles.
  */
 export async function publishArticleToLive(
   articleId: string,
   options?: {
     /** When set, only transition from this review_status (race-safe). */
     requireReviewStatus?: string;
+    /** Admin override for clear same-event block. */
+    allowSameEventOverride?: boolean;
   }
 ): Promise<PublishArticleToLiveResult> {
   const envCheck = await checkSupabaseServiceEnvWithDns();
@@ -158,7 +199,7 @@ export async function publishArticleToLive(
     };
   }
 
-  const article = data as PublishArticleFields;
+  const article = data as PublishArticleFieldsWithMeta;
 
   if (article.is_published === true && article.status === "published") {
     return {
@@ -180,6 +221,36 @@ export async function publishArticleToLive(
   }
 
   const copy = resolvePublishCopy(article);
+  let softSameEventWarning: SameEventPublishMatch | undefined;
+
+  if (!options?.allowSameEventOverride) {
+    const published = await loadRecentPublishedForSameEvent();
+    const guard = evaluatePublishedSameEventGuard(
+      {
+        title: copy.koTitle || copy.enTitle,
+        summary: copy.koSummary || copy.enSummary,
+        titleAlt: copy.enTitle || copy.koTitle,
+        summaryAlt: copy.enSummary || copy.koSummary,
+        source: article.source ?? null,
+        publishedAt: article.published_at,
+        hasThumbnail: Boolean(article.thumbnail_url?.trim()),
+      },
+      published,
+      { excludeArticleId: articleId }
+    );
+
+    if (guard.blocked) {
+      return {
+        ok: false,
+        error: `유사한 공개 기사가 있습니다: ${guard.match.title.slice(0, 120)}`,
+        step: "same_event_guard",
+        sameEventMatch: toSameEventMatch(guard.match),
+      };
+    }
+    if (guard.softWarning) {
+      softSameEventWarning = toSameEventMatch(guard.softWarning);
+    }
+  }
 
   try {
     await upsertLocalizations(client, articleId, copy);
@@ -224,7 +295,12 @@ export async function publishArticleToLive(
     };
   }
 
-  return { ok: true, publishedAt: sitePublishedAt, firstPublish };
+  return {
+    ok: true,
+    publishedAt: sitePublishedAt,
+    firstPublish,
+    ...(softSameEventWarning ? { softSameEventWarning } : {}),
+  };
 }
 
 /**
@@ -233,7 +309,8 @@ export async function publishArticleToLive(
  * No OpenAI.
  */
 export async function quickPublishArticle(
-  articleId: string
+  articleId: string,
+  options?: { allowSameEventOverride?: boolean }
 ): Promise<
   | PublishArticleToLiveResult
   | {
@@ -242,6 +319,7 @@ export async function quickPublishArticle(
       step: string;
       errors?: string[];
       warnings?: string[];
+      sameEventMatch?: SameEventPublishMatch;
     }
 > {
   const envCheck = await checkSupabaseServiceEnvWithDns();
@@ -264,7 +342,7 @@ export async function quickPublishArticle(
     };
   }
 
-  const article = data as PublishArticleFields;
+  const article = data as PublishArticleFieldsWithMeta;
   if (!isQuickReviewArticle(article)) {
     return {
       ok: false,
@@ -286,6 +364,7 @@ export async function quickPublishArticle(
 
   return publishArticleToLive(articleId, {
     requireReviewStatus: ARTICLE_WORKFLOW.quickReview.review_status,
+    allowSameEventOverride: options?.allowSameEventOverride,
   });
 }
 

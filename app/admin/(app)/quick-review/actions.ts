@@ -48,8 +48,23 @@ export async function quickPublishFromForm(formData: FormData) {
     redirect("/admin/login");
   }
 
-  const result = await quickPublishArticle(articleId);
+  const override =
+    String(formData.get("allowSameEventOverride") ?? "").trim() === "1";
+
+  const result = await quickPublishArticle(articleId, {
+    allowSameEventOverride: override,
+  });
   if (!result.ok) {
+    if (result.step === "same_event_guard" && result.sameEventMatch) {
+      const q = new URLSearchParams({
+        sameEvent: "1",
+        matchId: result.sameEventMatch.id,
+        matchTitle: result.sameEventMatch.title.slice(0, 160),
+        matchSource: result.sameEventMatch.source,
+        matchPublishedAt: result.sameEventMatch.publishedAt || "",
+      });
+      redirect(`/admin/quick-review/${articleId}?${q.toString()}`);
+    }
     const msg = encodeURIComponent(result.error.slice(0, 200));
     redirect(`/admin/quick-review/${articleId}?error=${msg}`);
   }

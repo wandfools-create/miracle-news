@@ -65,11 +65,14 @@ describe("RSS ops expansion (fixture only, no OpenAI)", () => {
     assert.equal(getRssSourceHealthLabel("yonhap"), "비활성");
     const activeKeys = getActiveRssFeedSources().map((f) => f.sourceKey);
     assert.equal(activeKeys.includes("yonhap"), false);
-    assert.equal(getActiveRssFeedSources().length, 16);
-    assert.equal(getActiveRssPublisherKeys().length, 10);
+    assert.equal(getActiveRssFeedSources().length, 20);
+    assert.equal(getActiveRssPublisherKeys().length, 11);
     assert.ok(RSS_FEED_SOURCES.some((f) => f.sourceKey === "yonhap"));
     assert.ok(
       getActiveRssFeedSources().some((f) => f.sourceKey === "yonhap-kr-radar")
+    );
+    assert.ok(
+      getActiveRssFeedSources().some((f) => f.sourceKey === "insight")
     );
   });
 
@@ -134,7 +137,7 @@ describe("RSS ops expansion (fixture only, no OpenAI)", () => {
     ).length;
     const pass1Ceiling = mainPublishers * RSS_FIRST_PASS_INSERTS_PER_FEED;
     assert.ok(pass1Ceiling <= 30);
-    assert.equal(pass1Ceiling, 27);
+    assert.equal(pass1Ceiling, 30);
   });
 
   it("publisher quota shared: 3 from politics then 1 more max for same sourceKey", () => {
@@ -179,6 +182,8 @@ describe("RSS ops expansion (fixture only, no OpenAI)", () => {
     assert.match(src, /publisherSavedCount/);
     assert.match(src, /yonhap-kr-radar|YONHAP_KR_RADAR/);
     assert.match(src, /yna-sitemap-radar/);
+    assert.match(src, /insight-section-list/);
+    assert.match(src, /fetchInsightSectionListItems/);
     assert.match(src, /pass:\s*1/);
     assert.match(src, /pass:\s*2/);
     assert.match(src, /continuing other feeds/);

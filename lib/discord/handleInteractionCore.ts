@@ -53,7 +53,13 @@ export type MakeArticleFn = (input: {
   selectedBy?: string | null;
 }) => Promise<
   | { ok: true; articleId: string; alreadyEnriched?: boolean }
-  | { ok: false; error: string; step?: string }
+  | {
+      ok: false;
+      error: string;
+      step?: string;
+      sameEventArticleId?: string;
+      sameEventTitle?: string;
+    }
 >;
 
 export type EditOriginalMessageFn = (input: {
@@ -147,6 +153,22 @@ export async function handleDiscordComponentInteraction(
           });
 
           if (!result.ok) {
+            if (result.step === "same_event_published") {
+              const blocked = buildMorningBriefPayload(
+                item,
+                "same_event_blocked",
+                {
+                  error: result.error,
+                  sameEventArticleId: result.sameEventArticleId,
+                  sameEventTitle: result.sameEventTitle,
+                }
+              );
+              await editOriginal({
+                content: blocked.content,
+                components: blocked.components,
+              });
+              return;
+            }
             const failed = buildMorningBriefPayload(item, "article_failed", {
               error: result.error,
             });

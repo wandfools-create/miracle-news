@@ -7,6 +7,10 @@ import {
 import { findExistingArticleByOriginalUrl } from "@/lib/articles/findExistingArticleByOriginalUrl";
 import { resolveSubmittedUrl } from "@/lib/from-link/resolveSubmittedUrl";
 import { fetchApNewsFeedItems } from "@/lib/rss/fetchApNewsFeed";
+import {
+  fetchInsightSectionListItems,
+  insightSectionFromFeedUrl,
+} from "@/lib/rss/fetchInsightSectionList";
 import { fetchYonhapKrRadarItems } from "@/lib/rss/fetchYonhapKrRadar";
 import { logRssCollectItemSkipped } from "@/lib/rss/logRssCollectFailure";
 import {
@@ -14,6 +18,12 @@ import {
   getRssItemSkipReason,
 } from "@/lib/rss/rssItemPrefilter";
 import { findVerySimilarTitle } from "@/lib/rss/rssTitleSimilarity";
+import {
+  decideCollectSameEvent,
+  loadRecentCandidatesForSameEvent,
+  type SameEventCandidateRow,
+} from "@/lib/same-event/sameEventLookback";
+import type { StoryDoc } from "@/lib/same-event/classifySameEvent";
 import {
   emptyRssCollectCostStats,
   formatRssCollectCostNote,
@@ -84,6 +94,7 @@ type CollectRunContext = {
   remainingCandidateBudget: { value: number };
   recordDbWrite: () => void;
   seenTitles: string[];
+  recentSameEventCandidates: SameEventCandidateRow[];
 };
 
 async function loadRecentCandidateTitles(): Promise<string[]> {
@@ -279,6 +290,28 @@ async function processRssItem(
     return "duplicate";
   }
 
+  const incomingDoc: StoryDoc = {
+    title: item.title,
+    summary: item.summary ?? null,
+    source: feed.sourceKey,
+    publishedAt: item.publishedAt,
+    hasThumbnail: Boolean(item.thumbnailUrl?.trim()),
+  };
+  const sameEvent = decideCollectSameEvent(
+    incomingDoc,
+    ctx.recentSameEventCandidates
+  );
+  if (sameEvent.action === "suppress") {
+    await logRssCollectItemSkipped({
+      sourceLabel: feed.label,
+      originalUrl: link,
+      rssTitle: item.title,
+      reason: `same_event: suppressed vs ${sameEvent.existingSource} "${sameEvent.existingTitle.slice(0, 80)}" (${sameEvent.reason})`,
+      persistLogs: false,
+    });
+    return "duplicate";
+  }
+
   ctx.seenTitles.push(item.title);
 
   if (!ctx.options.save) {
@@ -324,6 +357,15 @@ async function processRssItem(
 
   ctx.costs.candidatesAdded += 1;
   ctx.recordDbWrite();
+  ctx.recentSameEventCandidates.unshift({
+    id: result.candidateId,
+    source: feed.sourceKey,
+    rss_title: item.title,
+    title: item.title,
+    summary: item.summary ?? null,
+    publishedAt: item.publishedAt,
+    hasThumbnail: Boolean(item.thumbnailUrl?.trim()),
+  });
 
   console.info("[collectRss] candidate saved", {
     candidateId: result.candidateId,
@@ -354,6 +396,22 @@ async function fetchFeedItems(
       return { ok: false, error: radar.error };
     }
     return { ok: true, items: radar.items };
+  }
+
+  if (feed.fetchKind === "insight-section-list") {
+    const section = insightSectionFromFeedUrl(feed.feedUrl);
+    if (!section) {
+      return { ok: false, error: "insight_unknown_section" };
+    }
+    const insight = await fetchInsightSectionListItems({
+      section,
+      listUrl: feed.feedUrl,
+      limit: RSS_MAX_ITEMS_PER_FEED,
+    });
+    if (!insight.ok) {
+      return { ok: false, error: insight.error };
+    }
+    return { ok: true, items: insight.items };
   }
 
   const parsed = await parseRssFeed(feed.feedUrl);
@@ -547,6 +605,7 @@ export async function collectRssToReviewQueue(
 
   const seenUrls = new Set<string>();
   const seenTitles = await loadRecentCandidateTitles();
+  const recentSameEventCandidates = await loadRecentCandidatesForSameEvent();
 
   const ctx: CollectRunContext = {
     options,
@@ -554,6 +613,7 @@ export async function collectRssToReviewQueue(
     remainingCandidateBudget,
     recordDbWrite,
     seenTitles,
+    recentSameEventCandidates,
   };
 
   if (!options.save) {

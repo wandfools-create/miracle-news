@@ -1,5 +1,6 @@
 /** Non-article RSS items: skip before from-link / OpenAI (AP, Fox, PBS, CSM). */
 
+import { getInsightCollectionSkipReason } from "@/lib/rss/insightCollectionPolicy";
 import { getSportsCollectionSkipReason } from "@/lib/rss/sportsCollectionPolicy";
 
 export const RSS_NON_ARTICLE_PATH_KEYWORDS = [
@@ -30,6 +31,7 @@ export const RSS_PREFILTER_SOURCE_KEYS = [
   "sciencedaily",
   "chosun",
   "tvchosun",
+  "insight",
 ] as const;
 
 /** TV조선 broadcast / clip / sports-desk titles (not general news). */
@@ -108,7 +110,8 @@ export type RssItemSkipReason = {
     | "similar_title"
     | "sports_policy"
     | "rss_category"
-    | "broadcast_title";
+    | "broadcast_title"
+    | "insight_policy";
   detail: string;
   summary: string;
 };
@@ -212,6 +215,21 @@ export function getRssItemSkipReason(
         code: "broadcast_title",
         detail: broadcast,
         summary: `TV조선 broadcast/clip title (${broadcast})`,
+      };
+    }
+  }
+
+  if (sourceKey === "insight") {
+    const insightSkip = getInsightCollectionSkipReason({
+      title: input.title,
+      summary: input.summary,
+      url: input.url,
+    });
+    if (insightSkip) {
+      return {
+        code: "insight_policy",
+        detail: insightSkip.detail,
+        summary: insightSkip.summary,
       };
     }
   }

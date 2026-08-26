@@ -9,6 +9,8 @@ import {
   collectJsonFromResult,
   runRegionalCollect,
 } from "@/lib/cron/runRegionalCollect";
+import { buildDeskRunAlertInput } from "@/lib/desk/buildDeskRunAlertInput";
+import { maybeSendDeskSystemAlert } from "@/lib/desk/sendDeskSystemAlert";
 import {
   runMorningBriefDiscord,
   runMorningBriefRecommend,
@@ -41,6 +43,7 @@ export type DeskStepDiscord =
       skipped: number;
       dryRun: boolean;
       errors: string[];
+      briefEligibleCount: number;
     }
   | {
       ok: false;
@@ -48,6 +51,7 @@ export type DeskStepDiscord =
       skipped: number;
       dryRun: boolean;
       errors: string[];
+      briefEligibleCount: number;
       error?: string;
     };
 
@@ -114,6 +118,7 @@ export async function runRegionalDeskOrchestrator(
       skipped: result.skipped,
       dryRun: result.dryRun ?? dryRun,
       errors: result.errors,
+      briefEligibleCount: result.briefEligibleCount,
       ...(result.ok ? {} : { error: result.errors[0] ?? "discord_failed" }),
     };
   } catch (err) {
@@ -124,8 +129,28 @@ export async function runRegionalDeskOrchestrator(
       skipped: 0,
       dryRun,
       errors: [String(err)],
+      briefEligibleCount: 0,
       error: String(err),
     };
+  }
+
+  let systemAlert: Awaited<ReturnType<typeof maybeSendDeskSystemAlert>> = {
+    sent: false,
+    reason: "none",
+  };
+  try {
+    systemAlert = await maybeSendDeskSystemAlert(
+      buildDeskRunAlertInput({
+        region,
+        dryRun,
+        collect,
+        recommend,
+        discord,
+      })
+    );
+  } catch (err) {
+    console.warn("[desk] system alert step failed (ignored)", { region, err });
+    systemAlert = { sent: false, reason: "send_failed", error: String(err) };
   }
 
   const ok = collect.ok || recommend.ok || discord.ok;
@@ -147,6 +172,7 @@ export async function runRegionalDeskOrchestrator(
       recommend,
       discord,
     },
+    systemAlert,
     vercelEnv: process.env.VERCEL_ENV ?? null,
   });
 }
