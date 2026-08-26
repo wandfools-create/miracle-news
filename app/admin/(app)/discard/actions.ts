@@ -4,40 +4,20 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
-  buildDiscardArticleUpdate,
-  buildRestoreDiscardedArticleUpdate,
-  evaluateDiscardEligibility,
-  evaluateRestoreEligibility,
-  partitionDiscardCandidates,
-} from "@/lib/admin/discardArticles";
-import { supabase } from "@/lib/supabase";
+  discardArticlesCore,
+  restoreDiscardedArticleCore,
+} from "@/lib/admin/discardArticlesCore";
+import { isAllowedAdminEmail } from "@/lib/admin/adminEmails";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export type DiscardArticlesResult = {
+export type DiscardArticlesActionResult = {
   ok: boolean;
   discardedCount: number;
   skippedCount: number;
-  skippedPublished: number;
-  skippedOther: number;
+  failedCount: number;
+  discardedIds: string[];
   error?: string;
 };
-
-function getArticleIdsFromFormData(formData: FormData): string[] {
-  const multi = formData
-    .getAll("articleIds")
-    .map((value) => String(value).trim())
-    .filter(Boolean);
-  if (multi.length > 0) return [...new Set(multi)];
-
-  const single = String(formData.get("articleId") ?? "").trim();
-  return single ? [single] : [];
-}
-
-function getReturnPath(formData: FormData): string {
-  const from = String(formData.get("from") ?? "").trim();
-  if (from === "revision") return "/admin/revision";
-  if (from === "archive") return "/admin/archive?tab=articles";
-  return "/admin/on-hold";
-}
 
 function revalidateDiscardPaths(articleIds: string[] = []) {
   revalidatePath("/admin/on-hold");
@@ -53,243 +33,155 @@ function revalidateDiscardPaths(articleIds: string[] = []) {
   }
 }
 
-/**
- * Soft-discard selected on-hold / revision articles → archived.
- * Never DELETE. Never touches published live articles.
- */
-export async function discardArticlesAction(
-  formData: FormData
-): Promise<void> {
-  const returnPath = getReturnPath(formData);
-  const articleIds = getArticleIdsFromFormData(formData);
+function getReturnPath(from: string): string {
+  if (from === "revision") return "/admin/revision";
+  if (from === "archive") return "/admin/archive?tab=articles";
+  return "/admin/on-hold";
+}
 
-  if (articleIds.length === 0) {
-    redirect(`${returnPath}?discardError=${encodeURIComponent("선택된 기사가 없습니다.")}`);
+function parseIdsFromFormData(formData: FormData): string[] {
+  const fromMulti = formData
+    .getAll("articleIds")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+  const fromCsv = String(formData.get("articleIdsCsv") ?? "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+  const single = String(formData.get("articleId") ?? "").trim();
+  return [...new Set([...fromMulti, ...fromCsv, ...(single ? [single] : [])])];
+}
+
+async function requireAdmin(): Promise<
+  { ok: true; email: string | null } | { ok: false; error: string }
+> {
+  const authClient = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+  if (!user || !isAllowedAdminEmail(user.email)) {
+    return { ok: false, error: "관리자만 폐기할 수 있습니다." };
   }
+  return { ok: true, email: user.email ?? null };
+}
 
-  const { data, error } = await supabase
-    .from("articles")
-    .select("id, status, review_status, is_published")
-    .in("id", articleIds);
-
-  if (error) {
-    redirect(
-      `${returnPath}?discardError=${encodeURIComponent(error.message)}`
-    );
-  }
-
-  const rows = data ?? [];
-  const foundIds = new Set(rows.map((r) => r.id));
-  const missing = articleIds.filter((id) => !foundIds.has(id)).length;
-
-  const { discardable, blocked } = partitionDiscardCandidates(rows);
-  const skippedPublished = blocked.filter(
-    (b) => b.blockReason.reason === "published"
-  ).length;
-  const skippedOther = blocked.length - skippedPublished + missing;
-
-  if (discardable.length === 0) {
-    redirect(
-      `${returnPath}?discarded=0&skipped=${blocked.length + missing}&discardError=${encodeURIComponent(
-        skippedPublished > 0
-          ? "공개 기사는 폐기할 수 없습니다."
-          : "폐기할 수 있는 기사가 없습니다."
-      )}`
-    );
-  }
-
-  const discardIds = discardable.map((r) => r.id);
-  const update = buildDiscardArticleUpdate();
-
-  const { data: updated, error: updateError } = await supabase
-    .from("articles")
-    .update(update)
-    .in("id", discardIds)
-    .eq("is_published", false)
-    .neq("status", "published")
-    .in("review_status", ["on_hold", "needs_revision"])
-    .select("id");
-
-  if (updateError) {
-    redirect(
-      `${returnPath}?discardError=${encodeURIComponent(updateError.message)}`
-    );
-  }
-
-  const discardedCount = updated?.length ?? 0;
-  const updateMiss =
-    discardIds.length - discardedCount + skippedOther + skippedPublished;
-
-  revalidateDiscardPaths(discardIds);
-
+function redirectWithDiscardResult(
+  returnPath: string,
+  result: Awaited<ReturnType<typeof discardArticlesCore>>
+): never {
   const params = new URLSearchParams();
-  params.set("discarded", String(discardedCount));
-  if (updateMiss > 0) params.set("skipped", String(updateMiss));
-  if (discardedCount < discardIds.length || skippedPublished > 0) {
+  params.set("discarded", String(result.discardedCount));
+  params.set(
+    "skipped",
+    String(result.skippedPublished + result.skippedOther)
+  );
+  params.set("failed", String(result.failedCount));
+  if (!result.ok || result.discardedCount === 0) {
     params.set(
       "discardError",
-      discardedCount === 0
-        ? "폐기 처리에 실패했습니다."
-        : `일부만 폐기됨 (${discardedCount}건 성공).`
+      result.error || "폐기된 기사 0건 — DB가 변경되지 않았습니다."
     );
+  } else if (result.error) {
+    params.set("discardError", result.error);
   }
-
   redirect(`${returnPath}?${params.toString()}`);
 }
 
-/** Restore archived (폐기) article to pending review — never publish. */
-export async function restoreDiscardedArticleAction(
-  formData: FormData
-): Promise<void> {
-  const articleId = String(formData.get("articleId") ?? "").trim();
-  if (!articleId) {
+/**
+ * Form / formAction entry: soft-discard → archived via service role.
+ * count=0 never counts as success.
+ */
+export async function discardArticlesAction(formData: FormData): Promise<void> {
+  const from = String(formData.get("from") ?? "on_hold").trim();
+  const returnPath = getReturnPath(from);
+
+  const auth = await requireAdmin();
+  if (!auth.ok) {
     redirect(
-      `/admin/archive?tab=articles&restoreError=${encodeURIComponent("기사 ID가 없습니다.")}`
+      `${returnPath}?discarded=0&discardError=${encodeURIComponent(auth.error)}`
     );
   }
 
-  const { data, error } = await supabase
-    .from("articles")
-    .select("id, status, review_status, is_published")
-    .eq("id", articleId)
-    .maybeSingle();
+  const articleIds = parseIdsFromFormData(formData);
+  const result = await discardArticlesCore(articleIds);
 
-  if (error) {
-    redirect(
-      `/admin/archive?tab=articles&restoreError=${encodeURIComponent(error.message)}`
-    );
-  }
-  if (!data) {
-    redirect(
-      `/admin/archive?tab=articles&restoreError=${encodeURIComponent("기사를 찾을 수 없습니다.")}`
-    );
+  if (result.discardedCount > 0) {
+    revalidateDiscardPaths(result.discardedIds);
   }
 
-  const eligibility = evaluateRestoreEligibility(data);
-  if (!eligibility.ok) {
-    redirect(
-      `/admin/archive?tab=articles&restoreError=${encodeURIComponent(
-        eligibility.reason === "published"
-          ? "공개 기사는 이 경로로 복구할 수 없습니다."
-          : "폐기(보관) 상태가 아닌 기사입니다."
-      )}`
-    );
-  }
-
-  const { error: updateError } = await supabase
-    .from("articles")
-    .update(buildRestoreDiscardedArticleUpdate())
-    .eq("id", articleId)
-    .eq("status", "archived")
-    .eq("review_status", "archived")
-    .eq("is_published", false);
-
-  if (updateError) {
-    redirect(
-      `/admin/archive?tab=articles&restoreError=${encodeURIComponent(updateError.message)}`
-    );
-  }
-
-  revalidateDiscardPaths([articleId]);
-  redirect("/admin/review?restored=1");
+  redirectWithDiscardResult(returnPath, result);
 }
 
-/** Programmatic helper for tests / callers that need a result object. */
-export async function discardArticlesByIds(
-  articleIds: string[]
-): Promise<DiscardArticlesResult> {
-  const unique = [...new Set(articleIds.map((id) => id.trim()).filter(Boolean))];
-  if (unique.length === 0) {
-    return {
-      ok: false,
-      discardedCount: 0,
-      skippedCount: 0,
-      skippedPublished: 0,
-      skippedOther: 0,
-      error: "no_ids",
-    };
-  }
+/**
+ * Explicit-ID entry for client collectors (avoids external checkbox FormData bugs).
+ * Returns a result object when `redirect=0`; otherwise redirects like the form action.
+ */
+export async function discardArticlesByIdsAction(
+  formData: FormData
+): Promise<DiscardArticlesActionResult | void> {
+  const from = String(formData.get("from") ?? "on_hold").trim();
+  const returnPath = getReturnPath(from);
+  const wantRedirect = String(formData.get("redirect") ?? "1") !== "0";
 
-  const { data, error } = await supabase
-    .from("articles")
-    .select("id, status, review_status, is_published")
-    .in("id", unique);
-
-  if (error) {
-    return {
-      ok: false,
-      discardedCount: 0,
-      skippedCount: unique.length,
-      skippedPublished: 0,
-      skippedOther: unique.length,
-      error: error.message,
-    };
-  }
-
-  const rows = data ?? [];
-  const { discardable, blocked } = partitionDiscardCandidates(rows);
-  const skippedPublished = blocked.filter(
-    (b) => b.blockReason.reason === "published"
-  ).length;
-  const missing = unique.length - rows.length;
-  const skippedOther =
-    blocked.length - skippedPublished + missing;
-
-  if (discardable.length === 0) {
-    return {
-      ok: false,
-      discardedCount: 0,
-      skippedCount: blocked.length + missing,
-      skippedPublished,
-      skippedOther,
-      error: skippedPublished > 0 ? "published_blocked" : "none_discardable",
-    };
-  }
-
-  const discardIds = discardable.map((r) => r.id);
-  // Guard: double-check each id is still eligible (defensive)
-  for (const row of discardable) {
-    const again = evaluateDiscardEligibility(row);
-    if (!again.ok) {
+  const auth = await requireAdmin();
+  if (!auth.ok) {
+    if (!wantRedirect) {
       return {
         ok: false,
         discardedCount: 0,
-        skippedCount: unique.length,
-        skippedPublished,
-        skippedOther: unique.length - skippedPublished,
-        error: "eligibility_changed",
+        skippedCount: 0,
+        failedCount: 0,
+        discardedIds: [],
+        error: auth.error,
       };
     }
+    redirect(
+      `${returnPath}?discarded=0&discardError=${encodeURIComponent(auth.error)}`
+    );
   }
 
-  const { data: updated, error: updateError } = await supabase
-    .from("articles")
-    .update(buildDiscardArticleUpdate())
-    .in("id", discardIds)
-    .eq("is_published", false)
-    .neq("status", "published")
-    .in("review_status", ["on_hold", "needs_revision"])
-    .select("id");
+  const articleIds = parseIdsFromFormData(formData);
+  const result = await discardArticlesCore(articleIds);
 
-  if (updateError) {
+  if (result.discardedCount > 0) {
+    revalidateDiscardPaths(result.discardedIds);
+  }
+
+  if (!wantRedirect) {
     return {
-      ok: false,
-      discardedCount: 0,
-      skippedCount: unique.length,
-      skippedPublished,
-      skippedOther,
-      error: updateError.message,
+      ok: result.ok && result.discardedCount > 0,
+      discardedCount: result.discardedCount,
+      skippedCount: result.skippedPublished + result.skippedOther,
+      failedCount: result.failedCount,
+      discardedIds: result.discardedIds,
+      error:
+        result.discardedCount === 0
+          ? result.error || "폐기된 기사 0건"
+          : result.error,
     };
   }
 
-  const discardedCount = updated?.length ?? 0;
-  revalidateDiscardPaths(discardIds);
+  redirectWithDiscardResult(returnPath, result);
+}
 
-  return {
-    ok: discardedCount > 0,
-    discardedCount,
-    skippedCount: unique.length - discardedCount,
-    skippedPublished,
-    skippedOther: unique.length - discardedCount - skippedPublished,
-  };
+export async function restoreDiscardedArticleAction(
+  formData: FormData
+): Promise<void> {
+  const auth = await requireAdmin();
+  if (!auth.ok) {
+    redirect(
+      `/admin/archive?tab=articles&restoreError=${encodeURIComponent(auth.error)}`
+    );
+  }
+
+  const articleId = String(formData.get("articleId") ?? "").trim();
+  const result = await restoreDiscardedArticleCore(articleId);
+  if (!result.ok) {
+    redirect(
+      `/admin/archive?tab=articles&restoreError=${encodeURIComponent(result.error)}`
+    );
+  }
+
+  revalidateDiscardPaths([result.articleId]);
+  redirect("/admin/review?restored=1");
 }

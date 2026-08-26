@@ -1,13 +1,12 @@
 import Link from "next/link";
 import AdminListPager from "@/components/admin/AdminListPager";
-import DiscardConfirmSubmitButton from "@/components/admin/DiscardConfirmSubmitButton";
+import DiscardArticlesButton from "@/components/admin/DiscardArticlesButton";
 import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
 import {
   ADMIN_LIST_PAGE_SIZE,
   adminListRange,
   parseAdminListPage,
 } from "@/lib/admin/listPagination";
-import { discardArticlesAction } from "@/app/admin/(app)/discard/actions";
 import { supabase } from "../../../../lib/supabase";
 import SelectAllReviewCheckbox from "../review/SelectAllReviewCheckbox";
 import { bulkResumeToReview, resumeToReview } from "./actions";
@@ -58,6 +57,7 @@ export default async function AdminOnHoldPage({
     page?: string;
     discarded?: string;
     skipped?: string;
+    failed?: string;
     discardError?: string;
   }>;
 }) {
@@ -65,6 +65,7 @@ export default async function AdminOnHoldPage({
   const page = parseAdminListPage(params.page);
   const discarded = params.discarded?.trim();
   const skipped = params.skipped?.trim();
+  const failed = params.failed?.trim();
   const discardError = params.discardError?.trim();
   const { from, to } = adminListRange(page);
 
@@ -122,10 +123,11 @@ export default async function AdminOnHoldPage({
 
         {discarded != null ? (
           <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-            {discarded}건을 폐기(보관)했습니다.
-            {skipped && Number(skipped) > 0
-              ? ` (건너뜀 ${skipped}건)`
-              : null}
+            {Number(discarded) > 0
+              ? `${discarded}건을 폐기(보관)했습니다.`
+              : "폐기된 기사 0건 — DB가 변경되지 않았습니다."}
+            {skipped && Number(skipped) > 0 ? ` · 건너뜀 ${skipped}건` : null}
+            {failed && Number(failed) > 0 ? ` · 실패 ${failed}건` : null}
           </div>
         ) : null}
         {discardError ? (
@@ -163,11 +165,7 @@ export default async function AdminOnHoldPage({
                   선택 기사 검토 대기로 보내기
                 </button>
 
-                <input type="hidden" name="from" value="on_hold" />
-                <DiscardConfirmSubmitButton
-                  mode="bulk"
-                  formAction={discardArticlesAction}
-                />
+                <DiscardArticlesButton mode="bulk" from="on_hold" />
               </div>
             </form>
 
@@ -270,11 +268,11 @@ export default async function AdminOnHoldPage({
                           </button>
                         </form>
 
-                        <form action={discardArticlesAction}>
-                          <input type="hidden" name="articleId" value={article.id} />
-                          <input type="hidden" name="from" value="on_hold" />
-                          <DiscardConfirmSubmitButton mode="single" />
-                        </form>
+                        <DiscardArticlesButton
+                          mode="single"
+                          from="on_hold"
+                          articleId={article.id}
+                        />
                       </div>
                     </div>
                   </div>

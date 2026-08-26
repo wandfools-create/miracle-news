@@ -1,8 +1,7 @@
 import Link from "next/link";
 import RevisionArticleActions from "@/components/admin/RevisionArticleActions";
 import AdminListPager from "@/components/admin/AdminListPager";
-import DiscardConfirmSubmitButton from "@/components/admin/DiscardConfirmSubmitButton";
-import { discardArticlesAction } from "@/app/admin/(app)/discard/actions";
+import DiscardArticlesButton from "@/components/admin/DiscardArticlesButton";
 import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
 import {
   ADMIN_LIST_PAGE_SIZE,
@@ -52,6 +51,7 @@ type PageProps = {
     page?: string;
     discarded?: string;
     skipped?: string;
+    failed?: string;
     discardError?: string;
   }>;
 };
@@ -61,6 +61,7 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
   const { aiError } = params;
   const discarded = params.discarded?.trim();
   const skipped = params.skipped?.trim();
+  const failed = params.failed?.trim();
   const discardError = params.discardError?.trim();
   const page = parseAdminListPage(params.page);
   const { from, to } = adminListRange(page);
@@ -131,10 +132,11 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
 
         {discarded != null ? (
           <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-            {discarded}건을 폐기(보관)했습니다.
-            {skipped && Number(skipped) > 0
-              ? ` (건너뜀 ${skipped}건)`
-              : null}
+            {Number(discarded) > 0
+              ? `${discarded}건을 폐기(보관)했습니다.`
+              : "폐기된 기사 0건 — DB가 변경되지 않았습니다."}
+            {skipped && Number(skipped) > 0 ? ` · 건너뜀 ${skipped}건` : null}
+            {failed && Number(failed) > 0 ? ` · 실패 ${failed}건` : null}
           </div>
         ) : null}
         {discardError ? (
@@ -163,11 +165,7 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
                   targetName="articleIds"
                   label="전체 선택"
                 />
-                <input type="hidden" name="from" value="revision" />
-                <DiscardConfirmSubmitButton
-                  mode="bulk"
-                  formAction={discardArticlesAction}
-                />
+                <DiscardArticlesButton mode="bulk" from="revision" />
               </div>
             </form>
 
@@ -268,15 +266,13 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
                           aiReviewNotes={article.ai_review_notes}
                         />
 
-                        <form action={discardArticlesAction} className="mt-3">
-                          <input
-                            type="hidden"
-                            name="articleId"
-                            value={article.id}
+                        <div className="mt-3">
+                          <DiscardArticlesButton
+                            mode="single"
+                            from="revision"
+                            articleId={article.id}
                           />
-                          <input type="hidden" name="from" value="revision" />
-                          <DiscardConfirmSubmitButton mode="single" />
-                        </form>
+                        </div>
                       </div>
                     </div>
                   </article>

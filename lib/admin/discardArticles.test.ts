@@ -153,20 +153,33 @@ describe("admin article discard (fixture only)", () => {
     assert.match(discardConfirmMessage(7), /기본 작업 목록에서 제외/);
   });
 
-  it("actions soft-update only — no DELETE / no new migration", () => {
+  it("core uses service role + treats update count=0 as error", () => {
+    const core = readFileSync(
+      join(process.cwd(), "lib/admin/discardArticlesCore.ts"),
+      "utf8"
+    );
+    assert.match(core, /createServiceRoleSupabaseClient/);
+    assert.match(core, /update_zero/);
+    assert.match(core, /discardedCount === 0/);
+    assert.doesNotMatch(core, /\.delete\(/);
+    assert.match(core, /archived/);
+    assert.match(core, /on_hold/);
+    assert.match(core, /needs_revision/);
+
     const actions = readFileSync(
       join(process.cwd(), "app/admin/(app)/discard/actions.ts"),
       "utf8"
     );
-    assert.match(actions, /\.update\(/);
-    assert.doesNotMatch(actions, /\.delete\(/);
-    assert.match(actions, /archived/);
-    assert.match(actions, /on_hold|needs_revision/);
+    assert.match(actions, /discardArticlesCore/);
+    assert.match(actions, /isAllowedAdminEmail/);
+    assert.match(actions, /articleIdsCsv/);
 
-    const core = readFileSync(
-      join(process.cwd(), "lib/admin/discardArticles.ts"),
+    const button = readFileSync(
+      join(process.cwd(), "components/admin/DiscardArticlesButton.tsx"),
       "utf8"
     );
-    assert.match(core, /no hard DELETE/i);
+    assert.match(button, /discardArticlesByIdsAction/);
+    assert.match(button, /articleIdsCsv/);
+    assert.match(button, /router\.refresh/);
   });
 });
