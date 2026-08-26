@@ -285,6 +285,15 @@ Shorts 1단계:
 - 초기에는 영상 자동 생성·자동 게시까지 진행하지 않는다.
 - 기존 Miracle News source/DB를 이동·복제하지 않고 `published` 기사만 사용한다.
 
+## 12A. Miracle News Shorts AI 개발 현황
+
+- **상태:** Phase 1 기반 개발 진행 중
+- **작업 브랜치:** `feature/miracle-news-shorts-studio-v1`
+- **현재 구현:** `/admin/shorts` 제작실, 공개 기사 조회, 아침/저녁 회차 선택, 날짜 선택, 기사 3~5개 제한
+- **보안/운영:** `published + approved + is_published=true` 기사만 조회하며 자동 공개·영상 렌더링·외부 업로드 없음
+- **다음 구현:** 선택 기사에서 제목·Hook·60~90초 나레이션·장면별 자막·화면 구성안을 생성하고 초안으로 저장
+- **장기 목표:** 클라우드 영상 렌더링·영구 저장·사람 승인 후 YouTube/Instagram/Facebook 업로드. 로컬 Mac이 꺼져 있어도 동작하는 구조
+
 ## 13. 문서 관리 규칙
 
 - 모든 Miracle News 작업은 최신 GitHub `main`과 이 문서를 먼저 확인한다.
