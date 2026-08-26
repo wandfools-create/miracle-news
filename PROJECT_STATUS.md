@@ -12,13 +12,13 @@
 | 공식 코드 기준 | GitHub `main` |
 | GitHub repository | https://github.com/wandfools-create/miracle-news |
 | 로컬 개발 폴더 | `/Users/WithMo/Documents/News/miracle-news` (특정 Mac의 작업 폴더이며 다른 AI 환경에서 접근 가능하다고 전제하지 않음) |
-| Branch | 복구 작업 브랜치 `fix/restore-discord-quick-review` (공식 기준은 GitHub `main`) |
+| Branch | `main` |
 | Production URL | https://www.hannoon.co |
 | Vercel project name | 확인 필요 |
 | Supabase project name / ref | 저장소에 비밀값 없는 식별자가 없어 확인 필요 |
 | Stack | Next.js 16.1.7, React 19.2.3, TypeScript 5, Tailwind CSS 4, Supabase JS/SSR, Vercel, OpenAI, Discord, RSS Parser, Playwright |
-| Production main commit | `484f46cb62964b35d6a27eadd4d4b3766ebdf5a3` — `Publish Discord-created articles directly (#2)` |
-| Restore commit (배포 대기) | `067270c28a1eb8d38a4f45345bbdee827625d6ee` — `Restore Discord quick-review workflow` |
+| Production main commit | `292bc216fd352d5fa9e7fa8904045e3f159c0e41` — `Merge pull request #3 from wandfools-create/fix/restore-discord-quick-review` |
+| Vercel Production | 배포 성공 (`https://www.hannoon.co`) |
 
 비밀번호, API key, bot token, service-role key, webhook secret 등은 이 문서에 기록하지 않는다.
 
@@ -45,9 +45,9 @@ Vercel Production ── https://www.hannoon.co
 - **Supabase:** 기사, 수집 후보, 상태, 검토 및 운영 로그의 데이터 계층이다.
 - **Vercel:** Next.js Production과 두 지역 Desk cron을 실행한다.
 - **GitHub:** `main`이 배포 및 기술 상태의 공식 코드 기준이다.
-- **Production SHA:** 현재 Production `main`은 `484f46cb62964b35d6a27eadd4d4b3766ebdf5a3`로 기록한다. 이 SHA에는 Discord **기사 만들기** 직접 공개가 포함되어 있다.
-- **복구 상태:** `067270c28a1eb8d38a4f45345bbdee827625d6ee`로 quick_review workflow 복구가 준비됐으나 **배포 대기**다. 배포 전 Production은 직접 공개 방식을 유지한다.
-- **복구 후 목표 workflow:** `Discord 기사 만들기 → quick_review → 사람 확인 → 공개`
+- **Production SHA:** `292bc216fd352d5fa9e7fa8904045e3f159c0e41` — Vercel Production 배포 성공.
+- **Discord workflow:** `기사 만들기 → quick_review → 사람 확인 → 공개`
+- **직접 공개 workflow:** 비활성/제거 완료 (PR #3 병합·배포 반영)
 
 ## 3. 현재 자동화 구조
 
@@ -204,6 +204,7 @@ Git history와 현재 코드에서 확인:
 - Insight 한국 뉴스 수집
 - US/International Desk와 Korea Desk 분리
 - Discord 빠른 기사 생성/검토 workflow
+- Discord quick_review Production 복구 완료 (PR #3, `292bc21`)
 - 알려진 인계 결과: `npm test` 191 tests 통과, build 성공 (현재 GitHub 환경에서 재실행하지 않음)
 
 ## 9. 현재 미해결 문제
@@ -215,14 +216,14 @@ Git history와 현재 코드에서 확인:
 
 ### Needs monitoring
 
-- Production에 Discord 직접 공개(`484f46c`)가 아직 적용되어 있음 → quick_review 복구(`067270c`) **배포 대기**
 - 최근 승인 완료 후 server-side exception 사례가 있었으나 **현재 재현되지 않음** (원인 확정 전 모니터링)
+- Discord `기사 만들기 → quick_review → 사람 확인 → 공개` 실제 운영 경로
 - 2~3일 지역별 Desk 실제 실행 안정성
 - Korea source별 실제 유입량과 HTML/Radar parser 안정성
 - SAME EVENT가 중복은 억제하면서 UPDATE / DIFFERENT ANGLE을 과도하게 차단하지 않는지
 - Discord Brief·interaction·system alerts 전달
 - 관리자 성능과 모바일 16:10 렌더링
-- Vercel Production 배포 SHA와 복구 브랜치/merge 반영 여부
+- Vercel Production 배포 SHA와 GitHub `main` 일치 여부
 
 ### Planned
 
@@ -231,6 +232,7 @@ Git history와 현재 코드에서 확인:
 
 ### Legacy / no longer applicable
 
+- Discord `기사 만들기` 직접 공개 workflow: PR #3로 제거·비활성 완료 (`292bc21` Production 배포)
 - 수정 대기 진입 시 OpenAI 자동 실행 문제: 해결됨
 - 기사 hard delete 전제: 현재 soft archive로 대체됨
 - 단일/옛 자동화와 Make 경로: 현행 regional Desk 핵심 코드에서 확인되지 않음; 실제 외부 Make scenario 활성 여부 확인 필요
@@ -240,7 +242,7 @@ Git history와 현재 코드에서 확인:
 
 **Status: IN PROGRESS**
 
-현재 Miracle News는 2~3일 실제 운영하면서 안정성을 확인하는 단계다. 완료 증거가 기록되기 전에는 **검증 완료**로 변경하지 않는다. 최우선은 Discord quick_review workflow의 Production 복구 배포와 그 이후 검토→공개 경로 확인이다.
+현재 Miracle News는 2~3일 실제 운영하면서 안정성을 확인하는 단계다. 완료 증거가 기록되기 전에는 **검증 완료**로 변경하지 않는다. Discord quick_review workflow는 Production에 복구 완료됐으며, 이후 실제 운영 결과 확인이 남아 있다.
 
 검증 항목:
 
@@ -265,19 +267,19 @@ Git history와 현재 코드에서 확인:
 
 | 항목 | 값 |
 |---|---|
-| Production main commit | `484f46cb62964b35d6a27eadd4d4b3766ebdf5a3` |
-| Production Discord workflow | 직접 공개 방식 적용 중 (`기사 만들기` → 안전 검사 통과 시 즉시 공개) |
-| Restore branch | `fix/restore-discord-quick-review` |
-| Restore commit | `067270c28a1eb8d38a4f45345bbdee827625d6ee` |
-| Restore status | **배포 대기** |
-| 복구 후 목표 workflow | Discord 기사 만들기 → `quick_review` → 사람 확인 → 공개 |
+| Branch | `main` |
+| Production main commit | `292bc216fd352d5fa9e7fa8904045e3f159c0e41` |
+| Vercel Production | 배포 성공 |
 | Production URL | https://www.hannoon.co |
-| Production = restore | 아직 아님 — 복구 배포 전 |
+| Discord workflow | 기사 만들기 → `quick_review` → 사람 확인 → 공개 |
+| 직접 공개 workflow | 비활성/제거 완료 |
+| Restore PR | #3 — merged |
+| Production = main | 예 — `292bc21` 배포 성공 |
 
 ## 12. 다음 최우선 작업
 
-1. Discord quick_review workflow를 Production에 복구한다 (`067270c` 배포).
-2. 복구 후 `기사 만들기 → quick_review → 사람 확인 → 공개` 경로를 Operational Validation에 기록한다.
+1. 2~3일 Operational Validation을 진행하고 날짜별 결과를 이 문서에 기록한다.
+2. Discord `기사 만들기 → quick_review → 사람 확인 → 공개` 실제 운영 결과를 확인한다.
 3. 승인 후 server-side exception 재발 여부를 계속 모니터링한다.
 4. 안정성 확인 후 신규 하위 작업 **Miracle News Shorts AI** 1단계를 시작한다.
 
@@ -302,9 +304,10 @@ Shorts 1단계:
 ---
 
 - **Last Updated:** 2026-08-26 UTC
-- **Production main commit:** `484f46cb62964b35d6a27eadd4d4b3766ebdf5a3` (Discord 직접 공개 적용 중)
-- **Restore commit:** `067270c28a1eb8d38a4f45345bbdee827625d6ee` — **배포 대기**
-- **복구 후 목표 workflow:** Discord 기사 만들기 → quick_review → 사람 확인 → 공개
+- **Production main commit:** `292bc216fd352d5fa9e7fa8904045e3f159c0e41`
+- **Vercel Production:** 배포 성공 (`https://www.hannoon.co`)
+- **Discord workflow:** 기사 만들기 → quick_review → 사람 확인 → 공개
+- **직접 공개 workflow:** 비활성/제거 완료
 - **Operational Validation:** IN PROGRESS
-- **Current Priority:** Discord quick_review workflow Production 복구
-- **Next Review:** 복구 배포 후 Discord/검토/공개 경로와 exception 재발 여부 확인 시
+- **Current Priority:** 2~3일 운영 안정성 검증
+- **Next Review:** Discord 기사 생성 → quick_review → 사람 확인 → 공개 실제 운영 결과 확인 후
