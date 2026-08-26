@@ -216,7 +216,7 @@ Git history와 현재 코드에서 확인:
 
 ### Needs monitoring
 
-- 최근 승인 완료 후 server-side exception 사례가 있었으나 **현재 재현되지 않음** (원인 확정 전 모니터링)
+- 승인 후「공개」시 SAME EVENT 차단이 Application error로 보이던 UX: 로컬에서 `/admin/approved` 안내·override로 수정 중(배포 전). 판정 로직 자체는 정상
 - Discord `기사 만들기 → quick_review → 사람 확인 → 공개` 실제 운영 경로
 - 2~3일 지역별 Desk 실제 실행 안정성
 - Korea source별 실제 유입량과 HTML/Radar parser 안정성
