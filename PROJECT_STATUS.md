@@ -336,7 +336,7 @@ Git history와 현재 코드에서 확인:
 
 - **Digest 272674686:** 정상 SAME EVENT 차단을 throw로 처리하던 UX 문제 — PR #4로 해소, 데이터 손상 없음
 - **Last Updated:** 2026-08-27 UTC
-- **Latest Commit:** `d212dd5824866bb80511d2c3dd62f90bbcbd9361` — PROJECT_STATUS finalize
+- **Latest Commit:** `4b2d9fcf92b64133aaac0c0d83975bf96dd26f89` — PROJECT_STATUS finalize
 - **Production main commit:** `6c185cfebffc8e9745cac544e8e54d6c19e8a62f`
 - **Vercel Production:** 배포 성공 (`https://www.hannoon.co`)
 - **Discord workflow:** 기사 만들기 → quick_review → 사람 확인 → 공개
