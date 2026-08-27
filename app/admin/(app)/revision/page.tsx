@@ -2,6 +2,7 @@ import Link from "next/link";
 import RevisionArticleActions from "@/components/admin/RevisionArticleActions";
 import AdminListPager from "@/components/admin/AdminListPager";
 import DiscardArticlesButton from "@/components/admin/DiscardArticlesButton";
+import RestorePublishedFromRevisionButton from "@/components/admin/RestorePublishedFromRevisionButton";
 import { getAdminNavCounts } from "@/lib/admin/adminNavCounts";
 import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
 import {
@@ -121,8 +122,9 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
         <p className="mt-3 text-sm leading-6 text-gray-600 sm:mt-4 sm:text-base">
           수정 요청이 들어간 기사입니다. 기본 {ADMIN_LIST_PAGE_SIZE}건씩 불러옵니다.
           페이지를 열거나 새로고침해도 OpenAI는 호출되지 않습니다. AI 재작성은
-          「AI로 수정」버튼을 눌렀을 때만 실행됩니다. 더 이상 필요 없는 기사는
-          폐기할 수 있으며,{" "}
+          「AI로 수정」버튼을 눌렀을 때만 실행됩니다. 이전에 공개됐던 기사는
+          「수정 없이 다시 공개」로 기존 공개 내용을 그대로 복구할 수 있습니다.
+          더 이상 필요 없는 기사는 폐기할 수 있으며,{" "}
           <Link href="/admin/archive?tab=articles" className="underline">
             보관함
           </Link>
@@ -168,8 +170,9 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
               <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border bg-gray-50 p-4">
                 <SelectAllReviewCheckbox
                   targetName="articleIds"
-                  label="전체 선택"
+                  label="현재 페이지 전체 선택"
                 />
+                <RestorePublishedFromRevisionButton mode="bulk" />
                 <DiscardArticlesButton mode="bulk" from="revision" />
               </div>
             </form>
@@ -283,7 +286,11 @@ export default async function AdminRevisionPage({ searchParams }: PageProps) {
                           }
                         />
 
-                        <div className="mt-3">
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          <RestorePublishedFromRevisionButton
+                            mode="single"
+                            articleId={article.id}
+                          />
                           <DiscardArticlesButton
                             mode="single"
                             from="revision"

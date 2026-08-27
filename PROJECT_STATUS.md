@@ -209,6 +209,7 @@ Git history와 현재 코드에서 확인:
 - Discord quick_review Production 복구 완료 (PR #3)
 - `/admin/approved` SAME EVENT 공개 차단 UX 배포 완료 (PR #4) — Digest `272674686` 원인(throw 처리) 해소
 - Miracle News Shorts Studio Phase 1 Production 배포 완료 (PR #1) — `/admin/shorts`
+- 수정 대기에서 이전 공개 상태로 복구하는 기능 로컬 개발 (AI 수정 없이 기존 공개 콘텐츠 복원; Production DB write·배포 전; 약 50개 실제 복구는 아직 실행하지 않음)
 - 알려진 인계 결과: `npm test` 199 tests 통과, build 성공
 
 ## 9. 현재 미해결 문제
@@ -334,5 +335,6 @@ Git history와 현재 코드에서 확인:
 - **Digest 272674686:** 정상 SAME EVENT 차단을 throw로 처리하던 UX 문제 — PR #4로 해소, 데이터 손상 없음
 - **Operational Validation:** IN PROGRESS
 - **Shorts Studio Phase 1:** Production 반영 완료 (`/admin/shorts`, PR #1)
+- **Revision restore (local):** 수정 대기 → 이전 공개 상태 복구 기능 로컬 개발 중 (배포·실DB 복구 전)
 - **Current Priority:** Shorts Studio 실제 운영 확인 및 AI 제작 패키지 2단계 준비
 - **Next Review:** Shorts Phase 1 운영 확인 및 Operational Validation 날짜별 기록 후
