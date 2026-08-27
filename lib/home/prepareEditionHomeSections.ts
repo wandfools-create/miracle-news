@@ -16,6 +16,7 @@ import {
 } from "./editorialRanking";
 import { pickTrendingIssues } from "./pickTrendingIssues";
 import { pickSidebarLatestArticles } from "./pickSidebarLatest";
+import { repairHomeCategory } from "@/lib/editorialPolicy/homeCategoryRepair";
 import type { HomeArticleCard, HomePageSections } from "./types";
 
 const TOP_STORIES_PER_COLUMN = 6;
@@ -25,6 +26,19 @@ export type EditionColumnLabels = {
   rightTitle: string;
 };
 
+function withRepairedCategories(articles: HomeArticleCard[]): HomeArticleCard[] {
+  return articles.map((article) => {
+    const next = repairHomeCategory({
+      category: article.category,
+      title: article.title,
+      summary: article.summary,
+      source: article.source,
+    });
+    if (next === (article.category ?? "other")) return article;
+    return { ...article, category: next };
+  });
+}
+
 export function prepareEditionHomeSections(
   articles: HomeArticleCard[],
   pageLocale: ArticleLocale,
@@ -32,7 +46,8 @@ export function prepareEditionHomeSections(
   options?: { featuredPool?: HomeArticleCard[]; nowMs?: number }
 ): HomePageSections {
   const nowMs = options?.nowMs ?? Date.now();
-  const featuredPool = options?.featuredPool ?? articles;
+  const featuredPool = withRepairedCategories(options?.featuredPool ?? articles);
+  const allArticles = withRepairedCategories(articles);
   const corePool = filterHomeCoreEligible(featuredPool, nowMs);
   const sortedCore = sortHomeArticlesForDisplay(corePool, nowMs);
 
@@ -74,7 +89,7 @@ export function prepareEditionHomeSections(
 
   // Source leads may use full published pool (outlet archive character).
   const sourceLeadMap: Record<string, HomeArticleCard> = {};
-  for (const article of sortArticlesByEditorialScore(articles, nowMs)) {
+  for (const article of sortArticlesByEditorialScore(allArticles, nowMs)) {
     const sourceKey = normalizeSource(article.source);
     if (!sourceLeadMap[sourceKey]) {
       sourceLeadMap[sourceKey] = article;
@@ -106,7 +121,7 @@ export function prepareEditionHomeSections(
 
   // Category archive: full pool (past articles remain reachable via tabs).
   const groupedByCategory: Record<string, HomeArticleCard[]> = {};
-  for (const article of sortHomeArticlesForDisplay(articles, nowMs)) {
+  for (const article of sortHomeArticlesForDisplay(allArticles, nowMs)) {
     const key = article.category ?? "other";
     if (!groupedByCategory[key]) groupedByCategory[key] = [];
     groupedByCategory[key].push(article);

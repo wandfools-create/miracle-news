@@ -355,6 +355,7 @@ describe("Discord desk (fixture only, no OpenAI/Discord/RSS)", () => {
     assert.match(content, /⭐ BEST/);
     assert.match(content, /Headline/);
     assert.match(content, /특종 후보/);
+    assert.match(content, /AI 추천 ≠ 자동 공개/);
 
     const payload = buildMorningBriefPayload(
       {

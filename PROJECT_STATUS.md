@@ -215,11 +215,15 @@ Git history와 현재 코드에서 확인:
 - Miracle News Shorts Studio Phase 1 Production 배포 완료 (PR #1) — `/admin/shorts`
 - 수정 대기 → 이전 공개 상태 복구 Production 배포 및 50건 실제 복구 완료 (PR #6) — AI 재작성 없음; `published_at`/localization/slug 보존; 공개→수정 대기 confirm 추가
 - 홈페이지 신문형 3열·카테고리 내비 Production 반영 완료 (PR #7) — 왼쪽 지금 주목 · 중앙 본문 · 오른쪽 지금 뜨는 이슈
-- 홈 editorial ranking Phase 1: **Draft PR #8** (`feature/home-editorial-ranking-v1`) — pin 72h 만료·핵심 영역 7일 제한·event family 다양성 적용; Production 배포·migration·stale DB flag 정리 전
+- 홈 editorial ranking Phase 1: **Production 적용 완료** (PR #8 merged → `39d9b8886ed594cdb856a9644d34d951b0b2bd29`) — pin 72h·7일 핵심·event family 다양성
   - featured + 「지금 주목」: 동일 event family 최대 2건 (두 번째는 UPDATE/DIFFERENT ANGLE만)
-  - snapshot 컬럼 write는 `ARTICLES_AI_RECOMMEND_SNAPSHOT=1`일 때만 (기본 OFF)
+  - snapshot 컬럼 write는 `ARTICLES_AI_RECOMMEND_SNAPSHOT=1`일 때만 (기본 OFF) — **migration 미적용**
   - 홈 ranking은 `collection_candidates.article_id` 조인 fallback 유지
   - stale top-story `54ca435f…`는 코드에서 홈 핵심 미노출; DB `is_top_story`는 별도 승인 후 정리
+- 정치·경제 편집 정책: **개발/Draft PR** (`feature/editorial-policy-politics-economy-v1`) — Preview 전 · Production 미배포
+  - **완료:** 공식 정책 문서, AI prompt/post-process 가중, 홈 policy points, Discord beat·관점 표시, 카테고리 표시 repair, Shorts 선택·균형 브리핑 타입/가이드
+  - **미완료:** 정치·경제 전용 수집 feed 확대, Production 수집 비중 55%, Shorts PR #5 패키지 연결, OpenAI 균형 대본 실검증, 관리자 균형 검토 UI, 영상 제작·업로드
+  - 7일 READ-ONLY 추정(~20% PE / bias 시뮬 ~23%)은 **목표 달성·수집 개선 완료가 아님**
 - 알려진 인계 결과: `npm test` / `npm run build`는 해당 브랜치에서 재검증
 
 ## 9. 현재 미해결 문제
@@ -289,7 +293,7 @@ Git history와 현재 코드에서 확인:
 | 항목 | 값 |
 |---|---|
 | Branch | `main` |
-| Production main commit | `90c2b75cf41c008eff808eeb719174674fef2ee3` |
+| Production main commit | `39d9b8886ed594cdb856a9644d34d951b0b2bd29` |
 | Vercel Production | 배포 성공 |
 | Production URL | https://www.hannoon.co |
 | Discord workflow | 기사 만들기 → `quick_review` → 사람 확인 → 공개 |
@@ -298,17 +302,20 @@ Git history와 현재 코드에서 확인:
 | 직접 공개 workflow | 비활성/제거 완료 |
 | Restore PRs | #3 Discord quick_review · #4 approved SAME EVENT UX · #6 revision restore — merged |
 | Home UI | PR #7 merged — Production 반영 완료 |
-| Home editorial ranking | Phase 1 **로컬 개발/검증 중** (`feature/home-editorial-ranking-v1`) — 배포·migration 적용 전 |
+| Home editorial ranking | PR #8 merged — **Production 적용 완료** (`39d9b88…`) |
+| Editorial policy (politics/economy) | Draft branch `feature/editorial-policy-politics-economy-v1` — Preview 전 |
 | Shorts Studio | PR #1 merged (Phase 1) · PR #5 OPEN (Phase 2 package, 보존) |
-| Production = main | 예 — `90c2b75` (PR #7 포함) |
+| articles AI snapshot migration | **미적용** (`20260827_articles_ai_recommend_snapshot.sql`) |
+| Shorts package migration | 기존 적용 상태 보존 (이 작업에서 변경 없음) |
+| Production = main | 예 — `39d9b88` (PR #8 포함) |
 
 ## 12. 다음 최우선 작업
 
-1. 홈 editorial ranking Phase 1 (`feature/home-editorial-ranking-v1`) 로컬 검증 완료 후 Preview → Production 검토 (migration 파일은 배포 전 별도 적용).
-2. Shorts Phase 2 재개 전 2~3일 Production 운영 안정성을 확인하고 날짜별 결과를 이 문서에 기록한다.
-3. Shorts Studio Phase 1(`/admin/shorts`) 실제 운영 확인 — published 기사 조회·날짜·Desk 분류·기사 선택.
-4. Shorts PR #5(AI production package)는 OPEN 상태로 보존; Phase 2 재개 시 별도 review.
-5. 실제 승인→공개, SAME EVENT 차단 안내, 명시적 override가 필요한 사례를 계속 확인한다.
+1. 정치·경제 편집 정책 Draft PR 검증 → Preview → (승인 후) Production.
+2. Shorts PR #5에 최신 main 일반 merge 후 `adviseShortsSelection` / `buildBalanceBriefing` 연결.
+3. 수집 후속: 기존 politics/business/world feed 조사 · 제목 pre-classification · 55%는 권장(하드 쿼타 아님).
+4. Shorts Studio Phase 1(`/admin/shorts`) 실제 운영 확인.
+5. 승인→공개 · SAME EVENT override 사례 계속 확인.
 
 ## 12A. Miracle News Shorts Studio Phase 1
 
@@ -346,16 +353,18 @@ Git history와 현재 코드에서 확인:
 
 - **Digest 272674686:** 정상 SAME EVENT 차단을 throw로 처리하던 UX 문제 — PR #4로 해소, 데이터 손상 없음
 - **Last Updated:** 2026-08-27 UTC
-- **Latest Commit:** `90c2b75cf41c008eff808eeb719174674fef2ee3` — Merge PR #7 home sidebar (main tip; editorial ranking uncommitted)
-- **Production main commit:** `90c2b75cf41c008eff808eeb719174674fef2ee3`
-- **Vercel Production:** 배포 성공 (`https://www.hannoon.co`) — 홈 PR #7 Production 반영 완료
+- **Latest Commit (Production main):** `39d9b8886ed594cdb856a9644d34d951b0b2bd29` — Merge PR #8 home editorial ranking
+- **Production main commit:** `39d9b8886ed594cdb856a9644d34d951b0b2bd29`
+- **Vercel Production:** 배포 성공 (`https://www.hannoon.co`) — PR #7 UI + PR #8 ranking 반영
 - **Discord workflow:** 기사 만들기 → quick_review → 사람 확인 → 공개
 - **SAME EVENT:** 판정·공개 차단 유지; `/admin/approved` 차단 안내·명시적 override 배포 완료
-- **Revision restore (PR #6):** Production 배포 완료; 수정 대기 50건 복구 완료 (AI 재작성 없음; `published_at`/localization/slug 보존)
-- **Operational Validation:** IN PROGRESS — 50건 복구 결과 기록 완료
+- **Revision restore (PR #6):** Production 배포 완료; 수정 대기 50건 복구 완료
+- **Operational Validation:** IN PROGRESS
 - **Shorts Studio Phase 1:** Production 반영 완료 (`/admin/shorts`, PR #1)
-- **Shorts PR #5:** OPEN — Phase 2 package 보존 (변경·병합 없음)
-- **Home PR #7:** Production 반영 완료 (신문형 3열·카테고리 내비)
-- **Home editorial ranking Phase 1:** 로컬 개발/검증 중 (`feature/home-editorial-ranking-v1`) — Production 배포·migration 적용 전
-- **Current Priority:** 홈 editorial ranking Phase 1 검증 · Shorts Phase 2는 PR #5 보존
-- **Next Review:** editorial ranking Preview 후 Production 검토 · Shorts Phase 2는 별도
+- **Shorts PR #5:** OPEN — Phase 2 package 보존 (이 작업에서 변경·병합 없음)
+- **articles AI snapshot migration:** 미적용
+- **Shorts package migration:** 기존 적용 상태 보존
+- **Home PR #7 / #8:** Production 반영 완료
+- **Editorial policy (politics/economy):** Draft branch 개발 중 — Preview 전 · Production 미배포
+- **Current Priority:** 정치·경제 편집 정책 검증 → Shorts 균형 브리핑 연결
+- **Next Review:** editorial-policy Draft PR Preview · 이후 PR #5에 main 일반 merge

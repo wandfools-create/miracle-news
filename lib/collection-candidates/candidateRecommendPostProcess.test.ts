@@ -146,8 +146,8 @@ describe("candidateRecommendPostProcess (fixture only, no OpenAI)", () => {
     assert.equal(clusters[0]?.length, 2);
   });
 
-  it("does not promote grades from rules alone", () => {
-    const processed = applyAiRecommendPostProcess([
+  it("does not promote to best from rules alone; PE may rise to priority", () => {
+    const pe = applyAiRecommendPostProcess([
       item(
         "x",
         "normal",
@@ -155,6 +155,18 @@ describe("candidateRecommendPostProcess (fixture only, no OpenAI)", () => {
         "Major escalation in the region."
       ),
     ]);
-    assert.equal(processed[0]?.grade, "normal");
+    assert.notEqual(pe[0]?.grade, "best");
+    assert.equal(pe[0]?.grade, "priority");
+
+    const soft = applyAiRecommendPostProcess([
+      item(
+        "y",
+        "normal",
+        "Local garden club hosts bake sale",
+        "Neighbors share recipes.",
+        { score: 40 }
+      ),
+    ]);
+    assert.equal(soft[0]?.grade, "normal");
   });
 });

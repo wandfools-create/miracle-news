@@ -10,6 +10,7 @@
  * 5. site published_at freshness
  */
 import { normalizeSource } from "@/lib/article/normalizeSource";
+import { homePolicyPoints } from "@/lib/editorialPolicy/signals";
 import {
   getEditorialFreshnessTimestamp,
   HOME_SURFACE_FALLBACK_MS,
@@ -117,6 +118,8 @@ export type EditorialScoreBreakdown = {
   aiScore: number;
   editorialPriority: number;
   freshness: number;
+  /** Politics/economy / mega-event / soft-news policy layer (PR editorial-policy). */
+  policy: number;
 };
 
 function articleKey(article: HomeArticleCard): string {
@@ -243,13 +246,24 @@ export function computeEditorialScore(
     );
   }
 
+  const policy = isHomeCoreEligible(article, nowMs)
+    ? homePolicyPoints({
+        title: article.title,
+        summary: article.summary,
+        source: article.source,
+        category: article.category,
+        source_country: article.source_country,
+      })
+    : 0;
+
   const total =
     topStory +
     manualPriority +
     aiGrade +
     aiScore +
     editorialPriority +
-    freshness;
+    freshness +
+    policy;
 
   return {
     total,
@@ -259,6 +273,7 @@ export function computeEditorialScore(
     aiScore,
     editorialPriority,
     freshness,
+    policy,
   };
 }
 
