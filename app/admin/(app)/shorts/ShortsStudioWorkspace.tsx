@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
 import {
   formatAmericaNewYorkDateKey,
   CRON_TIMEZONE,
@@ -11,6 +13,8 @@ import {
   validateShortsArticleCount,
   type ShortsDesk,
 } from "@/lib/shorts/shortsPolicy";
+import { generateShortsPackageAction } from "./actions";
+import type { ShortsProductionPackageRecord } from "@/lib/shorts/shortsPackageTypes";
 
 export type ShortsPublishedArticle = {
   id: string;
@@ -28,15 +32,29 @@ function todayEditDateKey(): string {
   return formatAmericaNewYorkDateKey(new Date());
 }
 
-export default function ShortsArticleSelector({
+function deskLabel(desk: ShortsDesk): string {
+  return desk === "morning" ? "아침뉴스" : "저녁뉴스";
+}
+
+export default function ShortsStudioWorkspace({
   articles,
+  recentPackages,
+  storeBlocked = false,
+  storeError = null,
 }: {
   articles: ShortsPublishedArticle[];
+  recentPackages: ShortsProductionPackageRecord[];
+  storeBlocked?: boolean;
+  storeError?: string | null;
 }) {
+  const router = useRouter();
   const [desk, setDesk] = useState<ShortsDesk>("morning");
   const [date, setDate] = useState(todayEditDateKey);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showAllDesks, setShowAllDesks] = useState(false);
+  const [error, setError] = useState<string | null>(storeError);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
   const dated = useMemo(
     () =>
@@ -53,8 +71,10 @@ export default function ShortsArticleSelector({
     [dated, desk, showAllDesks]
   );
   const validation = validateShortsArticleCount(selectedIds.length);
+  const canGenerate = validation.ok && !pending && !storeBlocked;
 
   function toggle(id: string) {
+    if (storeBlocked) return;
     setSelectedIds((current) => {
       if (current.includes(id)) return current.filter((value) => value !== id);
       if (current.length >= SHORTS_MAX_ARTICLES) return current;
@@ -65,6 +85,37 @@ export default function ShortsArticleSelector({
   function changeDesk(next: ShortsDesk) {
     setDesk(next);
     setSelectedIds([]);
+    setError(storeError);
+    setNotice(null);
+  }
+
+  function handleGenerate() {
+    if (!canGenerate) return;
+    setError(null);
+    setNotice(null);
+
+    const formData = new FormData();
+    formData.set("desk", desk);
+    formData.set("editDate", date);
+    formData.set("articleIds", JSON.stringify(selectedIds));
+
+    startTransition(async () => {
+      const result = await generateShortsPackageAction(formData);
+      if (!result.ok) {
+        const dupNote =
+          result.removedDuplicates && result.removedDuplicates.length > 0
+            ? `\n제거된 중복: ${result.removedDuplicates.map((d) => d.id).join(", ")}`
+            : "";
+        setError(`${result.error}${dupNote}`);
+        return;
+      }
+      if (result.removedDuplicates.length > 0) {
+        setNotice(
+          `SAME EVENT 중복 ${result.removedDuplicates.length}건을 제외하고 패키지를 생성했습니다.`
+        );
+      }
+      router.push(`/admin/shorts/packages/${result.packageId}`);
+    });
   }
 
   return (
@@ -89,6 +140,7 @@ export default function ShortsArticleSelector({
             onChange={(event) => {
               setDate(event.target.value);
               setSelectedIds([]);
+              setError(null);
             }}
             className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2"
           />
@@ -107,34 +159,72 @@ export default function ShortsArticleSelector({
         <p className="text-sm text-gray-600">
           선택 {selectedIds.length}/{SHORTS_MAX_ARTICLES} · 권장 3~5개
         </p>
+        <button
+          type="button"
+          disabled={!canGenerate}
+          onClick={handleGenerate}
+          className={`rounded-xl px-5 py-2.5 text-sm font-semibold text-white ${
+            canGenerate ? "bg-black hover:bg-gray-800" : "cursor-not-allowed bg-gray-300"
+          }`}
+        >
+          {pending ? "제작 패키지 생성 중…" : "AI 제작 패키지 생성"}
+        </button>
       </div>
+
       {!validation.ok ? (
         <p className="mt-2 text-sm text-amber-700">{validation.message}</p>
       ) : (
         <p className="mt-2 text-sm text-green-700">
-          기사 {selectedIds.length}개 선택 완료. (Phase 1 — 선택만 저장되며 서버에 기록되지 않습니다.)
+          기사 {selectedIds.length}개 선택 완료. 생성 시 서버에서 공개 상태를 다시 확인합니다.
         </p>
       )}
+
+      {error ? (
+        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 whitespace-pre-wrap">
+          {error}
+        </div>
+      ) : null}
+      {notice ? (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          {notice}
+        </div>
+      ) : null}
 
       <div
         className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-700"
         role="status"
       >
-        <p className="font-semibold text-gray-900">AI 대본 생성 — 다음 단계</p>
+        <p className="font-semibold text-gray-900">Phase 2 — AI 제작 패키지</p>
         <p className="mt-1">
-          Phase 1에서는 공개 기사 조회와 3~5개 선택만 제공합니다. Hook·나레이션·자막·화면
-          구성안 AI 생성은 아직 연결되지 않았습니다.
+          Hook·나레이션·자막·화면 구성안·미디어 제안을 생성합니다. 기본은 로컬 stub 생성이며,
+          OpenAI는 <code className="text-xs">SHORTS_AI_OPENAI_ENABLED=1</code>일 때만 사용합니다.
+          Production 저장소는 <code className="text-xs">SHORTS_PACKAGE_STORE=supabase</code>가
+          필요합니다. 자동 공개는 없으며 사람 검토가 필요합니다.
         </p>
-        <button
-          type="button"
-          disabled
-          aria-disabled="true"
-          title="AI 대본 생성은 다음 단계에서 연결됩니다."
-          className="mt-3 cursor-not-allowed rounded-xl bg-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-600"
-        >
-          AI 대본 생성 (다음 단계)
-        </button>
       </div>
+
+      {recentPackages.length > 0 ? (
+        <section className="mt-8">
+          <h2 className="text-lg font-semibold">최근 제작 패키지</h2>
+          <ul className="mt-3 space-y-2">
+            {recentPackages.slice(0, 8).map((pkg) => (
+              <li key={pkg.id}>
+                <Link
+                  href={`/admin/shorts/packages/${pkg.id}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 px-4 py-3 text-sm hover:bg-gray-50"
+                >
+                  <span className="font-medium">{pkg.package.title}</span>
+                  <span className="text-gray-500">
+                    {deskLabel(pkg.desk)} · {pkg.editDate} ·{" "}
+                    {pkg.status === "reviewed" ? "검토 완료" : "초안"} ·{" "}
+                    {pkg.generationMode === "openai" ? "OpenAI" : "stub"}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <div className="mt-6 space-y-4">
         {visible.length === 0 ? (
@@ -168,6 +258,7 @@ export default function ShortsArticleSelector({
                     checked={selected}
                     onChange={() => toggle(article.id)}
                     className="mt-1 h-5 w-5"
+                    disabled={pending}
                   />
                   <div className="flex min-w-0 flex-1 gap-4">
                     <div className="hidden h-24 w-36 shrink-0 overflow-hidden rounded-xl bg-gray-100 sm:block">

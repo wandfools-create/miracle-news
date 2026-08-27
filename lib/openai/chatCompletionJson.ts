@@ -149,10 +149,18 @@ export async function chatCompletionJson<T extends Record<string, unknown>>(
 export function formatOpenAiFailureForUi(
   failure: ChatCompletionJsonFailure
 ): string {
+  const scrub = (text: string) =>
+    text
+      .replace(/sk-[a-zA-Z0-9_-]{10,}/g, "[redacted]")
+      .replace(/Bearer\s+\S+/gi, "Bearer [redacted]");
+
   const lines = [
-    `[${failure.step}] ${failure.error}`,
-    failure.hint ? `상세: ${failure.hint}` : null,
+    `[${failure.step}] ${scrub(failure.error)}`,
+    failure.hint ? `상세: ${scrub(failure.hint)}` : null,
     failure.httpStatus ? `HTTP ${failure.httpStatus}` : null,
+    failure.step.includes("timeout") || failure.error.includes("시간 초과")
+      ? "잠시 후 다시 시도하세요."
+      : null,
   ].filter(Boolean);
   return lines.join("\n");
 }

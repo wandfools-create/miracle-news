@@ -29,6 +29,20 @@ export function getOpenAiArticleModel(): string {
   );
 }
 
+/**
+ * Model for Shorts production packages.
+ * OPENAI_SHORTS_MODEL → OPENAI_ARTICLE_MODEL → OPENAI_MODEL → default.
+ * Does not change article/candidate model selection.
+ */
+export function getOpenAiShortsModel(): string {
+  return (
+    process.env.OPENAI_SHORTS_MODEL?.trim() ||
+    process.env.OPENAI_ARTICLE_MODEL?.trim() ||
+    process.env.OPENAI_MODEL?.trim() ||
+    DEFAULT_ARTICLE_MODEL
+  );
+}
+
 export function checkOpenAiEnv(): OpenAiEnvCheck {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {

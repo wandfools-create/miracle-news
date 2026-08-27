@@ -314,6 +314,36 @@ Git history와 현재 코드에서 확인:
 - **Desk 분류:** Korea Herald(`korea-herald`)는 US/International(아침), Korea Desk는 `chosun`·`tvchosun`·`yonhap-kr-radar`·`insight`·`joongang`(예약)
 - **운영 원칙:** 사람 검토 원칙 유지, 자동 공개·Production DB write·schema 변경 없음
 
+## 12B. Miracle News Shorts Studio Phase 2 (로컬 개발)
+
+- **상태:** **로컬 개발 중** — branch `feature/shorts-ai-production-package-v1` (main `0d9e4a0` 기준, **미배포**)
+- **Production URL:** Phase 1만 반영 (`/admin/shorts` 선택 UI). Phase 2 패키지 생성·편집은 Production 미반영.
+- **저장소:**
+  - `SHORTS_PACKAGE_STORE=file` — 로컬/테스트 전용 (`data/shorts-packages/`, gitignore)
+  - `SHORTS_PACKAGE_STORE=supabase` — Production 전용 (필수). **migration 미적용 · Production store 미활성**
+  - `NODE_ENV=production`에서 file/미설정 시 오류 — **자동 file fallback 금지**
+- **OpenAI:** `SHORTS_AI_OPENAI_ENABLED` gate 유지, 모델 `OPENAI_SHORTS_MODEL` → article → model. **실호출 미검증** (기본 stub)
+
+**구현된 기능 (로컬)**
+
+- 공개 기사 3~5개 선택 후 **AI 제작 패키지 생성** (기본: stub)
+- 서버에서 published 상태 재검증 + 출처 URL 서버 구성
+- SAME EVENT 중복 제거, 구조화 JSON 검증
+- Repository 분리 (file / supabase) + reviewed 읽기 전용 · 초안 되돌리기
+- `/admin/shorts/packages/[id]` 편집 UI
+- 관리자 server action 인증
+
+**아직 미구현 / 다음 단계**
+
+- Production Supabase migration 적용 (`20260827_shorts_production_packages.sql`)
+- `SHORTS_PACKAGE_STORE=supabase` Production 활성화
+- OpenAI Production 호출 검증
+- 영상 생성·나레이션 TTS·SNS 업로드
+- 자동 공개 (의도적으로 없음)
+
+- **OpenAI 재사용:** `lib/openai/chatCompletionJson.ts`
+- **Shorts env:** `SHORTS_PACKAGE_STORE`, `SHORTS_AI_OPENAI_ENABLED`, `OPENAI_SHORTS_MODEL`, `SHORTS_PACKAGE_STORE_DIR`
+
 ## 13. 문서 관리 규칙
 
 - 모든 Miracle News 작업은 최신 GitHub `main`과 이 문서를 먼저 확인한다.
@@ -334,5 +364,6 @@ Git history와 현재 코드에서 확인:
 - **Digest 272674686:** 정상 SAME EVENT 차단을 throw로 처리하던 UX 문제 — PR #4로 해소, 데이터 손상 없음
 - **Operational Validation:** IN PROGRESS
 - **Shorts Studio Phase 1:** Production 반영 완료 (`/admin/shorts`, PR #1)
-- **Current Priority:** Shorts Studio 실제 운영 확인 및 AI 제작 패키지 2단계 준비
-- **Next Review:** Shorts Phase 1 운영 확인 및 Operational Validation 날짜별 기록 후
+- **Shorts Studio Phase 2:** 로컬 개발 중 (`feature/shorts-ai-production-package-v1`) — migration 미적용 · Production store 미활성 · OpenAI 실호출 미검증
+- **Current Priority:** Phase 2 저장소/테스트 검증 후 PR·migration 승인 대기
+- **Next Review:** Phase 2 commit 전 최종 점검
