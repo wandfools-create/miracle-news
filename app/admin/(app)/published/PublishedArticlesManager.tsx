@@ -221,7 +221,19 @@ export default function PublishedArticlesManager({
             </button>
           </form>
 
-          <form action={bulkSendToRevisionFromPublished}>
+          <form
+            action={bulkSendToRevisionFromPublished}
+            onSubmit={(e) => {
+              if (selectedIds.size === 0) {
+                e.preventDefault();
+                return;
+              }
+              const ok = window.confirm(
+                `선택한 ${selectedIds.size}건을 수정 대기로 보냅니다.\n공개 중이면 사이트에서 내려가며, AI는 호출되지 않습니다.\n계속할까요?`
+              );
+              if (!ok) e.preventDefault();
+            }}
+          >
             {[...selectedIds].map((id) => (
               <input key={`r-${id}`} type="hidden" name="articleIds" value={id} />
             ))}
@@ -358,7 +370,15 @@ export default function PublishedArticlesManager({
                             </button>
                           </form>
 
-                          <form action={sendToRevisionFromPublished}>
+                          <form
+                            action={sendToRevisionFromPublished}
+                            onSubmit={(e) => {
+                              const ok = window.confirm(
+                                "이 기사를 수정 대기로 보냅니다. 공개 중이면 사이트에서 내려가며, AI는 호출되지 않습니다. 계속할까요?"
+                              );
+                              if (!ok) e.preventDefault();
+                            }}
+                          >
                             <input type="hidden" name="articleId" value={article.id} />
                             <button
                               type="submit"

@@ -17,7 +17,7 @@
 | Vercel project name | 확인 필요 |
 | Supabase project name / ref | 저장소에 비밀값 없는 식별자가 없어 확인 필요 |
 | Stack | Next.js 16.1.7, React 19.2.3, TypeScript 5, Tailwind CSS 4, Supabase JS/SSR, Vercel, OpenAI, Discord, RSS Parser, Playwright |
-| Production main commit | `e8474c3226215b6f14973d17120739ca862495df` — `Merge pull request #1` (Shorts Studio Phase 1) |
+| Production main commit | `6c185cfebffc8e9745cac544e8e54d6c19e8a62f` — `Merge pull request #6` (revision-to-published restore) |
 | Vercel Production | 배포 성공 (`https://www.hannoon.co`) |
 
 비밀번호, API key, bot token, service-role key, webhook secret 등은 이 문서에 기록하지 않는다.
@@ -45,7 +45,8 @@ Vercel Production ── https://www.hannoon.co
 - **Supabase:** 기사, 수집 후보, 상태, 검토 및 운영 로그의 데이터 계층이다.
 - **Vercel:** Next.js Production과 두 지역 Desk cron을 실행한다.
 - **GitHub:** `main`이 배포 및 기술 상태의 공식 코드 기준이다.
-- **Production SHA:** `e8474c3226215b6f14973d17120739ca862495df` — Vercel Production 배포 성공 (PR #1 Shorts Studio Phase 1 포함).
+- **Production SHA:** `6c185cfebffc8e9745cac544e8e54d6c19e8a62f` — Vercel Production 배포 성공 (PR #6 revision restore 포함).
+- **Revision restore:** 수정 대기 50건 → 이전 공개 상태 복구 완료 (AI 재작성 없음; `published_at`/localization/slug 보존).
 - **Discord workflow:** `기사 만들기 → quick_review → 사람 확인 → 공개` (PR #3 복구 완료)
 - **SAME EVENT:** 판정 및 공개 차단 유지. `/admin/approved` 차단 시 Application error 대신 안내·override UX (PR #4 배포 완료)
 - **직접 공개 workflow:** 비활성/제거 완료 (PR #3)
@@ -137,6 +138,8 @@ Vercel Production ── https://www.hannoon.co
 - 수집·추천·Discord 실패는 단계별로 격리하고 이전 단계 성공을 rollback하지 않는다.
 - Discord **기사 만들기**는 OpenAI를 한 번 호출할 수 있으나 `quick_review`에만 두고 자동 공개하지 않는다.
 - `/admin/approved` SAME EVENT 차단은 redirect 안내로 표시하며, 「그래도 공개」 명시적 override만 허용한다.
+- 공개 목록에서 수정 대기로 보낼 때 개별/일괄 confirm을 요구한다.
+- 수정 대기에서 **수정 없이 다시 공개**는 이전 `published_at`·localization·slug·본문을 보존하는 상태 복구만 허용한다.
 
 ## 6. Discord 구조
 
@@ -187,6 +190,7 @@ Vercel Production ── https://www.hannoon.co
 | 공개 | `published + approved + is_published=true`; 사람 확인 필요 |
 | 폐기·보관 | `archived` soft archive. 보류/수정 대기/반려에서 가능 |
 | 복구 | archive에서 검토 대기로 복귀; 승인·공개하지 않음 |
+| 수정 대기 → 재공개 | 이전에 공개됐던 기사만 AI 수정 없이 기존 공개 콘텐츠 그대로 복구 (PR #6) |
 
 ## 8. 최근 완료 작업
 
@@ -209,7 +213,8 @@ Git history와 현재 코드에서 확인:
 - Discord quick_review Production 복구 완료 (PR #3)
 - `/admin/approved` SAME EVENT 공개 차단 UX 배포 완료 (PR #4) — Digest `272674686` 원인(throw 처리) 해소
 - Miracle News Shorts Studio Phase 1 Production 배포 완료 (PR #1) — `/admin/shorts`
-- 알려진 인계 결과: `npm test` 199 tests 통과, build 성공
+- 수정 대기 → 이전 공개 상태 복구 Production 배포 및 50건 실제 복구 완료 (PR #6) — AI 재작성 없음; `published_at`/localization/slug 보존; 공개→수정 대기 confirm 추가
+- 알려진 인계 결과: `npm test` 215 tests 통과, build 성공
 
 ## 9. 현재 미해결 문제
 
@@ -241,13 +246,14 @@ Git history와 현재 코드에서 확인:
 - 수정 대기 진입 시 OpenAI 자동 실행 문제: 해결됨
 - 기사 hard delete 전제: 현재 soft archive로 대체됨
 - 단일/옛 자동화와 Make 경로: 현행 regional Desk 핵심 코드에서 확인되지 않음; 실제 외부 Make scenario 활성 여부 확인 필요
+- 수정 대기 50건 일괄 복구 긴급 대응: **완료** (2026-08-27)
 - Yonhap English 자동 수집: 비활성
 
 ## 10. Operational Validation
 
 **Status: IN PROGRESS**
 
-현재 Miracle News는 2~3일 실제 운영하면서 안정성을 확인하는 단계다. 완료 증거가 기록되기 전에는 **검증 완료**로 변경하지 않는다. Discord quick_review 복구와 `/admin/approved` SAME EVENT UX 배포가 Production에 반영됐으며, 실제 승인→공개·차단 안내·override 운영 결과 확인이 남아 있다.
+현재 Miracle News는 2~3일 실제 운영하면서 안정성을 확인하는 단계다. 수정 대기 50건 복구 긴급 대응은 완료됐으며, Shorts Phase 2 재개 전 Production 안정성 확인이 남아 있다.
 
 검증 항목:
 
@@ -260,11 +266,13 @@ Git history와 현재 코드에서 확인:
 - 시스템 장애 알림
 - 빠른 기사 생성/검토/공개
 - 승인→공개 및 SAME EVENT 차단 안내·override
+- 수정 대기 → 이전 공개 복구 (50건)
 - 관리자 속도
 - 모바일 화면
 
 | 날짜 | Desk/항목 | 결과 | 발견 문제 | 조치/다음 확인 | 확인자 |
 |---|---|---|---|---|---|
+| 2026-08-27 | 수정 대기 50건 복구 | **성공 50건** | 수정 대기 잔여 0건. `status=published`, `review_status=approved`, `revision_status=none`, `is_published=true`, `published_at` 보존, ko/en slug 존재. 표본 `/ko`·`/en` article 200. OpenAI 호출·본문 변경 흔적 없음. | Shorts Phase 2 재개 전 2~3일 운영 안정성 확인 | 관리자 |
 | YYYY-MM-DD | US/International | 미기록 |  |  |  |
 | YYYY-MM-DD | Korea | 미기록 |  |  |  |
 | YYYY-MM-DD | Discord/관리자/모바일 | 미기록 |  |  |  |
@@ -274,28 +282,29 @@ Git history와 현재 코드에서 확인:
 | 항목 | 값 |
 |---|---|
 | Branch | `main` |
-| Production main commit | `e8474c3226215b6f14973d17120739ca862495df` |
+| Production main commit | `6c185cfebffc8e9745cac544e8e54d6c19e8a62f` |
 | Vercel Production | 배포 성공 |
 | Production URL | https://www.hannoon.co |
 | Discord workflow | 기사 만들기 → `quick_review` → 사람 확인 → 공개 |
 | SAME EVENT | 판정·공개 차단 유지; `/admin/approved` 차단 안내·명시적 override |
+| Revision restore | PR #6 merged — 50건 복구 완료 |
 | 직접 공개 workflow | 비활성/제거 완료 |
-| Restore PRs | #3 Discord quick_review · #4 approved SAME EVENT UX — merged |
-| Shorts Studio | PR #1 merged — Phase 1 Production 반영 |
-| Production = main | 예 — `e8474c3` 배포 성공 |
+| Restore PRs | #3 Discord quick_review · #4 approved SAME EVENT UX · #6 revision restore — merged |
+| Shorts Studio | PR #1 merged (Phase 1) · PR #5 OPEN (Phase 2 package, 보존) |
+| Production = main | 예 — `6c185cf` 배포 성공 |
 
 ## 12. 다음 최우선 작업
 
-1. 2~3일 Operational Validation을 진행하고 날짜별 결과를 이 문서에 기록한다.
+1. Shorts Phase 2 재개 전 2~3일 Production 운영 안정성을 확인하고 날짜별 결과를 이 문서에 기록한다.
 2. Shorts Studio Phase 1(`/admin/shorts`) 실제 운영 확인 — published 기사 조회·날짜·Desk 분류·기사 선택.
-3. AI 제작 패키지 2단계 준비 — Hook·대본·나레이션·자막·화면 구성안 (사람 검토 원칙 유지).
-4. 실제 승인→공개, SAME EVENT 차단 안내, 명시적 override가 필요한 사례를 확인한다.
+3. Shorts PR #5(AI production package)는 OPEN 상태로 보존; Phase 2 재개 시 별도 review.
+4. 실제 승인→공개, SAME EVENT 차단 안내, 명시적 override가 필요한 사례를 계속 확인한다.
 
 ## 12A. Miracle News Shorts Studio Phase 1
 
 - **상태:** **Production 반영 완료** (PR #1 merged, Vercel Production SUCCESS)
 - **Production URL:** https://www.hannoon.co/admin/shorts (비로그인 시 `/admin/login?next=/admin/shorts` redirect — 정상)
-- **Production commit:** `e8474c3226215b6f14973d17120739ca862495df`
+- **Production commit:** `6c185cfebffc8e9745cac544e8e54d6c19e8a62f` (PR #6 revision restore; Shorts Phase 1 코드 포함)
 - **검증:** `npm test` 199/199 PASS · `npm run build` SUCCESS
 
 **현재 가능한 기능**
@@ -314,17 +323,18 @@ Git history와 현재 코드에서 확인:
 - **Desk 분류:** Korea Herald(`korea-herald`)는 US/International(아침), Korea Desk는 `chosun`·`tvchosun`·`yonhap-kr-radar`·`insight`·`joongang`(예약)
 - **운영 원칙:** 사람 검토 원칙 유지, 자동 공개·Production DB write·schema 변경 없음
 
-## 12B. Miracle News Shorts Studio Phase 2 (로컬 개발)
+## 12B. Miracle News Shorts Studio Phase 2 (Draft PR #5)
 
-- **상태:** **로컬 개발 중** — branch `feature/shorts-ai-production-package-v1` (main `0d9e4a0` 기준, **미배포**)
+- **상태:** **Draft PR #5 OPEN** — branch `feature/shorts-ai-production-package-v1` (origin/main `4b2d9fc` 통합, **Production 미배포**)
 - **Production URL:** Phase 1만 반영 (`/admin/shorts` 선택 UI). Phase 2 패키지 생성·편집은 Production 미반영.
 - **저장소:**
   - `SHORTS_PACKAGE_STORE=file` — 로컬/테스트 전용 (`data/shorts-packages/`, gitignore)
-  - `SHORTS_PACKAGE_STORE=supabase` — Production 전용 (필수). **migration 미적용 · Production store 미활성**
+  - `SHORTS_PACKAGE_STORE=supabase` — Production 전용 (필수). **migration 미적용 · Production store 미설정**
   - `NODE_ENV=production`에서 file/미설정 시 오류 — **자동 file fallback 금지**
-- **OpenAI:** `SHORTS_AI_OPENAI_ENABLED` gate 유지, 모델 `OPENAI_SHORTS_MODEL` → article → model. **실호출 미검증** (기본 stub)
+- **OpenAI:** `SHORTS_AI_OPENAI_ENABLED=1` gate 유지, 모델 `OPENAI_SHORTS_MODEL` → article → model. **실호출 미검증** (기본 stub)
+- **자동 영상 제작·SNS 업로드:** 미구현 (의도적으로 없음)
 
-**구현된 기능 (로컬)**
+**구현된 기능 (branch / Preview)**
 
 - 공개 기사 3~5개 선택 후 **AI 제작 패키지 생성** (기본: stub)
 - 서버에서 published 상태 재검증 + 출처 URL 서버 구성
@@ -333,13 +343,14 @@ Git history와 현재 코드에서 확인:
 - `/admin/shorts/packages/[id]` 편집 UI
 - 관리자 server action 인증
 
-**아직 미구현 / 다음 단계**
+**배포 전 필수 (PR 본문과 동일)**
 
-- Production Supabase migration 적용 (`20260827_shorts_production_packages.sql`)
-- `SHORTS_PACKAGE_STORE=supabase` Production 활성화
-- OpenAI Production 호출 검증
-- 영상 생성·나레이션 TTS·SNS 업로드
-- 자동 공개 (의도적으로 없음)
+1. migration 검토 및 적용
+2. `SHORTS_PACKAGE_STORE=supabase` 설정
+3. Supabase 저장 smoke test
+4. OpenAI gate 활성화 후 1회 검증
+5. 사람 검토
+6. main merge (**migration·env 설정 전 merge 금지**)
 
 - **OpenAI 재사용:** `lib/openai/chatCompletionJson.ts`
 - **Shorts env:** `SHORTS_PACKAGE_STORE`, `SHORTS_AI_OPENAI_ENABLED`, `OPENAI_SHORTS_MODEL`, `SHORTS_PACKAGE_STORE_DIR`
@@ -355,15 +366,16 @@ Git history와 현재 코드에서 확인:
 
 ---
 
+- **Digest 272674686:** 정상 SAME EVENT 차단을 throw로 처리하던 UX 문제 — PR #4로 해소, 데이터 손상 없음
 - **Last Updated:** 2026-08-27 UTC
-- **Latest Commit:** `e8474c3226215b6f14973d17120739ca862495df`
-- **Production main commit:** `e8474c3226215b6f14973d17120739ca862495df`
+- **Latest Commit:** `4b2d9fcf92b64133aaac0c0d83975bf96dd26f89` — PROJECT_STATUS finalize
+- **Production main commit:** `6c185cfebffc8e9745cac544e8e54d6c19e8a62f`
 - **Vercel Production:** 배포 성공 (`https://www.hannoon.co`)
 - **Discord workflow:** 기사 만들기 → quick_review → 사람 확인 → 공개
 - **SAME EVENT:** 판정·공개 차단 유지; `/admin/approved` 차단 안내·명시적 override 배포 완료
-- **Digest 272674686:** 정상 SAME EVENT 차단을 throw로 처리하던 UX 문제 — PR #4로 해소, 데이터 손상 없음
-- **Operational Validation:** IN PROGRESS
+- **Revision restore (PR #6):** Production 배포 완료; 수정 대기 50건 복구 완료 (AI 재작성 없음; `published_at`/localization/slug 보존)
+- **Operational Validation:** IN PROGRESS — 50건 복구 결과 기록 완료
 - **Shorts Studio Phase 1:** Production 반영 완료 (`/admin/shorts`, PR #1)
-- **Shorts Studio Phase 2:** 로컬 개발 중 (`feature/shorts-ai-production-package-v1`) — migration 미적용 · Production store 미활성 · OpenAI 실호출 미검증
-- **Current Priority:** Phase 2 저장소/테스트 검증 후 PR·migration 승인 대기
-- **Next Review:** Phase 2 commit 전 최종 점검
+- **Shorts PR #5:** OPEN (Draft) — Phase 2 AI production package; origin/main `4b2d9fc` 통합; migration 미적용 · `SHORTS_PACKAGE_STORE` Production 미설정 · OpenAI 실호출 미검증 · 자동 영상/업로드 미구현
+- **Current Priority:** main merge 후 Shorts Phase 2 검증; Production 운영 안정성 확인 병행
+- **Next Review:** npm test/build·PR #5 Preview 확인; migration·env 설정 전 main merge 금지
