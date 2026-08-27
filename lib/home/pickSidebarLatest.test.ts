@@ -47,10 +47,11 @@ describe("pickSidebarLatestArticles", () => {
     assert.equal(side[0]?.id, "a1");
   });
 
-  it("falls back to newest published cards when freshness windows are empty", () => {
+  it("does not inject months-old pins when the 7d window is empty", () => {
     const articles = [
       card({
         id: "old1",
+        is_top_story: true,
         source_published_at: new Date(NOW - 40 * 24 * 3600_000).toISOString(),
         published_at: new Date(NOW - 40 * 24 * 3600_000).toISOString(),
         created_at: new Date(NOW - 40 * 24 * 3600_000).toISOString(),
@@ -63,11 +64,10 @@ describe("pickSidebarLatestArticles", () => {
       }),
     ];
     const side = pickSidebarLatestArticles(articles, 5, NOW);
-    assert.equal(side.length, 2);
-    assert.equal(side[0]?.id, "old1");
+    assert.equal(side.length, 0);
   });
 
-  it("never returns empty when published cards exist", () => {
+  it("uses created_at fallback when publish times missing but still within 7d", () => {
     const articles = [
       card({
         id: "x",

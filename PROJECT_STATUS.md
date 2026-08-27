@@ -215,9 +215,10 @@ Git history와 현재 코드에서 확인:
 - Miracle News Shorts Studio Phase 1 Production 배포 완료 (PR #1) — `/admin/shorts`
 - 수정 대기 → 이전 공개 상태 복구 Production 배포 및 50건 실제 복구 완료 (PR #6) — AI 재작성 없음; `published_at`/localization/slug 보존; 공개→수정 대기 confirm 추가
 - 홈페이지 신문형 3열·카테고리 내비 Production 반영 완료 (PR #7) — 왼쪽 지금 주목 · 중앙 본문 · 오른쪽 지금 뜨는 이슈
-- 홈 editorial ranking Phase 1: **로컬 개발/검증 중** (`feature/home-editorial-ranking-v1`) — 후보 AI 중요도 연결·editorial score·다양성; Production 배포·migration 적용 전
-  - snapshot 컬럼 write는 `ARTICLES_AI_RECOMMEND_SNAPSHOT=1`일 때만 (기본 OFF → migration 미적용 시 schema error 없음)
+- 홈 editorial ranking Phase 1: **Draft PR #8** (`feature/home-editorial-ranking-v1`) — pin 72h 만료·핵심 영역 7일 제한 적용; Production 배포·migration·stale DB flag 정리 전
+  - snapshot 컬럼 write는 `ARTICLES_AI_RECOMMEND_SNAPSHOT=1`일 때만 (기본 OFF)
   - 홈 ranking은 `collection_candidates.article_id` 조인 fallback 유지
+  - stale top-story `54ca435f…`는 코드에서 홈 핵심 미노출; DB `is_top_story`는 별도 승인 후 정리
 - 알려진 인계 결과: `npm test` / `npm run build`는 해당 브랜치에서 재검증
 
 ## 9. 현재 미해결 문제
@@ -229,6 +230,7 @@ Git history와 현재 코드에서 확인:
 
 ### Needs monitoring
 
+- 홈 stale `is_top_story`: `54ca435f-100e-4393-bc44-53100738eb0a` (카카오 파업 예고, published_at=2026-05-28, is_top_story=true). PR #8 코드는 홈 핵심 영역에서 만료 처리하나 **DB 플래그는 미정리** — 별도 승인 후 `is_top_story=false` 정리 검토
 - 승인→공개, SAME EVENT 차단 안내, 명시적 override가 필요한 실제 운영 사례
 - Discord `기사 만들기 → quick_review → 사람 확인 → 공개` 실제 운영 경로
 - 2~3일 지역별 Desk 실제 실행 안정성

@@ -1,40 +1,41 @@
 import { getSourceFeaturedSortBias } from "@/lib/article/sourcePolicy";
 import { normalizeSource } from "@/lib/article/normalizeSource";
-import {
-  filterArticlesForHomeSurface,
-  getSitePublishedTimestamp,
-} from "./articleFreshness";
+import { getSitePublishedTimestamp } from "./articleFreshness";
 import {
   compareArticlesByEditorialScore,
+  filterHomeCoreEligible,
+  filterHomeCoreSurfacePool,
   getEditorialFreshnessTimestamp,
+  isForceTopStoryPin,
   pickDiversifiedByEditorialScore,
   sortArticlesByEditorialScore,
 } from "./editorialRanking";
 import type { HomeArticleCard } from "./types";
 
-/** Featured hero only considers articles with site freshness within this many days. */
+/** Featured / core rails: max site-publish age (days). */
 export const FEATURED_RECENT_DAYS = 7;
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** @deprecated Prefer getEditorialFreshnessTimestamp for ranking. */
 export function getPublishedTimestamp(article: HomeArticleCard): number {
   return getEditorialFreshnessTimestamp(article);
 }
 
-/** Manual pin always wins for featured — no age expiry. */
-export function isActiveTopStory(article: HomeArticleCard): boolean {
-  return article.is_top_story === true;
+/**
+ * Active featured pin: is_top_story with site published_at within 72h.
+ * Older pins are not forced into featured.
+ */
+export function isActiveTopStory(
+  article: HomeArticleCard,
+  nowMs: number = Date.now()
+): boolean {
+  return isForceTopStoryPin(article, nowMs);
 }
 
 export function isFeaturedCandidate(
   article: HomeArticleCard,
   nowMs: number = Date.now()
 ): boolean {
-  const freshnessMs = getEditorialFreshnessTimestamp(article);
-  if (freshnessMs <= 0) return false;
-  const cutoff = nowMs - FEATURED_RECENT_DAYS * MS_PER_DAY;
-  return freshnessMs >= cutoff;
+  return filterHomeCoreEligible([article], nowMs).length > 0;
 }
 
 function effectiveFeaturedTimestamp(
@@ -45,21 +46,6 @@ function effectiveFeaturedTimestamp(
   if (freshness <= 0) return 0;
   void nowMs;
   return freshness - getSourceFeaturedSortBias(normalizeSource(article.source));
-}
-
-function compareActiveTopStories(
-  a: HomeArticleCard,
-  b: HomeArticleCard
-): number {
-  const orderA = a.top_story_order ?? 0;
-  const orderB = b.top_story_order ?? 0;
-  if (orderA !== orderB) return orderA - orderB;
-
-  const freshnessDiff =
-    getEditorialFreshnessTimestamp(b) - getEditorialFreshnessTimestamp(a);
-  if (freshnessDiff !== 0) return freshnessDiff;
-
-  return getSitePublishedTimestamp(b) - getSitePublishedTimestamp(a);
 }
 
 export function compareFeaturedCandidates(
@@ -76,23 +62,17 @@ export function compareFeaturedCandidates(
 }
 
 /**
- * 오늘의 주요 기사:
- * 1) is_top_story pin (always)
- * 2) else editorial score within 7d site freshness
+ * 오늘의 주요 기사: build ≤7d eligible pool first, then editorial rank
+ * (72h top-story force boost → manual → AI → auto → freshness).
  */
 export function pickFeaturedArticle(
   articles: HomeArticleCard[],
   nowMs: number = Date.now()
 ): HomeArticleCard | null {
-  const activeTops = articles.filter((a) => isActiveTopStory(a));
-  if (activeTops.length > 0) {
-    return [...activeTops].sort(compareActiveTopStories)[0] ?? null;
-  }
-
-  const candidates = articles.filter((a) => isFeaturedCandidate(a, nowMs));
-  if (candidates.length === 0) return null;
+  const eligible = filterHomeCoreEligible(articles, nowMs);
+  if (eligible.length === 0) return null;
   return (
-    pickDiversifiedByEditorialScore(candidates, {
+    pickDiversifiedByEditorialScore(eligible, {
       limit: 1,
       nowMs,
       sourceCap: 1,
@@ -108,7 +88,7 @@ function articleKey(article: HomeArticleCard): string {
 
 /**
  * Featured combo: secondary lead + numbered related list.
- * Uses editorial score + diversity; 72h then 7d surface window.
+ * 72h then 7d surface window — never past 7d, no stale pin inject.
  */
 export function pickFeaturedHubArticles(
   articles: HomeArticleCard[],
@@ -123,10 +103,9 @@ export function pickFeaturedHubArticles(
     (a) => articleKey(a) !== featuredKey && a.id !== featured?.id
   );
 
-  const recent = filterArticlesForHomeSurface(withoutFeatured, {
+  const recent = filterHomeCoreSurfacePool(withoutFeatured, {
     nowMs,
     minCount: relatedLimit + 1,
-    allowManualTopStory: false,
   });
 
   const exclude = new Set<string>();
@@ -162,3 +141,6 @@ export function sortHomeArticlesForDisplay(
 ): HomeArticleCard[] {
   return sortArticlesByEditorialScore(articles, nowMs);
 }
+
+/** Kept for tests that still reference site timestamp helpers. */
+export { getSitePublishedTimestamp };

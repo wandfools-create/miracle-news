@@ -3,6 +3,9 @@ import { categoryOrder } from "@/lib/koreanArticleDisplay";
 import { filterArticlesForHomeSurface } from "./articleFreshness";
 import {
   compareArticlesByEditorialScore,
+  computeEditorialScore,
+  FRESHNESS_MAX_POINTS,
+  getEditorialFreshnessTimestamp,
   sortArticlesByEditorialScore,
 } from "./editorialRanking";
 import { getArticleRegion, type ArticleRegion } from "./articleRegion";
@@ -101,10 +104,32 @@ function leadByEditorialScore(
   nowMs: number
 ): HomeArticleCard | null {
   if (!items.length) return null;
-  return (
-    [...items].sort((a, b) => compareArticlesByEditorialScore(a, b, nowMs))[0] ??
-    null
-  );
+
+  const byScore = sortArticlesByEditorialScore(items, nowMs);
+  const lead = byScore[0] ?? null;
+  if (!lead || items.length === 1) return lead;
+
+  const freshest = [...items].sort(
+    (a, b) =>
+      getEditorialFreshnessTimestamp(b) - getEditorialFreshnessTimestamp(a)
+  )[0];
+  if (!freshest || (freshest.article_id ?? freshest.id) === (lead.article_id ?? lead.id)) {
+    return lead;
+  }
+
+  const leadScore = computeEditorialScore(lead, nowMs).total;
+  const freshScore = computeEditorialScore(freshest, nowMs).total;
+  const leadFresh = getEditorialFreshnessTimestamp(lead);
+  const freshTs = getEditorialFreshnessTimestamp(freshest);
+  // Prefer a meaningfully newer update when its score is close (within freshness band).
+  if (
+    freshTs > leadFresh &&
+    freshScore >= leadScore - FRESHNESS_MAX_POINTS &&
+    freshScore > 0
+  ) {
+    return freshest;
+  }
+  return lead;
 }
 
 function buildIssue(

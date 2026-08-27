@@ -10,6 +10,7 @@ import {
   sortHomeArticlesForDisplay,
 } from "./featuredSelection";
 import {
+  filterHomeCoreEligible,
   pickDiversifiedByEditorialScore,
   sortArticlesByEditorialScore,
 } from "./editorialRanking";
@@ -31,17 +32,12 @@ export function prepareEditionHomeSections(
   options?: { featuredPool?: HomeArticleCard[]; nowMs?: number }
 ): HomePageSections {
   const nowMs = options?.nowMs ?? Date.now();
-  const sorted = sortHomeArticlesForDisplay(articles, nowMs);
-  const featuredSorted = sortHomeArticlesForDisplay(
-    options?.featuredPool ?? articles,
-    nowMs
-  );
-  const featured = pickFeaturedArticle(featuredSorted, nowMs);
-  const featuredHub = pickFeaturedHubArticles(
-    options?.featuredPool ?? articles,
-    featured,
-    { nowMs }
-  );
+  const featuredPool = options?.featuredPool ?? articles;
+  const corePool = filterHomeCoreEligible(featuredPool, nowMs);
+  const sortedCore = sortHomeArticlesForDisplay(corePool, nowMs);
+
+  const featured = pickFeaturedArticle(corePool, nowMs);
+  const featuredHub = pickFeaturedHubArticles(corePool, featured, { nowMs });
   const featuredKey = featured?.article_id ?? featured?.id;
 
   const coreExclude = new Set<string>();
@@ -50,7 +46,7 @@ export function prepareEditionHomeSections(
     coreExclude.add(a.article_id ?? a.id);
   }
 
-  const pool = sorted.filter(
+  const pool = sortedCore.filter(
     (a) => (a.article_id ?? a.id) !== featuredKey && a.id !== featured?.id
   );
 
@@ -76,8 +72,8 @@ export function prepareEditionHomeSections(
     coreExclude.add(a.article_id ?? a.id);
   }
 
+  // Source leads may use full published pool (outlet archive character).
   const sourceLeadMap: Record<string, HomeArticleCard> = {};
-  // Per-outlet: highest editorial score (not raw newest).
   for (const article of sortArticlesByEditorialScore(articles, nowMs)) {
     const sourceKey = normalizeSource(article.source);
     if (!sourceLeadMap[sourceKey]) {
@@ -101,10 +97,11 @@ export function prepareEditionHomeSections(
     pageLocale
   );
 
-  const sidebar = pickSidebarLatestArticles(sorted, 5, nowMs);
+  const sidebar = pickSidebarLatestArticles(corePool, 5, nowMs);
 
+  // Category archive: full pool (past articles remain reachable via tabs).
   const groupedByCategory: Record<string, HomeArticleCard[]> = {};
-  for (const article of sorted) {
+  for (const article of sortHomeArticlesForDisplay(articles, nowMs)) {
     const key = article.category ?? "other";
     if (!groupedByCategory[key]) groupedByCategory[key] = [];
     groupedByCategory[key].push(article);
@@ -114,7 +111,6 @@ export function prepareEditionHomeSections(
       groupedByCategory[key],
       nowMs
     );
-    // Preserve outlet-rank rules for world/religion after editorial sort.
     groupedByCategory[key] = sortArticlesForCategorySection(scored, key);
   }
 
@@ -126,12 +122,8 @@ export function prepareEditionHomeSections(
     .filter((config) => Boolean(sourceLeadMap[config.key]))
     .map((config) => config.label);
 
-  const trendingSorted = sortHomeArticlesForDisplay(
-    options?.featuredPool ?? articles,
-    nowMs
-  );
   const trendingIssues = pickTrendingIssues(
-    trendingSorted,
+    featuredPool,
     pageLocale,
     3,
     nowMs

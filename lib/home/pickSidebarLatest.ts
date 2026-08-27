@@ -1,7 +1,5 @@
 import {
-  filterArticlesForHomeSurface,
-} from "./articleFreshness";
-import {
+  filterHomeCoreSurfacePool,
   pickDiversifiedByEditorialScore,
   sortArticlesByEditorialScore,
 } from "./editorialRanking";
@@ -12,29 +10,20 @@ export function articleDedupeKey(article: HomeArticleCard): string {
 }
 
 /**
- * 「지금 주목」: editorial score within 72h→7d surface window, with diversity.
- * Falls back to score-sorted full pool so the section still renders.
+ * 「지금 주목」: editorial score within 72h→7d only.
+ * Never injects out-of-window top stories; never falls back to full archive.
+ * Prefer fewer slots over filling with months-old pins.
  */
 export function pickSidebarLatestArticles(
   articles: HomeArticleCard[],
   limit = 5,
   nowMs: number = Date.now()
 ): HomeArticleCard[] {
-  const recent = filterArticlesForHomeSurface(articles, {
+  const recent = filterHomeCoreSurfacePool(articles, {
     nowMs,
     minCount: limit,
-    allowManualTopStory: true,
   });
-  const fromWindow = pickDiversifiedByEditorialScore(recent, {
-    limit,
-    nowMs,
-    sourceCap: 2,
-    balanceRegions: true,
-    suppressTopicClusters: true,
-  });
-  if (fromWindow.length > 0) return fromWindow;
-
-  return pickDiversifiedByEditorialScore(articles, {
+  return pickDiversifiedByEditorialScore(recent, {
     limit,
     nowMs,
     sourceCap: 2,

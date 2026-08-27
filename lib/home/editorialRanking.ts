@@ -2,9 +2,9 @@
  * Home editorial ranking Phase 1 — importance + site freshness + diversity.
  * No OpenAI. Does not change publish/SAME EVENT guards.
  *
- * Priority (high → low):
- * 1. is_top_story (manual pin until cleared)
- * 2. editorial_priority_manual (human-locked)
+ * Priority (high → low), within the home core eligibility window:
+ * 1. is_top_story with full boost only while site-published within 72h
+ * 2. editorial_priority_manual (human-locked; still must be in 7d core pool)
  * 3. AI recommend grade (+ score fine-tune within grade)
  * 4. automatic editorial_priority (site-publish window)
  * 5. site published_at freshness
@@ -12,6 +12,8 @@
 import { normalizeSource } from "@/lib/article/normalizeSource";
 import {
   getEditorialFreshnessTimestamp,
+  HOME_SURFACE_FALLBACK_MS,
+  HOME_SURFACE_PRIMARY_MS,
   normalizeEditorialPriority,
   type EditorialPriority,
 } from "./articleFreshness";
@@ -26,14 +28,33 @@ import type { HomeArticleCard } from "./types";
 
 export { getEditorialFreshnessTimestamp };
 
-/** Manual top-story pin — outranks every other home ranking signal until cleared. */
+/** Full top-story boost — only while site published_at is within this window. */
+export const TOP_STORY_FORCE_WINDOW_MS = 72 * 60 * 60 * 1000;
+
+/**
+ * Home core surfaces (featured / 지금 주목 / KR·US) never include articles
+ * older than this site-publish age. Prefer showing fewer slots over archive fill.
+ */
+export const HOME_CORE_MAX_WINDOW_MS = HOME_SURFACE_FALLBACK_MS; // 7d
+
+/** Primary expansion step for sidebar / related (72h). */
+export const HOME_CORE_PRIMARY_WINDOW_MS = HOME_SURFACE_PRIMARY_MS;
+
+/** Full pin boost while within TOP_STORY_FORCE_WINDOW_MS. */
 export const TOP_STORY_BASE_POINTS = 1_000_000;
 /** Subtracted by top_story_order so lower order ranks higher within pins. */
 export const TOP_STORY_ORDER_SLACK = 1_000;
 
 /**
+ * Limited boost for is_top_story between 72h and 7d (still inside core pool).
+ * Below AI priority band so it cannot dominate recent AI-ranked coverage.
+ */
+export const TOP_STORY_HISTORICAL_POINTS = 5_000;
+
+/**
  * Human-locked editorial_priority points.
  * Must stay above AI grade bands so AI cannot override manual priority.
+ * Only meaningful inside the 7d core pool (pool filter excludes older rows).
  */
 export const MANUAL_PRIORITY_POINTS: Record<EditorialPriority, number> = {
   normal: 0,
@@ -95,7 +116,7 @@ function articleKey(article: HomeArticleCard): string {
   return article.article_id ?? article.id;
 }
 
-function isWithinSiteWindow(
+export function isWithinSiteWindow(
   article: HomeArticleCard,
   nowMs: number,
   windowMs: number
@@ -105,6 +126,60 @@ function isWithinSiteWindow(
   return nowMs - freshTs <= windowMs;
 }
 
+/** Site-publish age in ms, or null when unknown. */
+export function getSitePublishAgeMs(
+  article: HomeArticleCard,
+  nowMs: number = Date.now()
+): number | null {
+  const freshTs = getEditorialFreshnessTimestamp(article);
+  if (freshTs <= 0) return null;
+  return Math.max(0, nowMs - freshTs);
+}
+
+/**
+ * Full 1M-class top-story boost eligibility: is_top_story + site publish ≤ 72h.
+ * Does not use source_published_at alone (editorial freshness prefers published_at).
+ */
+export function isForceTopStoryPin(
+  article: HomeArticleCard,
+  nowMs: number = Date.now()
+): boolean {
+  if (article.is_top_story !== true) return false;
+  return isWithinSiteWindow(article, nowMs, TOP_STORY_FORCE_WINDOW_MS);
+}
+
+/** Eligible for featured / sidebar / KR·US core rails (≤ 7d site publish). */
+export function isHomeCoreEligible(
+  article: HomeArticleCard,
+  nowMs: number = Date.now()
+): boolean {
+  return isWithinSiteWindow(article, nowMs, HOME_CORE_MAX_WINDOW_MS);
+}
+
+export function filterHomeCoreEligible(
+  articles: HomeArticleCard[],
+  nowMs: number = Date.now()
+): HomeArticleCard[] {
+  return articles.filter((a) => isHomeCoreEligible(a, nowMs));
+}
+
+/**
+ * 72h pool first; if thinner than minCount, expand to 7d.
+ * Never injects out-of-window top stories and never expands past 7d.
+ */
+export function filterHomeCoreSurfacePool(
+  articles: HomeArticleCard[],
+  options?: { nowMs?: number; minCount?: number }
+): HomeArticleCard[] {
+  const nowMs = options?.nowMs ?? Date.now();
+  const minCount = options?.minCount ?? 1;
+  const primary = articles.filter((a) =>
+    isWithinSiteWindow(a, nowMs, HOME_CORE_PRIMARY_WINDOW_MS)
+  );
+  if (primary.length >= minCount) return primary;
+  return filterHomeCoreEligible(articles, nowMs);
+}
+
 export function computeEditorialScore(
   article: HomeArticleCard,
   nowMs: number = Date.now()
@@ -112,8 +187,13 @@ export function computeEditorialScore(
   let topStory = 0;
   if (article.is_top_story === true) {
     const order = article.top_story_order ?? 0;
-    topStory =
-      TOP_STORY_BASE_POINTS + Math.max(0, TOP_STORY_ORDER_SLACK - order);
+    if (isForceTopStoryPin(article, nowMs)) {
+      topStory =
+        TOP_STORY_BASE_POINTS + Math.max(0, TOP_STORY_ORDER_SLACK - order);
+    } else if (isHomeCoreEligible(article, nowMs)) {
+      // 72h–7d: small historical nod only; no permanent pin.
+      topStory = TOP_STORY_HISTORICAL_POINTS;
+    }
   }
 
   const priority = normalizeEditorialPriority(article.editorial_priority);
@@ -121,8 +201,11 @@ export function computeEditorialScore(
   let manualPriority = 0;
   let editorialPriority = 0;
   if (manual) {
-    // Human lock: AI grade/score must not weaken or override this band.
-    manualPriority = MANUAL_PRIORITY_POINTS[priority];
+    // Human lock outranks AI, but only while the row is in the 7d core window.
+    // Older manuals do not bypass home core eligibility (pool filter).
+    if (isHomeCoreEligible(article, nowMs)) {
+      manualPriority = MANUAL_PRIORITY_POINTS[priority];
+    }
   } else if (
     priority !== "normal" &&
     isWithinSiteWindow(article, nowMs, EDITORIAL_PRIORITY_SITE_WINDOW_MS)
@@ -140,7 +223,6 @@ export function computeEditorialScore(
     const grade = normalizeStoredAiRecommendGrade(article.ai_recommend_grade);
     aiGrade = grade ? AI_GRADE_POINTS[grade] : 0;
     const score = normalizeStoredAiRecommendScore(article.ai_recommend_score);
-    // Fine-tune only within the grade band (0–100 << grade gaps).
     aiScore = score ?? 0;
   }
 
@@ -213,6 +295,7 @@ export type DiversifiedPickOptions = {
 /**
  * Greedy pick by editorial score with source / region / topic diversity.
  * Source cap relaxes (+1 repeatedly) when not enough unique picks remain.
+ * Never invents articles outside the provided list (caller supplies ≤7d pool).
  */
 export function pickDiversifiedByEditorialScore(
   articles: HomeArticleCard[],
@@ -244,7 +327,6 @@ export function pickDiversifiedByEditorialScore(
     sourceCap += 1;
   }
 
-  // Final fill: still honor topic suppress; only source/region caps are relaxed away.
   const seen = new Set<string>();
   const topicSeen = new Set<string>();
   const out: HomeArticleCard[] = [];
@@ -305,7 +387,6 @@ function tryPick(
 
     if (opts.balanceRegions && out.length > 0) {
       const region = getArticleRegion(article);
-      // Soft: when one region is ahead by 2+, prefer the other if available later.
       if (region === "us" && us >= kr + 2) {
         const hasKrLater = sorted.slice(i + 1).some((a) => {
           const k = articleKey(a);

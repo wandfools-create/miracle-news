@@ -89,23 +89,25 @@ describe("home freshness priority", () => {
     assert.equal(sortArticlesByFreshness([older, recent], NOW)[0]?.id, "recent");
   });
 
-  it("D: is_top_story always wins featured (no age expiry)", () => {
+  it("D: is_top_story past 72h no longer force-wins featured over AI priority", () => {
     const manual = card({
       id: "manual",
       title: "manual top",
       is_top_story: true,
       top_story_order: 1,
-      source_published_at: hoursAgo(40),
-      published_at: hoursAgo(40),
+      source_published_at: hoursAgo(80),
+      published_at: hoursAgo(80),
     });
     const fresh = card({
       id: "fresh",
       title: "fresh normal",
       source_published_at: hoursAgo(0.1),
       published_at: hoursAgo(0.1),
+      ai_recommend_grade: "priority",
+      ai_recommend_score: 70,
     });
     const featured = pickFeaturedArticle([fresh, manual], NOW);
-    assert.equal(featured?.id, "manual");
+    assert.equal(featured?.id, "fresh");
   });
 
   it("active is_top_story within 24h still wins featured", () => {

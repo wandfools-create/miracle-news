@@ -125,8 +125,8 @@ function isWithinWindow(
 
 /**
  * Prefer articles within the primary window; if fewer than `minCount`,
- * expand to the fallback window. Never includes older than fallback
- * unless `allowManualTopStory` and the article is a manual top story.
+ * expand to the fallback window. Never includes older than fallback.
+ * `allowManualTopStory` is ignored (deprecated) — stale pins must not inject.
  * Windows use site published_at first (editorial freshness).
  */
 export function filterArticlesForHomeSurface(
@@ -136,6 +136,7 @@ export function filterArticlesForHomeSurface(
     primaryMs?: number;
     fallbackMs?: number;
     minCount?: number;
+    /** @deprecated Ignored — out-of-window top stories are never injected. */
     allowManualTopStory?: boolean;
   }
 ): HomeArticleCard[] {
@@ -143,20 +144,8 @@ export function filterArticlesForHomeSurface(
   const primaryMs = options?.primaryMs ?? HOME_SURFACE_PRIMARY_MS;
   const fallbackMs = options?.fallbackMs ?? HOME_SURFACE_FALLBACK_MS;
   const minCount = options?.minCount ?? 1;
-  const allowManualTopStory = options?.allowManualTopStory === true;
 
   const primary = articles.filter((a) => isWithinWindow(a, nowMs, primaryMs));
-  const pool =
-    primary.length >= minCount
-      ? primary
-      : articles.filter((a) => isWithinWindow(a, nowMs, fallbackMs));
-
-  if (!allowManualTopStory) return pool;
-
-  const extras = articles.filter((a) => {
-    if (a.is_top_story !== true) return false;
-    if (pool.some((p) => p.id === a.id)) return false;
-    return true;
-  });
-  return extras.length ? [...pool, ...extras] : pool;
+  if (primary.length >= minCount) return primary;
+  return articles.filter((a) => isWithinWindow(a, nowMs, fallbackMs));
 }

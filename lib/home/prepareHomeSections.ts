@@ -4,7 +4,10 @@ import { featuredSourceConfigs, normalizeSource } from "@/lib/koreanArticleDispl
 import { sortSourceLeadCards } from "@/lib/sourceLeadOrder";
 import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
 import { balanceLatestByRegion } from "./balanceLatestByRegion";
-import { sortArticlesByEditorialScore } from "./editorialRanking";
+import {
+  filterHomeCoreEligible,
+  sortArticlesByEditorialScore,
+} from "./editorialRanking";
 import {
   pickFeaturedArticle,
   sortHomeArticlesForDisplay,
@@ -25,8 +28,9 @@ export function prepareHomeSections(
   options?: PrepareHomeSectionsOptions
 ): HomePageSections {
   const nowMs = options?.nowMs ?? Date.now();
-  const sorted = sortHomeArticlesForDisplay(articles, nowMs);
-  const featured = pickFeaturedArticle(sorted, nowMs);
+  const corePool = filterHomeCoreEligible(articles, nowMs);
+  const sorted = sortHomeArticlesForDisplay(corePool, nowMs);
+  const featured = pickFeaturedArticle(corePool, nowMs);
   const featuredId = featured?.id;
   const latestLimit = options?.latestLimit ?? 8;
 
@@ -59,10 +63,10 @@ export function prepareHomeSections(
     locale
   );
 
-  const sidebar = pickSidebarLatestArticles(sorted, 5, nowMs);
+  const sidebar = pickSidebarLatestArticles(corePool, 5, nowMs);
 
   const groupedByCategory: Record<string, HomeArticleCard[]> = {};
-  for (const article of sorted) {
+  for (const article of sortHomeArticlesForDisplay(articles, nowMs)) {
     const key = article.category ?? "other";
     if (!groupedByCategory[key]) groupedByCategory[key] = [];
     groupedByCategory[key].push(article);
