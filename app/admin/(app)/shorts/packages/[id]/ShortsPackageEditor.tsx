@@ -122,7 +122,10 @@ export default function ShortsPackageEditor({
               {record.status === "reviewed" ? "검토 완료 (읽기 전용)" : "초안"}
             </span>
             {" · "}
-            모드: {record.generationMode === "openai" ? "OpenAI" : "stub (로컬)"}
+            생성 방식:{" "}
+            {record.generationMode === "openai"
+              ? "AI 생성"
+              : "테스트 생성 · OpenAI 미사용"}
           </p>
         </div>
         <Link

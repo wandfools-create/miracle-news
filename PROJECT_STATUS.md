@@ -253,7 +253,7 @@ Git history와 현재 코드에서 확인:
 
 **Status: IN PROGRESS**
 
-현재 Miracle News는 2~3일 실제 운영하면서 안정성을 확인하는 단계다. 수정 대기 50건 복구 긴급 대응은 완료됐으며, Shorts Phase 2 재개 전 Production 안정성 확인이 남아 있다.
+현재 Miracle News는 2~3일 실제 운영하면서 안정성을 확인하는 단계다. 수정 대기 50건 복구 긴급 대응은 완료됐으며, Shorts Phase 2는 Draft PR #5에서 Preview stub smoke test까지 완료했다.
 
 검증 항목:
 
@@ -325,32 +325,40 @@ Git history와 현재 코드에서 확인:
 
 ## 12B. Miracle News Shorts Studio Phase 2 (Draft PR #5)
 
-- **상태:** **Draft PR #5 OPEN** — branch `feature/shorts-ai-production-package-v1` (origin/main `4b2d9fc` 통합, **Production 미배포**)
-- **Production URL:** Phase 1만 반영 (`/admin/shorts` 선택 UI). Phase 2 패키지 생성·편집은 Production 미반영.
+- **상태:** **Draft PR #5 OPEN** — branch `feature/shorts-ai-production-package-v1` (origin/main 통합, **Production 코드 미배포**)
+- **Production URL:** Phase 1만 반영 (`/admin/shorts` 선택 UI). Phase 2 패키지 UI는 Preview에서 검증 중.
 - **저장소:**
-  - `SHORTS_PACKAGE_STORE=file` — 로컬/테스트 전용 (`data/shorts-packages/`, gitignore)
-  - `SHORTS_PACKAGE_STORE=supabase` — Production 전용 (필수). **migration 미적용 · Production store 미설정**
+  - `SHORTS_PACKAGE_STORE=file` — 로컬/개발 전용 (`data/shorts-packages/`, gitignore)
+  - `SHORTS_PACKAGE_STORE=supabase` — Preview·Production 서버 저장
+  - **Production Supabase migration 적용 완료** (`shorts_production_packages`, 2026-08-27)
+  - RLS / constraints / indexes / updated_at trigger 검증 완료
+  - **Preview env:** `SHORTS_PACKAGE_STORE=supabase` 설정 완료 (Production env 미설정)
   - `NODE_ENV=production`에서 file/미설정 시 오류 — **자동 file fallback 금지**
-- **OpenAI:** `SHORTS_AI_OPENAI_ENABLED=1` gate 유지, 모델 `OPENAI_SHORTS_MODEL` → article → model. **실호출 미검증** (기본 stub)
+- **OpenAI:** `SHORTS_AI_OPENAI_ENABLED=1` gate 유지. **실호출 미검증** (기본: 테스트 생성 / stub)
 - **자동 영상 제작·SNS 업로드:** 미구현 (의도적으로 없음)
 
 **구현된 기능 (branch / Preview)**
 
-- 공개 기사 3~5개 선택 후 **AI 제작 패키지 생성** (기본: stub)
+- 공개 기사 3~5개 선택 후 **AI 제작 패키지 생성** (기본: 테스트 생성 / stub)
 - 서버에서 published 상태 재검증 + 출처 URL 서버 구성
 - SAME EVENT 중복 제거, 구조화 JSON 검증
 - Repository 분리 (file / supabase) + reviewed 읽기 전용 · 초안 되돌리기
 - `/admin/shorts/packages/[id]` 편집 UI
 - 관리자 server action 인증
 
-**배포 전 필수 (PR 본문과 동일)**
+**Stub smoke test (2026-08-27, Preview → Production Supabase)**
 
-1. migration 검토 및 적용
-2. `SHORTS_PACKAGE_STORE=supabase` 설정
-3. Supabase 저장 smoke test
-4. OpenAI gate 활성화 후 1회 검증
-5. 사람 검토
-6. main merge (**migration·env 설정 전 merge 금지**)
+- Preview에서 공개 기사 3개로 package 1건 생성 성공 (`generation_mode=stub`)
+- 초안 저장 · 새로고침 후 내용 유지 · 검토 완료 · 편집 잠금 · 초안 되돌리기 성공
+- OpenAI 호출 없음
+- 선택 기사·localization 무영향 (articles 217 / localizations 345 / published 111 유지)
+
+**배포 전 남은 단계**
+
+1. OpenAI gate 활성화 후 Preview 1회 smoke test
+2. Production `SHORTS_PACKAGE_STORE=supabase` 설정 (현재 Preview만)
+3. 사람 검토
+4. main merge (**OpenAI 검증·Production env 전 merge 금지**)
 
 - **OpenAI 재사용:** `lib/openai/chatCompletionJson.ts`
 - **Shorts env:** `SHORTS_PACKAGE_STORE`, `SHORTS_AI_OPENAI_ENABLED`, `OPENAI_SHORTS_MODEL`, `SHORTS_PACKAGE_STORE_DIR`
@@ -376,6 +384,6 @@ Git history와 현재 코드에서 확인:
 - **Revision restore (PR #6):** Production 배포 완료; 수정 대기 50건 복구 완료 (AI 재작성 없음; `published_at`/localization/slug 보존)
 - **Operational Validation:** IN PROGRESS — 50건 복구 결과 기록 완료
 - **Shorts Studio Phase 1:** Production 반영 완료 (`/admin/shorts`, PR #1)
-- **Shorts PR #5:** OPEN (Draft) — Phase 2 AI production package; origin/main `4b2d9fc` 통합; migration 미적용 · `SHORTS_PACKAGE_STORE` Production 미설정 · OpenAI 실호출 미검증 · 자동 영상/업로드 미구현
-- **Current Priority:** main merge 후 Shorts Phase 2 검증; Production 운영 안정성 확인 병행
-- **Next Review:** npm test/build·PR #5 Preview 확인; migration·env 설정 전 main merge 금지
+- **Shorts PR #5:** OPEN (Draft) — Phase 2 AI production package; Production migration 적용 완료; Preview `SHORTS_PACKAGE_STORE=supabase`; stub smoke test 성공; OpenAI 실호출 미검증; Production env·코드 미배포; 자동 영상/업로드 미구현
+- **Current Priority:** Preview OpenAI smoke test → Production env 설정 → PR #5 검토·merge
+- **Next Review:** OpenAI gate Preview 검증; Production `SHORTS_PACKAGE_STORE` 설정 전 main merge 금지

@@ -196,9 +196,10 @@ export default function ShortsStudioWorkspace({
       >
         <p className="font-semibold text-gray-900">Phase 2 — AI 제작 패키지</p>
         <p className="mt-1">
-          Hook·나레이션·자막·화면 구성안·미디어 제안을 생성합니다. 기본은 로컬 stub 생성이며,
-          OpenAI는 <code className="text-xs">SHORTS_AI_OPENAI_ENABLED=1</code>일 때만 사용합니다.
-          Production 저장소는 <code className="text-xs">SHORTS_PACKAGE_STORE=supabase</code>가
+          Hook·나레이션·자막·화면 구성안·미디어 제안을 생성합니다. 기본은 테스트 생성(OpenAI
+          미사용)이며, OpenAI는{" "}
+          <code className="text-xs">SHORTS_AI_OPENAI_ENABLED=1</code>일 때만 사용합니다. Preview·
+          Production 저장은 <code className="text-xs">SHORTS_PACKAGE_STORE=supabase</code>가
           필요합니다. 자동 공개는 없으며 사람 검토가 필요합니다.
         </p>
       </div>
@@ -217,7 +218,9 @@ export default function ShortsStudioWorkspace({
                   <span className="text-gray-500">
                     {deskLabel(pkg.desk)} · {pkg.editDate} ·{" "}
                     {pkg.status === "reviewed" ? "검토 완료" : "초안"} ·{" "}
-                    {pkg.generationMode === "openai" ? "OpenAI" : "stub"}
+                    {pkg.generationMode === "openai"
+                      ? "AI 생성"
+                      : "테스트 생성 · OpenAI 미사용"}
                   </span>
                 </Link>
               </li>
