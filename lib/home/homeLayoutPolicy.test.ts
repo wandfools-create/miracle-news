@@ -1,6 +1,6 @@
 /**
  * Home layout policy fixtures — no DB / OpenAI.
- * Documents newspaper 3-col rails, non-sticky panels, category panel URL.
+ * Documents newspaper 3-col rails, editorial hierarchy, category panel URL.
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -69,7 +69,7 @@ describe("home sidebar layout and category nav (fixture)", () => {
     );
   });
 
-  it("HomeNewsView uses 3-col rails without sticky or fixed follow", () => {
+  it("HomeNewsView uses 3-col rails without sticky or card-shadow chrome", () => {
     const view = readFileSync(
       join(process.cwd(), "components/home/HomeNewsView.tsx"),
       "utf8"
@@ -78,13 +78,16 @@ describe("home sidebar layout and category nav (fixture)", () => {
     assert.match(view, /newsHomeThreeColGrid/);
     assert.match(view, /showLeftRail/);
     assert.match(view, /showRightRail/);
-    assert.match(view, /order-3.*xl:col-start-1|xl:col-start-1[\s\S]*order-3/);
-    assert.match(view, /order-2.*xl:col-start-3|xl:col-start-3/);
+    assert.match(view, /xl:col-span-full/);
+    assert.match(view, /xl:row-span-2/);
     assert.doesNotMatch(view, /lg:sticky|sticky |fixed |position:\s*sticky/);
     assert.doesNotMatch(view, /SpotlightSection/);
+    assert.doesNotMatch(view, /shadow-sm|shadow-md|rounded-xl/);
     assert.match(view, /role="tablist"/);
     assert.match(view, /aria-selected/);
     assert.match(view, /searchParams\.get\("category"\)/);
+    assert.match(view, /FeaturedSecondary/);
+    assert.match(view, /StoryListRow/);
   });
 
   it("TrendingIssuesPanel keeps full descriptions and article links without internal scroll", () => {
@@ -96,7 +99,7 @@ describe("home sidebar layout and category nav (fixture)", () => {
     assert.match(panel, /primaryArticle/);
     assert.match(panel, /relatedArticles/);
     assert.match(panel, /issue\.description/);
-    assert.doesNotMatch(panel, /max-h-\[|overflow-y-auto|line-clamp-2/);
+    assert.doesNotMatch(panel, /max-h-\[|overflow-y-auto|shadow-sm|rounded-lg/);
     assert.doesNotMatch(panel, /maxPerRegion/);
     assert.doesNotMatch(panel, /similarity|fuzzy|matchTitle/i);
   });
@@ -109,7 +112,7 @@ describe("home sidebar layout and category nav (fixture)", () => {
     assert.match(view, /id="featured"[\s\S]*order-1/);
     assert.match(view, /order-2 min-w-0 xl:order-none/);
     assert.match(view, /order-3 min-w-0 xl:order-none xl:col-start-1/);
-    assert.match(view, /id="sources"[\s\S]*order-4|order-4 scroll-mt-6/);
-    assert.match(view, /id="categories"[\s\S]*order-5|order-5 scroll-mt-6/);
+    assert.match(view, /order-4 min-w-0 scroll-mt-6/);
+    assert.match(view, /order-5 min-w-0 scroll-mt-6/);
   });
 });

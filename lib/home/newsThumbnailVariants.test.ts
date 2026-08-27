@@ -29,7 +29,7 @@ describe("NewsThumbnail home variants (fixture only)", () => {
     assert.doesNotMatch(source, /max-h-/);
   });
 
-  it("HomeNewsView wires source/category to variants; FeaturedHero stays contain", () => {
+  it("HomeNewsView wires source/category variants and editorial cover thumbs", () => {
     const view = readFileSync(
       join(process.cwd(), "components/home/HomeNewsView.tsx"),
       "utf8"
@@ -39,13 +39,8 @@ describe("NewsThumbnail home variants (fixture only)", () => {
     assert.match(view, /newsThumbFrameForVariant\("categoryCard"\)/);
     assert.match(view, /variant="categoryCard"/);
     assert.doesNotMatch(view, /min-h-\[168px\]/);
-
-    // Featured hero ArticleThumb calls omit cover/variant → default contain
-    const featuredSplit = view.slice(
-      view.indexOf("if (splitLayout)"),
-      view.indexOf("/** 주요 기사 목록 썸네일")
-    );
-    assert.doesNotMatch(featuredSplit, /objectFit="cover"/);
-    assert.doesNotMatch(featuredSplit, /variant=/);
+    assert.match(view, /function FeaturedHero[\s\S]*objectFit="cover"/);
+    assert.match(view, /StoryListRow/);
+    assert.match(view, /CategoryLead/);
   });
 });

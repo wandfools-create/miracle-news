@@ -46,17 +46,17 @@ function IssueRow({
     : null;
 
   return (
-    <li className="border-b border-neutral-200/80 py-2.5 last:border-b-0 last:pb-0">
+    <li className="border-b border-neutral-200 py-3 last:border-b-0 last:pb-0">
       {primaryHref ? (
         <Link
           href={primaryHref}
-          className="group block rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy"
+          className="group block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy"
         >
           <p className="text-[13px] font-semibold leading-snug text-neutral-950 group-hover:underline decoration-neutral-300 underline-offset-2">
             {issue.title}
           </p>
           {issue.description ? (
-            <p className="mt-1 text-xs leading-relaxed text-neutral-600 group-hover:text-neutral-700">
+            <p className="mt-1.5 text-[12px] leading-relaxed text-neutral-600 group-hover:text-neutral-700">
               {issue.description}
             </p>
           ) : null}
@@ -67,7 +67,7 @@ function IssueRow({
             {issue.title}
           </p>
           {issue.description ? (
-            <p className="mt-1 text-xs leading-relaxed text-neutral-600">
+            <p className="mt-1.5 text-[12px] leading-relaxed text-neutral-600">
               {issue.description}
             </p>
           ) : null}
@@ -91,7 +91,7 @@ function IssueRow({
                   {href ? (
                     <Link
                       href={href}
-                      className="block rounded-sm text-[11px] leading-snug text-neutral-700 hover:text-news-navy hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy"
+                      className="block text-[11px] leading-snug text-neutral-700 hover:text-news-navy hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy"
                     >
                       <span className="font-medium text-neutral-500">
                         {sourceLabel}
@@ -144,13 +144,13 @@ function RegionList({
   if (issues.length === 0) return null;
 
   return (
-    <div className="mt-3 first:mt-0">
+    <div className="mt-4 first:mt-0">
       <p
-        className={`border-l-2 pl-2 text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-500 ${accentClass} border-solid`}
+        className={`border-l-2 pl-2 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-500 ${accentClass}`}
       >
         {title}
       </p>
-      <ul className="mt-2 space-y-0">
+      <ul className="mt-1.5 space-y-0">
         {issues.map((issue) => (
           <IssueRow
             key={issue.id}
@@ -171,19 +171,19 @@ export default function TrendingIssuesPanel({
 }: TrendingIssuesPanelProps) {
   return (
     <section
-      className="min-w-0 rounded-lg border border-neutral-200 bg-white px-4 py-3.5 shadow-sm"
+      className="min-w-0 border-t border-neutral-300 pt-3"
       aria-labelledby="trending-issues-heading"
     >
       <h2
         id="trending-issues-heading"
-        className="text-sm font-bold text-news-navy"
+        className="border-b border-neutral-200 pb-2 text-[15px] font-bold text-news-navy"
       >
         {labels.title}
       </h2>
       <RegionList
         title={labels.regionUs}
         issues={block.us}
-        accentClass="border-l-blue-800"
+        accentClass="border-l-news-navy"
         labels={labels}
         articleHrefPrefix={articleHrefPrefix}
       />
