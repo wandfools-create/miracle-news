@@ -69,25 +69,22 @@ describe("home sidebar layout and category nav (fixture)", () => {
     );
   });
 
-  it("HomeNewsView keeps trending in right rail and spotlight in main", () => {
+  it("HomeNewsView keeps trending in right rail without sticky follow", () => {
     const view = readFileSync(
       join(process.cwd(), "components/home/HomeNewsView.tsx"),
       "utf8"
     );
     assert.match(view, /SpotlightSection/);
     assert.match(view, /showAside = showTrending/);
-    assert.match(view, /lg:hidden/);
-    assert.match(view, /hidden[\s\S]*lg:block/);
+    assert.match(view, /lg:order-2/);
+    assert.match(view, /order-4/);
+    assert.doesNotMatch(view, /lg:sticky/);
     assert.match(view, /role="tablist"/);
     assert.match(view, /aria-selected/);
     assert.match(view, /searchParams\.get\("category"\)/);
-    assert.doesNotMatch(
-      view.slice(view.indexOf("{showAside ?"), view.length),
-      /sidebarTitle/
-    );
   });
 
-  it("TrendingIssuesPanel links with articleHrefPrefix locale paths", () => {
+  it("TrendingIssuesPanel links with articleHrefPrefix and internal scroll", () => {
     const panel = readFileSync(
       join(process.cwd(), "components/home/TrendingIssuesPanel.tsx"),
       "utf8"
@@ -95,18 +92,19 @@ describe("home sidebar layout and category nav (fixture)", () => {
     assert.match(panel, /articleHrefPrefix/);
     assert.match(panel, /primaryArticle/);
     assert.match(panel, /relatedArticles/);
+    assert.match(panel, /max-h-\[min\(70vh,28rem\)\]/);
+    assert.match(panel, /overflow-y-auto/);
     assert.doesNotMatch(panel, /similarity|fuzzy|matchTitle/i);
   });
 
-  it("documents mobile order: top stories then trending then spotlight", () => {
+  it("documents desktop spotlight under featured and mobile trending before spotlight", () => {
     const view = readFileSync(
       join(process.cwd(), "components/home/HomeNewsView.tsx"),
       "utf8"
     );
-    const trendingMobile = view.indexOf("{trendingPanel ? (");
-    const spotlight = view.indexOf("<SpotlightSection");
-    const categories = view.indexOf('id="categories"');
-    assert.ok(trendingMobile > 0 && spotlight > trendingMobile);
-    assert.ok(categories > spotlight);
+    assert.match(view, /order-1[\s\S]*featured|featured[\s\S]*order-1/);
+    assert.match(view, /lg:order-2/);
+    assert.match(view, /order-3 min-w-0 lg:hidden/);
+    assert.match(view, /order-4 min-w-0 lg:order-2/);
   });
 });

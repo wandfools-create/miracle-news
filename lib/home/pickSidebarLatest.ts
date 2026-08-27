@@ -8,9 +8,26 @@ export function articleDedupeKey(article: HomeArticleCard): string {
   return article.article_id ?? article.id;
 }
 
+function takeUnique(
+  articles: HomeArticleCard[],
+  limit: number
+): HomeArticleCard[] {
+  const seen = new Set<string>();
+  const result: HomeArticleCard[] = [];
+  for (const article of articles) {
+    const key = articleDedupeKey(article);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(article);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+
 /**
  * 「지금 주목」: prefer last 72h by source freshness, fall back to 7d.
- * Older than 7d excluded (manual is_top_story still allowed).
+ * If the freshness windows are empty (missing timestamps / very old pool),
+ * fall back to the newest published cards so the section still renders.
  */
 export function pickSidebarLatestArticles(
   articles: HomeArticleCard[],
@@ -22,17 +39,9 @@ export function pickSidebarLatestArticles(
     minCount: limit,
     allowManualTopStory: true,
   });
-  const sorted = sortArticlesByFreshness(recent, nowMs);
-  const seen = new Set<string>();
-  const result: HomeArticleCard[] = [];
+  const fromWindow = takeUnique(sortArticlesByFreshness(recent, nowMs), limit);
+  if (fromWindow.length > 0) return fromWindow;
 
-  for (const article of sorted) {
-    const key = articleDedupeKey(article);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(article);
-    if (result.length >= limit) break;
-  }
-
-  return result;
+  // Guaranteed fill from published home cards when surface windows yield nothing.
+  return takeUnique(sortArticlesByFreshness(articles, nowMs), limit);
 }

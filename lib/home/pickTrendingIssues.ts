@@ -110,7 +110,7 @@ function buildIssue(
   region: ArticleRegion,
   nowMs: number
 ): TrendingIssue {
-  const relatedArticles = relatedArticlesFromBucket(items, lead, nowMs, 3);
+  const relatedArticles = relatedArticlesFromBucket(items, lead, nowMs, 2);
   return {
     id,
     title,

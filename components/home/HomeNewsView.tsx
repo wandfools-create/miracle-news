@@ -1150,9 +1150,13 @@ export default function HomeNewsView({
 
         {!errorMessage && hasArticles ? (
           <div className={showAside ? newsMainGrid : "min-w-0"}>
-            <div className="min-w-0 space-y-10 lg:space-y-12">
+            <div className="flex min-w-0 flex-col gap-10 lg:gap-12">
               {showFeatured && displaySections.featured ? (
-                <section id="featured" className="scroll-mt-6" aria-labelledby="home-featured">
+                <section
+                  id="featured"
+                  className="order-1 scroll-mt-6"
+                  aria-labelledby="home-featured"
+                >
                   <SectionHeading
                     eyebrow={labels.featuredEyebrow}
                     title={labels.featuredTitle}
@@ -1178,8 +1182,21 @@ export default function HomeNewsView({
                 </section>
               ) : null}
 
+              {/* Desktop: spotlight directly under featured. Mobile: after trending (order-4). */}
+              {showSidebar ? (
+                <div className="order-4 min-w-0 lg:order-2">
+                  <SpotlightSection
+                    articles={displaySections.sidebar}
+                    locale={locale}
+                    labels={labels}
+                    articleHrefPrefix={articleHrefPrefix}
+                    articleHrefFor={articleHrefFor}
+                  />
+                </div>
+              ) : null}
+
               {showTopStories && topStories ? (
-                <section id="latest" className="scroll-mt-6">
+                <section id="latest" className="order-2 scroll-mt-6 lg:order-3">
                   <SectionHeading
                     eyebrow={labels.latestEyebrow}
                     title={labels.latestTitle}
@@ -1215,7 +1232,7 @@ export default function HomeNewsView({
               ) : null}
 
               {!showTopStories && displaySections.latest.length > 0 ? (
-                <section id="latest" className="scroll-mt-6">
+                <section id="latest" className="order-2 scroll-mt-6 lg:order-3">
                   <SectionHeading
                     eyebrow={labels.latestEyebrow}
                     title={labels.latestTitle}
@@ -1238,23 +1255,13 @@ export default function HomeNewsView({
                 </section>
               ) : null}
 
-              {/* Mobile: trending between top stories and spotlight */}
+              {/* Mobile only: trending after main stories, before spotlight */}
               {trendingPanel ? (
-                <div className="lg:hidden">{trendingPanel}</div>
-              ) : null}
-
-              {showSidebar ? (
-                <SpotlightSection
-                  articles={displaySections.sidebar}
-                  locale={locale}
-                  labels={labels}
-                  articleHrefPrefix={articleHrefPrefix}
-                  articleHrefFor={articleHrefFor}
-                />
+                <div className="order-3 min-w-0 lg:hidden">{trendingPanel}</div>
               ) : null}
 
               {showSources ? (
-                <section id="sources" className="scroll-mt-6">
+                <section id="sources" className="order-5 scroll-mt-6">
                   <SectionHeading
                     eyebrow={labels.sourcesEyebrow}
                     title={labels.sourcesTitle}
@@ -1315,7 +1322,7 @@ export default function HomeNewsView({
               ) : null}
 
               {showCategories ? (
-                <section id="categories" className="scroll-mt-6">
+                <section id="categories" className="order-6 scroll-mt-6">
                   <SectionHeading
                     eyebrow={labels.categoriesEyebrow}
                     title={labels.categoriesTitle}
@@ -1420,7 +1427,7 @@ export default function HomeNewsView({
             </div>
 
             {showAside ? (
-              <aside className="scroll-mt-6 hidden space-y-5 lg:sticky lg:top-6 lg:block lg:self-start">
+              <aside className="scroll-mt-6 hidden self-start lg:block">
                 {trendingPanel}
               </aside>
             ) : null}

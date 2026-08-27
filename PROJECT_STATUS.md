@@ -215,6 +215,7 @@ Git history와 현재 코드에서 확인:
 - Miracle News Shorts Studio Phase 1 Production 배포 완료 (PR #1) — `/admin/shorts`
 - 수정 대기 → 이전 공개 상태 복구 Production 배포 및 50건 실제 복구 완료 (PR #6) — AI 재작성 없음; `published_at`/localization/slug 보존; 공개→수정 대기 confirm 추가
 - 홈페이지 정보 구조 개선 로컬 개발: 지금 주목 상단 이동 · 지금 뜨는 이슈 관련 기사 연결 · 카테고리 클릭 패널 복구 (Production 배포 전)
+- 홈페이지 Preview 피드백 반영 로컬 수정: 이슈 sticky 제거 · 지금 주목 본문 강제 표시 · 이슈 카드 내부 스크롤 (Production 배포 전)
 - 알려진 인계 결과: `npm test` 215 tests 통과, build 성공
 
 ## 9. 현재 미해결 문제
