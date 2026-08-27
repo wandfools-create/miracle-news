@@ -18,8 +18,11 @@ export const koHomeLabels: HomeNewsLabels = {
   trendingTitle: "지금 뜨는 이슈",
   trendingRegionUs: "미국",
   trendingRegionKr: "한국",
+  trendingRelatedLabel: "관련 기사",
+  trendingOriginalLabel: "원문 보기",
   categoriesEyebrow: "Sections",
   categoriesTitle: "카테고리별 기사",
+  categoriesEmpty: "이 카테고리에 공개된 기사가 없습니다.",
   sourcesEyebrow: "Sources",
   sourcesTitle: "주요 언론사",
   sourcesDesc:

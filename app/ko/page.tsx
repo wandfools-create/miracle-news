@@ -4,6 +4,7 @@ import { koHomeLabels } from "@/lib/home/koHomeLabels";
 import { prepareEditionHomeSections } from "@/lib/home/prepareEditionHomeSections";
 import { koHomeSearchLabels } from "@/lib/home/koSearchLabels";
 import { formatServerHeaderDate } from "@/lib/home/serverDateLabels";
+import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -25,22 +26,30 @@ export default async function KoreanHomePage() {
   const sourceOptions = sections.activeSourceLabels;
 
   return (
-    <HomeNewsView
-      pageRole="ko"
-      locale="ko"
-      labels={koHomeLabels}
-      sections={sections}
-      articleHrefPrefix="/ko/article"
-      homeHref="/ko"
-      alternateLangHref="/en"
-      sourceFilterOptions={sourceOptions}
-      sourceFilterAllLabel="모든 언론사"
-      errorMessage={error?.message ?? null}
-      showDateInHeader
-      headerDateText={headerDateText}
-      searchArticles={articles}
-      searchPath="/ko/search"
-      searchLabels={koHomeSearchLabels}
-    />
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-white px-4 py-10 text-neutral-600">
+          불러오는 중…
+        </main>
+      }
+    >
+      <HomeNewsView
+        pageRole="ko"
+        locale="ko"
+        labels={koHomeLabels}
+        sections={sections}
+        articleHrefPrefix="/ko/article"
+        homeHref="/ko"
+        alternateLangHref="/en"
+        sourceFilterOptions={sourceOptions}
+        sourceFilterAllLabel="모든 언론사"
+        errorMessage={error?.message ?? null}
+        showDateInHeader
+        headerDateText={headerDateText}
+        searchArticles={articles}
+        searchPath="/ko/search"
+        searchLabels={koHomeSearchLabels}
+      />
+    </Suspense>
   );
 }

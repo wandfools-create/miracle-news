@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ArticleLocale } from "@/lib/article/formatPublishedDate";
 import { getCategoryLabel } from "@/lib/article/categoryLabels";
 import {
@@ -59,6 +60,9 @@ export type HomeNewsLabels = {
   trendingTitle: string;
   trendingRegionUs: string;
   trendingRegionKr: string;
+  trendingRelatedLabel: string;
+  trendingOriginalLabel: string;
+  categoriesEmpty: string;
 };
 
 function formatCategoryCount(locale: ArticleLocale, n: number): string {
@@ -698,18 +702,65 @@ function CategoryCard({
 function SidebarItem({
   article,
   locale,
+  labels,
   articleHrefPrefix,
   articleHrefFor,
   index,
+  compact = false,
 }: {
   article: HomeArticleCard;
   locale: ArticleLocale;
+  labels: HomeNewsLabels;
   articleHrefPrefix: string;
   articleHrefFor?: (article: HomeArticleCard) => string;
   index: number;
+  compact?: boolean;
 }) {
   const displayLocale = article.locale ?? locale;
   const href = resolveArticleHref(article, articleHrefPrefix, articleHrefFor);
+
+  if (compact) {
+    return (
+      <article className="min-w-[220px] max-w-[280px] shrink-0 snap-start overflow-hidden rounded-xl border border-neutral-200 bg-white sm:min-w-0 sm:max-w-none">
+        <Link
+          href={href}
+          className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy"
+        >
+          <div className={`${newsThumbFrameClass} aspect-video w-full`}>
+            <ArticleThumb
+              article={article}
+              noImageLabel={labels.noImage}
+              sizes="(max-width: 640px) 70vw, 20vw"
+            />
+          </div>
+        </Link>
+        <div className="p-3">
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-[10px] font-bold text-white">
+              {index + 1}
+            </span>
+            <span className="truncate">
+              {getSourceLabel(article.source, article.original_url)}
+            </span>
+          </div>
+          <h3 className="mt-1.5 text-[14px] font-semibold leading-snug text-neutral-900 sm:text-[15px]">
+            <Link
+              href={href}
+              className="line-clamp-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy"
+            >
+              {article.title}
+            </Link>
+          </h3>
+          <time
+            dateTime={article.published_at ?? article.created_at}
+            className="mt-1 block text-[12px] text-neutral-500"
+          >
+            {listDateText(article, displayLocale)}
+          </time>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article className="border-b border-neutral-200/80 pb-3.5 last:border-b-0 last:pb-0">
@@ -735,6 +786,44 @@ function SidebarItem({
         </div>
       </div>
     </article>
+  );
+}
+
+function SpotlightSection({
+  articles,
+  locale,
+  labels,
+  articleHrefPrefix,
+  articleHrefFor,
+}: {
+  articles: HomeArticleCard[];
+  locale: ArticleLocale;
+  labels: HomeNewsLabels;
+  articleHrefPrefix: string;
+  articleHrefFor?: (article: HomeArticleCard) => string;
+}) {
+  return (
+    <section id="sidebar" className="scroll-mt-6">
+      <SectionHeading
+        eyebrow={labels.sidebarEyebrow}
+        title={labels.sidebarTitle}
+        description={labels.sidebarDesc}
+      />
+      <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 snap-x snap-mandatory sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3 xl:grid-cols-5">
+        {articles.map((article, index) => (
+          <SidebarItem
+            key={article.id}
+            article={article}
+            locale={locale}
+            labels={labels}
+            articleHrefPrefix={articleHrefPrefix}
+            articleHrefFor={articleHrefFor}
+            index={index}
+            compact
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -804,6 +893,9 @@ export default function HomeNewsView({
     null
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const handleSearchQueryChange = useCallback((query: string) => {
     setSearchQuery(query);
   }, []);
@@ -863,7 +955,8 @@ export default function HomeNewsView({
     trendingIssues &&
       (trendingIssues.us.length > 0 || trendingIssues.kr.length > 0)
   );
-  const showAside = showTrending || showSidebar;
+  /** Desktop right rail: trending only (spotlight moved to main column). */
+  const showAside = showTrending;
   const filteredSourceLeadCards = useMemo(() => {
     if (!selectedSourceLabel) {
       return displaySections.sourceLeadCards.slice(0, SOURCE_LEAD_DISPLAY_LIMIT);
@@ -893,6 +986,66 @@ export default function HomeNewsView({
     [displaySections.visibleCategories, filteredGroupedByCategory]
   );
   const showCategories = filteredVisibleCategories.length > 0;
+
+  /** Category click panel — mirrors EditionFilterBar `?category=` URL pattern. */
+  const categoryFromUrl = searchParams.get("category");
+  const selectedCategory = useMemo(() => {
+    if (
+      categoryFromUrl &&
+      filteredVisibleCategories.includes(categoryFromUrl)
+    ) {
+      return categoryFromUrl;
+    }
+    return filteredVisibleCategories[0] ?? null;
+  }, [categoryFromUrl, filteredVisibleCategories]);
+
+  useEffect(() => {
+    if (!categoryFromUrl) return;
+    if (filteredVisibleCategories.includes(categoryFromUrl)) return;
+    if (filteredVisibleCategories.length === 0) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("category");
+    const q = params.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+  }, [
+    categoryFromUrl,
+    filteredVisibleCategories,
+    pathname,
+    router,
+    searchParams,
+  ]);
+
+  const selectCategory = useCallback(
+    (category: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("category", category);
+      const q = params.toString();
+      router.replace(`${pathname}?${q}`, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
+
+  const selectedCategoryArticles = selectedCategory
+    ? (filteredGroupedByCategory[selectedCategory] ?? []).slice(0, 6)
+    : [];
+  const selectedCategoryTotal = selectedCategory
+    ? filteredGroupedByCategory[selectedCategory]?.length ?? 0
+    : 0;
+
+  const trendingPanel = showTrending && trendingIssues ? (
+    <TrendingIssuesPanel
+      block={trendingIssues}
+      articleHrefPrefix={articleHrefPrefix}
+      labels={{
+        title: labels.trendingTitle,
+        regionUs: labels.trendingRegionUs,
+        regionKr: labels.trendingRegionKr,
+        relatedArticlesLabel: labels.trendingRelatedLabel,
+        originalSourceLabel: labels.trendingOriginalLabel,
+      }}
+    />
+  ) : null;
+
   const showSources =
     filteredSourceLeadCards.length > 0 || sourceFilterOptions.length > 0;
   const pageTitle = getBrandName(pageRole);
@@ -1085,6 +1238,21 @@ export default function HomeNewsView({
                 </section>
               ) : null}
 
+              {/* Mobile: trending between top stories and spotlight */}
+              {trendingPanel ? (
+                <div className="lg:hidden">{trendingPanel}</div>
+              ) : null}
+
+              {showSidebar ? (
+                <SpotlightSection
+                  articles={displaySections.sidebar}
+                  locale={locale}
+                  labels={labels}
+                  articleHrefPrefix={articleHrefPrefix}
+                  articleHrefFor={articleHrefFor}
+                />
+              ) : null}
+
               {showSources ? (
                 <section id="sources" className="scroll-mt-6">
                   <SectionHeading
@@ -1152,88 +1320,108 @@ export default function HomeNewsView({
                     eyebrow={labels.categoriesEyebrow}
                     title={labels.categoriesTitle}
                   />
-                  <div className="space-y-10">
+                  <div
+                    role="tablist"
+                    aria-label={labels.categoriesTitle}
+                    className="mb-5 flex flex-wrap gap-2"
+                  >
                     {filteredVisibleCategories.map((category) => {
-                      const items = filteredGroupedByCategory[category].slice(
-                        0,
-                        3
-                      );
+                      const selected = selectedCategory === category;
                       const total =
-                        filteredGroupedByCategory[category].length;
-
+                        filteredGroupedByCategory[category]?.length ?? 0;
                       return (
-                        <div key={category}>
-                          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-news-red/70 pb-2">
-                            <h3 className="text-xl font-bold text-news-navy">
-                              {getCategoryLabel(category, locale)}
-                            </h3>
-                            <span className="text-sm text-neutral-500">
-                              {formatCategoryCount(locale, total)}
-                            </span>
-                          </div>
-                          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-5">
-                            {items.map((article) => (
-                              <CategoryCard
-                                key={article.id}
-                                article={article}
-                                locale={locale}
-                                labels={labels}
-                                articleHrefPrefix={articleHrefPrefix}
-                                articleHrefFor={articleHrefFor}
-                              />
-                            ))}
-                          </div>
-                        </div>
+                        <button
+                          key={category}
+                          type="button"
+                          role="tab"
+                          id={`category-tab-${category}`}
+                          aria-selected={selected}
+                          aria-controls="category-panel"
+                          tabIndex={selected ? 0 : -1}
+                          onClick={() => selectCategory(category)}
+                          onKeyDown={(event) => {
+                            if (
+                              event.key !== "ArrowRight" &&
+                              event.key !== "ArrowLeft"
+                            ) {
+                              return;
+                            }
+                            event.preventDefault();
+                            const idx =
+                              filteredVisibleCategories.indexOf(category);
+                            const nextIdx =
+                              event.key === "ArrowRight"
+                                ? (idx + 1) % filteredVisibleCategories.length
+                                : (idx - 1 + filteredVisibleCategories.length) %
+                                  filteredVisibleCategories.length;
+                            selectCategory(
+                              filteredVisibleCategories[nextIdx]
+                            );
+                          }}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy sm:text-sm ${
+                            selected
+                              ? "bg-news-navy text-white"
+                              : "border border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50"
+                          }`}
+                        >
+                          {getCategoryLabel(category, locale)}
+                          <span className="ml-1.5 opacity-70">
+                            {formatCategoryCount(locale, total)}
+                          </span>
+                        </button>
                       );
                     })}
+                  </div>
+
+                  <div
+                    id="category-panel"
+                    role="tabpanel"
+                    aria-labelledby={
+                      selectedCategory
+                        ? `category-tab-${selectedCategory}`
+                        : undefined
+                    }
+                    className="min-w-0"
+                  >
+                    {selectedCategory && selectedCategoryTotal > 0 ? (
+                      <>
+                        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-news-red/70 pb-2">
+                          <h3 className="text-xl font-bold text-news-navy">
+                            {getCategoryLabel(selectedCategory, locale)}
+                          </h3>
+                          <span className="text-sm text-neutral-500">
+                            {formatCategoryCount(
+                              locale,
+                              selectedCategoryTotal
+                            )}
+                          </span>
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 xl:gap-5">
+                          {selectedCategoryArticles.map((article) => (
+                            <CategoryCard
+                              key={article.id}
+                              article={article}
+                              locale={locale}
+                              labels={labels}
+                              articleHrefPrefix={articleHrefPrefix}
+                              articleHrefFor={articleHrefFor}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="rounded-xl border border-neutral-200 bg-white px-4 py-10 text-center text-sm text-neutral-600">
+                        {labels.categoriesEmpty}
+                      </p>
+                    )}
                   </div>
                 </section>
               ) : null}
             </div>
 
             {showAside ? (
-              <aside
-                className="scroll-mt-6 space-y-5 lg:sticky lg:top-6 lg:self-start"
-              >
-                {showTrending && trendingIssues ? (
-                  <TrendingIssuesPanel
-                    block={trendingIssues}
-                    labels={{
-                      title: labels.trendingTitle,
-                      regionUs: labels.trendingRegionUs,
-                      regionKr: labels.trendingRegionKr,
-                    }}
-                  />
-                ) : null}
-
-                {showSidebar ? (
-                <section
-                  id="sidebar"
-                  className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm"
-                >
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
-                    {labels.sidebarEyebrow}
-                  </p>
-                  <h2 className="mt-1 text-[17px] font-bold text-neutral-950">
-                    {labels.sidebarTitle}
-                  </h2>
-                  <p className="mt-2 text-[15px] leading-relaxed text-neutral-600">
-                    {labels.sidebarDesc}
-                  </p>
-                  <div className="mt-4 space-y-1">
-                    {displaySections.sidebar.map((article, index) => (
-                      <SidebarItem
-                        key={article.id}
-                        article={article}
-                        locale={locale}
-                        articleHrefPrefix={articleHrefPrefix}
-                        articleHrefFor={articleHrefFor}
-                        index={index}
-                      />
-                    ))}
-                  </div>
-                </section>
-                ) : null}
+              <aside className="scroll-mt-6 hidden space-y-5 lg:sticky lg:top-6 lg:block lg:self-start">
+                {trendingPanel}
               </aside>
             ) : null}
           </div>

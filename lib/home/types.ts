@@ -61,11 +61,28 @@ export type EditionTopStoriesColumns = {
   right: HomeArticleCard[];
 };
 
+/**
+ * Published home-card fields carried with a trending issue so the UI can link
+ * without client-side text matching. Built only from the same article pool.
+ */
+export type TrendingIssueRelatedArticle = {
+  id: string;
+  article_id?: string;
+  slug: string;
+  title: string;
+  source: string;
+  original_url?: string | null;
+};
+
 export type TrendingIssue = {
   id: string;
   title: string;
   description: string | null;
   region: "us" | "kr";
+  /** Lead published article used to form title/description (may be null if none). */
+  primaryArticle: TrendingIssueRelatedArticle | null;
+  /** Up to 3 related published articles from the same topic/category bucket. */
+  relatedArticles: TrendingIssueRelatedArticle[];
 };
 
 export type TrendingIssuesBlock = {
