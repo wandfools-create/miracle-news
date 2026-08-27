@@ -6,6 +6,7 @@ import {
   filterHomeCoreEligible,
   filterHomeCoreSurfacePool,
   getEditorialFreshnessTimestamp,
+  HOME_CORE_EVENT_FAMILY_MAX,
   isForceTopStoryPin,
   pickDiversifiedByEditorialScore,
   sortArticlesByEditorialScore,
@@ -118,6 +119,9 @@ export function pickFeaturedHubArticles(
     balanceRegions: true,
     suppressTopicClusters: true,
     excludeKeys: exclude,
+    reservedCoreArticles: featured ? [featured] : [],
+    maxPerEventFamily: HOME_CORE_EVENT_FAMILY_MAX,
+    requireDistinctAngleForSecond: true,
   });
 
   const leads: HomeArticleCard[] = [];

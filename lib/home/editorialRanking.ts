@@ -23,8 +23,15 @@ import {
   type AiRecommendGrade,
 } from "./aiRecommendSnapshot";
 import { getArticleRegion, type ArticleRegion } from "./articleRegion";
-import { normalizeTopicClusterKey } from "./topicClusterKey";
+import {
+  HOME_CORE_EVENT_FAMILY_MAX,
+  isDistinctEventAngle,
+  normalizeEventFamilyKey,
+  normalizeTopicClusterKey,
+} from "./topicClusterKey";
 import type { HomeArticleCard } from "./types";
+
+export { HOME_CORE_EVENT_FAMILY_MAX };
 
 export { getEditorialFreshnessTimestamp };
 
@@ -290,11 +297,39 @@ export type DiversifiedPickOptions = {
   /** Suppress repeat topic clusters within this pick. */
   suppressTopicClusters?: boolean;
   excludeKeys?: Set<string>;
+  /**
+   * Already-selected core surface articles (e.g. featured + 보조).
+   * Count toward event-family caps; also excluded by key from picking.
+   */
+  reservedCoreArticles?: HomeArticleCard[];
+  /**
+   * Max articles per event family across reserved + this pick.
+   * Featured + 「지금 주목」 use HOME_CORE_EVENT_FAMILY_MAX (2).
+   */
+  maxPerEventFamily?: number;
+  /**
+   * When a family already has ≥1 in reserved+picked, allow another only if
+   * UPDATE / DIFFERENT ANGLE. Default false (opt-in for core surfaces).
+   */
+  requireDistinctAngleForSecond?: boolean;
 };
 
+function topicSignal(article: HomeArticleCard) {
+  return {
+    topic_key: article.topic_key,
+    topic_label: article.topic_label,
+    title: article.title,
+  };
+}
+
+function familyOf(article: HomeArticleCard): string | null {
+  return normalizeEventFamilyKey(topicSignal(article));
+}
+
 /**
- * Greedy pick by editorial score with source / region / topic diversity.
+ * Greedy pick by editorial score with source / region / topic / event-family diversity.
  * Source cap relaxes (+1 repeatedly) when not enough unique picks remain.
+ * Event-family caps never relax — prefer empty slots over same-event fill.
  * Never invents articles outside the provided list (caller supplies ≤7d pool).
  */
 export function pickDiversifiedByEditorialScore(
@@ -305,12 +340,25 @@ export function pickDiversifiedByEditorialScore(
   const limit = Math.max(0, options.limit);
   if (limit === 0) return [];
 
-  const exclude = options.excludeKeys ?? new Set<string>();
+  const reserved = options.reservedCoreArticles ?? [];
+  const exclude = new Set(options.excludeKeys ?? []);
+  for (const a of reserved) {
+    exclude.add(articleKey(a));
+    if (a.id) exclude.add(a.id);
+  }
+
   const baseCap = options.sourceCap ?? DEFAULT_SOURCE_CAP;
   const sorted = sortArticlesByEditorialScore(
-    articles.filter((a) => !exclude.has(articleKey(a))),
+    articles.filter((a) => !exclude.has(articleKey(a)) && !exclude.has(a.id)),
     nowMs
   );
+
+  const familyOpts = {
+    reserved,
+    maxPerEventFamily: options.maxPerEventFamily,
+    requireDistinctAngleForSecond:
+      options.requireDistinctAngleForSecond === true,
+  };
 
   let sourceCap = baseCap;
   for (let relax = 0; relax < 6; relax += 1) {
@@ -320,6 +368,7 @@ export function pickDiversifiedByEditorialScore(
       sourceCap,
       balanceRegions: options.balanceRegions === true,
       suppressTopicClusters: options.suppressTopicClusters !== false,
+      ...familyOpts,
     });
     if (picked.length >= limit || picked.length >= sorted.length) {
       return picked.slice(0, limit);
@@ -327,26 +376,15 @@ export function pickDiversifiedByEditorialScore(
     sourceCap += 1;
   }
 
-  const seen = new Set<string>();
-  const topicSeen = new Set<string>();
-  const out: HomeArticleCard[] = [];
-  for (const article of sorted) {
-    const key = articleKey(article);
-    if (seen.has(key)) continue;
-    if (options.suppressTopicClusters !== false) {
-      const topic = normalizeTopicClusterKey({
-        topic_key: article.topic_key,
-        topic_label: article.topic_label,
-        title: article.title,
-      });
-      if (topic && topicSeen.has(topic)) continue;
-      if (topic) topicSeen.add(topic);
-    }
-    seen.add(key);
-    out.push(article);
-    if (out.length >= limit) break;
-  }
-  return out;
+  // Final pass: keep family caps; only relax source (already at high cap).
+  return tryPick(sorted, {
+    limit,
+    nowMs,
+    sourceCap,
+    balanceRegions: false,
+    suppressTopicClusters: options.suppressTopicClusters !== false,
+    ...familyOpts,
+  }).slice(0, limit);
 }
 
 function tryPick(
@@ -357,6 +395,9 @@ function tryPick(
     sourceCap: number;
     balanceRegions: boolean;
     suppressTopicClusters: boolean;
+    reserved: HomeArticleCard[];
+    maxPerEventFamily?: number;
+    requireDistinctAngleForSecond: boolean;
   }
 ): HomeArticleCard[] {
   const out: HomeArticleCard[] = [];
@@ -365,6 +406,11 @@ function tryPick(
   const topicSeen = new Set<string>();
   let us = 0;
   let kr = 0;
+
+  const familyMembers = (family: string): HomeArticleCard[] => [
+    ...opts.reserved.filter((a) => familyOf(a) === family),
+    ...out.filter((a) => familyOf(a) === family),
+  ];
 
   for (let i = 0; i < sorted.length; i += 1) {
     const article = sorted[i];
@@ -377,12 +423,21 @@ function tryPick(
     if (sourceCount >= opts.sourceCap) continue;
 
     if (opts.suppressTopicClusters) {
-      const topic = normalizeTopicClusterKey({
-        topic_key: article.topic_key,
-        topic_label: article.topic_label,
-        title: article.title,
-      });
+      const topic = normalizeTopicClusterKey(topicSignal(article));
       if (topic && topicSeen.has(topic)) continue;
+    }
+
+    const family = familyOf(article);
+    if (family && opts.maxPerEventFamily != null) {
+      const existing = familyMembers(family);
+      if (existing.length >= opts.maxPerEventFamily) continue;
+      if (
+        opts.requireDistinctAngleForSecond &&
+        existing.length >= 1 &&
+        !isDistinctEventAngle(topicSignal(article), existing.map(topicSignal))
+      ) {
+        continue;
+      }
     }
 
     if (opts.balanceRegions && out.length > 0) {
@@ -407,11 +462,7 @@ function tryPick(
 
     seen.add(key);
     sourceCounts.set(source, sourceCount + 1);
-    const topic = normalizeTopicClusterKey({
-      topic_key: article.topic_key,
-      topic_label: article.topic_label,
-      title: article.title,
-    });
+    const topic = normalizeTopicClusterKey(topicSignal(article));
     if (topic) topicSeen.add(topic);
     const region = getArticleRegion(article);
     if (region === "us") us += 1;
@@ -420,6 +471,23 @@ function tryPick(
   }
 
   return out;
+}
+
+/** Shared options for 「지금 주목」 given featured (+ 보조) already chosen. */
+export function homeCoreSpotlightPickOptions(
+  reservedCoreArticles: HomeArticleCard[],
+  excludeKeys?: Set<string>
+): DiversifiedPickOptions {
+  return {
+    limit: 5,
+    sourceCap: 2,
+    balanceRegions: true,
+    suppressTopicClusters: true,
+    excludeKeys,
+    reservedCoreArticles,
+    maxPerEventFamily: HOME_CORE_EVENT_FAMILY_MAX,
+    requireDistinctAngleForSecond: true,
+  };
 }
 
 export function regionOf(article: HomeArticleCard): ArticleRegion {

@@ -1,10 +1,11 @@
 /**
- * Deterministic topic/event cluster key for home diversity (no OpenAI).
+ * Deterministic topic/event keys for home diversity (no OpenAI).
  *
- * Goals:
- * - Collapse clear SAME EVENT spelling variants (e.g. Nepal flood headlines)
- * - Preserve UPDATE / DIFFERENT ANGLE signals when distinctive tokens remain
- * - Avoid merging unrelated countries/events on a single shared word
+ * - normalizeTopicClusterKey: SAME EVENT spelling + optional ANGLE suffix
+ * - normalizeEventFamilyKey: coarser family for featured+spotlight caps
+ *   (e.g. nepal flood / Korean Nepal evacuation → nepal-flood)
+ *
+ * Never merges different countries on a single shared word like "flood".
  */
 const FILLER = new Set(["the", "a", "an", "and", "of", "in", "on", "to", "for"]);
 
@@ -27,7 +28,25 @@ const ANGLE_TOKENS = new Set([
   "특검",
   "angle",
   "피해규모",
+  "rescue",
+  "evacuat",
+  "이송",
+  "구조",
+  "고립",
+  "실종",
+  "missing",
+  "cause",
+  "빙하",
+  "glacier",
+  "climate",
+  "온난화",
 ]);
+
+export type TopicSignalInput = {
+  topic_key?: string | null;
+  topic_label?: string | null;
+  title?: string | null;
+};
 
 function tokenize(raw: string): string[] {
   return raw
@@ -41,10 +60,6 @@ function tokenize(raw: string): string[] {
     .filter((tok) => !FILLER.has(tok));
 }
 
-function hasAll(tokens: string[], needles: string[]): boolean {
-  return needles.every((n) => tokens.some((t) => t.includes(n) || n.includes(t)));
-}
-
 function extractAngleSuffix(tokens: string[]): string {
   const kept = tokens.filter((t) =>
     [...ANGLE_TOKENS].some((a) => t.includes(a) || a.includes(t))
@@ -52,58 +67,107 @@ function extractAngleSuffix(tokens: string[]): string {
   return kept.slice(0, 3).join("-");
 }
 
-/**
- * Returns a stable cluster id, or null when there is no topic signal.
- */
-export function normalizeTopicClusterKey(input: {
-  topic_key?: string | null;
-  topic_label?: string | null;
-  title?: string | null;
-}): string | null {
+function topicFieldTokens(input: TopicSignalInput): string[] {
   const rawKey = input.topic_key?.trim().toLowerCase() ?? "";
   const rawLabel = input.topic_label?.trim().toLowerCase() ?? "";
-  // Prefer structured topic fields only — never fall back to freeform title
-  // (title-only matching over-merges unrelated stories).
   const base = (rawKey || rawLabel).replace(/^topic:/, "");
-  if (!base) return null;
+  return base ? tokenize(base) : [];
+}
 
-  const tokens = tokenize(base);
-  if (tokens.length === 0) return null;
+function titleTokens(input: TopicSignalInput): string[] {
+  const title = input.title?.trim() ?? "";
+  return title ? tokenize(title) : [];
+}
 
-  const angle = extractAngleSuffix(tokens);
-
-  // Clear multi-token SAME EVENT stems only (require co-occurring signals).
-  let stem: string | null = null;
+/**
+ * Known multi-signal event stems only (never single-word collapse).
+ * Topic fields preferred; title used only to detect these same stems
+ * when topic_key is missing (e.g. Nepal evacuation headlines).
+ */
+export function detectEventFamilyStem(tokens: string[]): string | null {
+  const hasNepal = tokens.some((t) => /nepal|네팔/.test(t));
   if (
-    hasAll(tokens, ["nepal"]) &&
-    tokens.some((t) => /flood|홍수|급류|glacier|빙하/.test(t))
+    hasNepal &&
+    tokens.some((t) =>
+      /flood|홍수|급류|glacier|빙하|실종|고립|이송|evacuat|missing|rescue/.test(t)
+    )
   ) {
-    stem = "nepal-flood";
-  } else if (
+    return "nepal-flood";
+  }
+  if (
     tokens.some((t) => /지지율|approval/.test(t)) &&
     tokens.some((t) => /이재명|lee/.test(t))
   ) {
-    stem = "lee-approval";
-  } else if (
+    return "lee-approval";
+  }
+  if (
     tokens.some((t) => t.includes("공매도") || t.includes("shortsell")) ||
     (tokens.some((t) => t.includes("short")) &&
       tokens.some((t) => t.includes("sell")))
   ) {
-    stem = "shortselling";
-  } else if (
+    return "shortselling";
+  }
+  if (
     tokens.some((t) => /hospital/.test(t)) &&
     tokens.some((t) => /fire|화재/.test(t))
   ) {
-    stem = "hospitalfire";
+    return "hospitalfire";
   }
+  return null;
+}
+
+function tokensForFamily(input: TopicSignalInput): string[] {
+  const topic = topicFieldTokens(input);
+  if (topic.length > 0) {
+    // Merge title tokens only to help stem known families (evacuation titles).
+    return [...topic, ...titleTokens(input)];
+  }
+  return titleTokens(input);
+}
+
+/**
+ * Coarse event family for featured + 「지금 주목」 caps.
+ */
+export function normalizeEventFamilyKey(
+  input: TopicSignalInput
+): string | null {
+  const tokens = tokensForFamily(input);
+  if (tokens.length === 0) return null;
+  const stem = detectEventFamilyStem(tokens);
+  return stem;
+}
+
+/**
+ * Returns a stable cluster id (family + optional angle), or null.
+ * Title is used only when topic fields are empty AND a known event family
+ * stem matches — never invents clusters from arbitrary headlines.
+ */
+export function normalizeTopicClusterKey(
+  input: TopicSignalInput
+): string | null {
+  const topicTokens = topicFieldTokens(input);
+
+  if (topicTokens.length === 0) {
+    const fromTitle = titleTokens(input);
+    if (fromTitle.length === 0) return null;
+    const stem = detectEventFamilyStem(fromTitle);
+    if (!stem) return null;
+    const angle = extractAngleSuffix(fromTitle);
+    return (angle ? `${stem}-${angle}` : stem).slice(0, 80);
+  }
+
+  const angle = extractAngleSuffix(topicTokens);
+  const stem = detectEventFamilyStem([
+    ...topicTokens,
+    ...titleTokens(input),
+  ]);
 
   if (stem) {
     const withAngle = angle ? `${stem}-${angle}` : stem;
     return withAngle.slice(0, 80);
   }
 
-  // Default: light spelling normalize without single-word event collapse.
-  let s = tokens
+  let s = topicTokens
     .join("-")
     .replace(/네팔-?중국|nepal-?china|nepal-?tibet/g, "nepal")
     .replace(/-+/g, "-")
@@ -113,12 +177,52 @@ export function normalizeTopicClusterKey(input: {
   return s.slice(0, 80);
 }
 
+export function extractEventAngleKey(input: TopicSignalInput): string | null {
+  const topicTokens = topicFieldTokens(input);
+  const tokens =
+    topicTokens.length > 0 ? topicTokens : titleTokens(input);
+  if (tokens.length === 0) return null;
+  // Title-only angles only when a known family stem matches.
+  if (topicTokens.length === 0 && !detectEventFamilyStem(tokens)) {
+    return null;
+  }
+  const angle = extractAngleSuffix(tokens);
+  return angle || null;
+}
+
+/**
+ * True when candidate is a meaningful UPDATE / DIFFERENT ANGLE versus
+ * already-selected articles in the same event family.
+ */
+export function isDistinctEventAngle(
+  candidate: TopicSignalInput,
+  existing: TopicSignalInput[]
+): boolean {
+  const family = normalizeEventFamilyKey(candidate);
+  if (!family) return true;
+
+  const candCluster = normalizeTopicClusterKey(candidate);
+
+  for (const ex of existing) {
+    if (normalizeEventFamilyKey(ex) !== family) continue;
+    const exCluster = normalizeTopicClusterKey(ex);
+    // Different cluster string on the same family = UPDATE / DIFFERENT ANGLE.
+    if (candCluster && exCluster && candCluster !== exCluster) return true;
+    // Same family + same (or missing) cluster → not distinct.
+    return false;
+  }
+  return true;
+}
+
 /** True when two topic signals collapse to the same home cluster (SAME EVENT). */
 export function isSameTopicCluster(
-  a: { topic_key?: string | null; topic_label?: string | null },
-  b: { topic_key?: string | null; topic_label?: string | null }
+  a: TopicSignalInput,
+  b: TopicSignalInput
 ): boolean {
   const ka = normalizeTopicClusterKey(a);
   const kb = normalizeTopicClusterKey(b);
   return Boolean(ka && kb && ka === kb);
 }
+
+/** Max articles for one event family across featured + spotlight. */
+export const HOME_CORE_EVENT_FAMILY_MAX = 2;

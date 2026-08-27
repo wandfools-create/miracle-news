@@ -215,7 +215,8 @@ Git history와 현재 코드에서 확인:
 - Miracle News Shorts Studio Phase 1 Production 배포 완료 (PR #1) — `/admin/shorts`
 - 수정 대기 → 이전 공개 상태 복구 Production 배포 및 50건 실제 복구 완료 (PR #6) — AI 재작성 없음; `published_at`/localization/slug 보존; 공개→수정 대기 confirm 추가
 - 홈페이지 신문형 3열·카테고리 내비 Production 반영 완료 (PR #7) — 왼쪽 지금 주목 · 중앙 본문 · 오른쪽 지금 뜨는 이슈
-- 홈 editorial ranking Phase 1: **Draft PR #8** (`feature/home-editorial-ranking-v1`) — pin 72h 만료·핵심 영역 7일 제한 적용; Production 배포·migration·stale DB flag 정리 전
+- 홈 editorial ranking Phase 1: **Draft PR #8** (`feature/home-editorial-ranking-v1`) — pin 72h 만료·핵심 영역 7일 제한·event family 다양성 적용; Production 배포·migration·stale DB flag 정리 전
+  - featured + 「지금 주목」: 동일 event family 최대 2건 (두 번째는 UPDATE/DIFFERENT ANGLE만)
   - snapshot 컬럼 write는 `ARTICLES_AI_RECOMMEND_SNAPSHOT=1`일 때만 (기본 OFF)
   - 홈 ranking은 `collection_candidates.article_id` 조인 fallback 유지
   - stale top-story `54ca435f…`는 코드에서 홈 핵심 미노출; DB `is_top_story`는 별도 승인 후 정리

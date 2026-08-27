@@ -97,7 +97,12 @@ export function prepareEditionHomeSections(
     pageLocale
   );
 
-  const sidebar = pickSidebarLatestArticles(corePool, 5, nowMs);
+  // Featured + 보조 share event-family budget with 「지금 주목」 (max 2).
+  const reservedCore = featuredHub.leads;
+  const sidebar = pickSidebarLatestArticles(corePool, 5, nowMs, {
+    excludeKeys: coreExclude,
+    reservedCoreArticles: reservedCore,
+  });
 
   // Category archive: full pool (past articles remain reachable via tabs).
   const groupedByCategory: Record<string, HomeArticleCard[]> = {};

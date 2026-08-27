@@ -18,7 +18,7 @@ import { pickFeaturedArticle } from "./featuredSelection";
 import { pickSidebarLatestArticles } from "./pickSidebarLatest";
 import { prepareEditionHomeSections } from "./prepareEditionHomeSections";
 import { pickTrendingIssues } from "./pickTrendingIssues";
-import { normalizeTopicClusterKey } from "./topicClusterKey";
+import { normalizeTopicClusterKey, normalizeEventFamilyKey } from "./topicClusterKey";
 import type { HomeArticleCard } from "./types";
 
 const NOW = Date.parse("2026-08-27T12:00:00.000Z");
@@ -568,16 +568,28 @@ describe("phase-1 ranking coverage restored", () => {
     );
   });
 
-  it("suppresses near-duplicate Nepal flood topic clusters", () => {
-    const a = normalizeTopicClusterKey({
+  it("shares nepal-flood event family while preserving glacier cause as angle", () => {
+    const aFamily = normalizeEventFamilyKey({
       topic_key: "nepal-china-flood",
       topic_label: "네팔 홍수",
     });
-    const b = normalizeTopicClusterKey({
+    const bFamily = normalizeEventFamilyKey({
       topic_key: "nepal-glacier-floods",
       topic_label: "네팔 빙하 홍수",
     });
-    assert.equal(a, b);
+    assert.equal(aFamily, "nepal-flood");
+    assert.equal(bFamily, "nepal-flood");
+
+    const aCluster = normalizeTopicClusterKey({
+      topic_key: "nepal-china-flood",
+      topic_label: "네팔 홍수",
+    });
+    const bCluster = normalizeTopicClusterKey({
+      topic_key: "nepal-glacier-floods",
+      topic_label: "네팔 빙하 홍수",
+    });
+    assert.equal(aCluster, "nepal-flood");
+    assert.notEqual(bCluster, aCluster);
 
     const picked = pickDiversifiedByEditorialScore(
       [
@@ -604,9 +616,16 @@ describe("phase-1 ranking coverage restored", () => {
           published_at: hoursAgo(4),
         }),
       ],
-      { limit: 3, nowMs: NOW, suppressTopicClusters: true }
+      {
+        limit: 3,
+        nowMs: NOW,
+        suppressTopicClusters: true,
+        maxPerEventFamily: 1,
+        requireDistinctAngleForSecond: true,
+      }
     );
     assert.equal(picked.filter((x) => x.id.startsWith("nepal")).length, 1);
+    assert.ok(picked.some((x) => x.id === "best-90"));
   });
 
   it("keeps UPDATE / DIFFERENT ANGLE distinct from base SAME EVENT", () => {
@@ -625,18 +644,341 @@ describe("phase-1 ranking coverage restored", () => {
     assert.equal(base, "nepal-flood");
     assert.notEqual(deathTollUpdate, base);
     assert.notEqual(govResponse, base);
+    assert.equal(
+      normalizeEventFamilyKey({ topic_key: "nepal-flood-death-toll-update" }),
+      "nepal-flood"
+    );
   });
 
   it("does not merge different countries that only share flood", () => {
-    const nepal = normalizeTopicClusterKey({
+    const nepal = normalizeEventFamilyKey({
       topic_key: "nepal-flood",
       topic_label: "네팔 홍수",
     });
-    const pakistan = normalizeTopicClusterKey({
+    const pakistan = normalizeEventFamilyKey({
       topic_key: "pakistan-flood",
       topic_label: "Pakistan flood",
     });
-    assert.notEqual(nepal, pakistan);
+    assert.equal(nepal, "nepal-flood");
+    assert.equal(pakistan, null);
+    assert.notEqual(
+      normalizeTopicClusterKey({ topic_key: "nepal-flood" }),
+      normalizeTopicClusterKey({ topic_key: "pakistan-flood" })
+    );
+  });
+
+  it("maps Korean Nepal evacuation titles to nepal-flood family", () => {
+    assert.equal(
+      normalizeEventFamilyKey({
+        title: "네팔 홍수로 한국인 8명 실종, 10명 고립",
+        topic_key: null,
+      }),
+      "nepal-flood"
+    );
+    assert.equal(
+      normalizeEventFamilyKey({
+        title: "네팔 홍수에 11명 규모 신속대응팀 구성…오늘 오후 출발",
+        topic_key: null,
+      }),
+      "nepal-flood"
+    );
+  });
+
+  it("caps featured Nepal family to +1 UPDATE in 지금 주목 and blocks a third", () => {
+    const featured = card({
+      id: "feat-nepal",
+      title: "네팔 홍수 사망자 늘어",
+      topic_key: "nepal-china-flood",
+      topic_label: "네팔 홍수",
+      ai_recommend_grade: "best",
+      ai_recommend_score: 95,
+      published_at: hoursAgo(2),
+      source: "The Korea Herald",
+      source_country: "KR",
+      original_url: "https://koreaherald.com/feat",
+    });
+    const update = card({
+      id: "nepal-update",
+      title: "네팔 홍수 사망 toll 갱신",
+      topic_key: "nepal-flood-death-toll-update",
+      topic_label: "네팔 홍수 사망자 갱신",
+      ai_recommend_grade: "priority",
+      ai_recommend_score: 80,
+      published_at: hoursAgo(3),
+      source: "AP",
+      original_url: "https://apnews.com/nepal-u",
+    });
+    const sameAngle = card({
+      id: "nepal-same",
+      title: "네팔·중국 접경 홍수",
+      topic_key: "nepal-china-flood",
+      topic_label: "네팔 홍수",
+      ai_recommend_grade: "priority",
+      ai_recommend_score: 78,
+      published_at: hoursAgo(3.2),
+      source: "Reuters",
+      original_url: "https://reuters.com/nepal-s",
+    });
+    const third = card({
+      id: "nepal-third",
+      title: "네팔 홍수 정부 대응",
+      topic_key: "nepal-flood-government-response",
+      topic_label: "네팔 홍수 정부 대응",
+      ai_recommend_grade: "priority",
+      ai_recommend_score: 77,
+      published_at: hoursAgo(3.5),
+      source: "Yonhap",
+      source_country: "KR",
+      original_url: "https://yonhapnews.co.kr/nepal-t",
+    });
+    const other1 = card({
+      id: "other-1",
+      title: "미 금리 결정",
+      ai_recommend_grade: "priority",
+      ai_recommend_score: 70,
+      published_at: hoursAgo(4),
+      source: "Bloomberg",
+      original_url: "https://bloomberg.com/o1",
+    });
+    const other2 = card({
+      id: "other-2",
+      title: "한국 증시",
+      ai_recommend_grade: "priority",
+      ai_recommend_score: 68,
+      published_at: hoursAgo(4.5),
+      source: "연합뉴스",
+      source_country: "KR",
+      original_url: "https://yonhapnews.co.kr/o2",
+    });
+    const other3 = card({
+      id: "other-3",
+      title: "EU climate bill",
+      ai_recommend_grade: "normal",
+      ai_recommend_score: 50,
+      published_at: hoursAgo(5),
+      source: "Reuters",
+      original_url: "https://reuters.com/o3",
+    });
+    const pakistanFlood = card({
+      id: "pak-flood",
+      title: "Pakistan flood kills dozens",
+      topic_key: "pakistan-flood",
+      topic_label: "Pakistan flood",
+      ai_recommend_grade: "priority",
+      ai_recommend_score: 66,
+      published_at: hoursAgo(5.5),
+      source: "AP",
+      original_url: "https://apnews.com/pak",
+    });
+
+    const side = pickSidebarLatestArticles(
+      [
+        featured,
+        update,
+        sameAngle,
+        third,
+        other1,
+        other2,
+        other3,
+        pakistanFlood,
+      ],
+      5,
+      NOW,
+      { reservedCoreArticles: [featured] }
+    );
+
+    const nepalSide = side.filter(
+      (a) =>
+        normalizeEventFamilyKey({
+          topic_key: a.topic_key,
+          topic_label: a.topic_label,
+          title: a.title,
+        }) === "nepal-flood"
+    );
+    assert.ok(nepalSide.length <= 1);
+    assert.ok(side.some((a) => a.id === "nepal-update"));
+    assert.ok(!side.some((a) => a.id === "nepal-same"));
+    assert.ok(!side.some((a) => a.id === "nepal-third"));
+    assert.ok(side.some((a) => a.id === "pak-flood"));
+    assert.ok(!side.some((a) => a.id === "feat-nepal"));
+  });
+
+  it("does not fill 지금 주목 with same family when other candidates are scarce", () => {
+    const featured = card({
+      id: "feat",
+      topic_key: "nepal-flood",
+      title: "네팔 홍수",
+      ai_recommend_grade: "best",
+      ai_recommend_score: 99,
+      published_at: hoursAgo(1),
+    });
+    const n2 = card({
+      id: "n2",
+      topic_key: "nepal-flood",
+      title: "네팔 홍수 추가",
+      ai_recommend_grade: "priority",
+      ai_recommend_score: 90,
+      published_at: hoursAgo(2),
+      source: "Reuters",
+      original_url: "https://reuters.com/n2",
+    });
+    const n3 = card({
+      id: "n3",
+      topic_key: "nepal-flood-death-toll-update",
+      title: "네팔 홍수 사망 갱신",
+      ai_recommend_grade: "priority",
+      ai_recommend_score: 88,
+      published_at: hoursAgo(3),
+      source: "AP",
+      original_url: "https://apnews.com/n3",
+    });
+    const n4 = card({
+      id: "n4",
+      topic_key: "nepal-flood-government-response",
+      title: "네팔 정부 대응",
+      ai_recommend_grade: "priority",
+      ai_recommend_score: 86,
+      published_at: hoursAgo(4),
+      source: "Bloomberg",
+      original_url: "https://bloomberg.com/n4",
+    });
+    const ancient = card({
+      id: "ancient",
+      title: "5월 카카오",
+      ai_recommend_grade: "best",
+      ai_recommend_score: 99,
+      is_top_story: true,
+      published_at: hoursAgo(90 * 24),
+      source_published_at: hoursAgo(90 * 24),
+      created_at: hoursAgo(90 * 24),
+    });
+
+    const side = pickSidebarLatestArticles(
+      [featured, n2, n3, n4, ancient],
+      5,
+      NOW,
+      { reservedCoreArticles: [featured] }
+    );
+    assert.ok(side.length <= 1);
+    assert.ok(side.every((a) => a.id !== "ancient"));
+    assert.ok(!side.some((a) => a.id === "n2"));
+    if (side.length === 1) {
+      assert.equal(side[0]?.id, "n3");
+    }
+  });
+
+  it("edition home: featured Nepal → sidebar Nepal family ≤1", () => {
+    const pool = [
+      card({
+        id: "feat-nepal",
+        article_id: "art-feat",
+        title: "네팔 홍수",
+        topic_key: "nepal-china-flood",
+        ai_recommend_grade: "best",
+        ai_recommend_score: 96,
+        published_at: hoursAgo(1),
+        source: "The Korea Herald",
+        source_country: "KR",
+        original_url: "https://koreaherald.com/f",
+        thumbnail_url: "https://img/f.jpg",
+      }),
+      card({
+        id: "n-evac",
+        article_id: "art-evac",
+        title: "네팔 홍수로 고립된 한국인 이송",
+        topic_key: null,
+        ai_recommend_grade: "priority",
+        ai_recommend_score: 85,
+        published_at: hoursAgo(2),
+        source: "The Korea Herald",
+        source_country: "KR",
+        original_url: "https://koreaherald.com/e",
+      }),
+      card({
+        id: "n-death",
+        article_id: "art-death",
+        title: "네팔 홍수 사망자 갱신",
+        topic_key: "nepal-flood-death-toll-update",
+        ai_recommend_grade: "priority",
+        ai_recommend_score: 84,
+        published_at: hoursAgo(2.5),
+        source: "AP",
+        original_url: "https://apnews.com/d",
+      }),
+      card({
+        id: "n-gov",
+        article_id: "art-gov",
+        title: "네팔 정부 대응",
+        topic_key: "nepal-flood-government-response",
+        ai_recommend_grade: "priority",
+        ai_recommend_score: 83,
+        published_at: hoursAgo(3),
+        source: "Reuters",
+        original_url: "https://reuters.com/g",
+      }),
+      card({
+        id: "us-1",
+        article_id: "art-us1",
+        title: "US rates",
+        ai_recommend_grade: "priority",
+        ai_recommend_score: 70,
+        published_at: hoursAgo(4),
+        source: "Bloomberg",
+        original_url: "https://bloomberg.com/u1",
+      }),
+      card({
+        id: "kr-1",
+        article_id: "art-kr1",
+        title: "한국 정치",
+        ai_recommend_grade: "priority",
+        ai_recommend_score: 69,
+        published_at: hoursAgo(4.5),
+        source: "연합뉴스",
+        source_country: "KR",
+        original_url: "https://yonhapnews.co.kr/k1",
+      }),
+      card({
+        id: "us-2",
+        article_id: "art-us2",
+        title: "EU bill",
+        ai_recommend_grade: "normal",
+        ai_recommend_score: 55,
+        published_at: hoursAgo(5),
+        source: "AP",
+        original_url: "https://apnews.com/u2",
+      }),
+    ];
+
+    const sections = prepareEditionHomeSections(
+      pool,
+      "ko",
+      { leftTitle: "KR", rightTitle: "US" },
+      { nowMs: NOW }
+    );
+    assert.equal(sections.featured?.id, "feat-nepal");
+    const nepalInSidebar = sections.sidebar.filter(
+      (a) =>
+        normalizeEventFamilyKey({
+          topic_key: a.topic_key,
+          topic_label: a.topic_label,
+          title: a.title,
+        }) === "nepal-flood"
+    );
+    assert.ok(nepalInSidebar.length <= 1);
+    const coreNepal = [
+      sections.featured,
+      ...(sections.featuredLeads ?? []).slice(1),
+      ...sections.sidebar,
+    ].filter(
+      (a) =>
+        a &&
+        normalizeEventFamilyKey({
+          topic_key: a.topic_key,
+          topic_label: a.topic_label,
+          title: a.title,
+        }) === "nepal-flood"
+    );
+    assert.ok(coreNepal.length <= 2);
   });
 
   it("picks highest candidate grade then score deterministically", async () => {

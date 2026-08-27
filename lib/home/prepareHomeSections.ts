@@ -63,7 +63,15 @@ export function prepareHomeSections(
     locale
   );
 
-  const sidebar = pickSidebarLatestArticles(corePool, 5, nowMs);
+  const sidebarExclude = new Set<string>();
+  if (featured) {
+    sidebarExclude.add(featured.article_id ?? featured.id);
+    sidebarExclude.add(featured.id);
+  }
+  const sidebar = pickSidebarLatestArticles(corePool, 5, nowMs, {
+    excludeKeys: sidebarExclude,
+    reservedCoreArticles: featured ? [featured] : [],
+  });
 
   const groupedByCategory: Record<string, HomeArticleCard[]> = {};
   for (const article of sortHomeArticlesForDisplay(articles, nowMs)) {
