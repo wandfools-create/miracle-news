@@ -2,11 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isAllowedAdminEmail } from "@/lib/admin/adminEmails";
 import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 import { reviseArticleWithFeedback } from "@/lib/articles/ai/reviseArticleWithFeedback";
 import { runEditorialReview } from "@/lib/articles/ai/runEditorialReview";
 import type { AdminAiActionResult } from "@/lib/admin/aiActionTypes";
 import { isAiRevisionProcessingStatus } from "@/lib/admin/revisionAiPolicy";
+import {
+  restorePublishedFromRevisionCore,
+  type RestorePublishedCoreResult,
+} from "@/lib/admin/restorePublishedFromRevisionCore";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { supabase } from "../../../../lib/supabase";
 
 function revalidateRevisionPages(articleId: string) {
@@ -14,6 +20,103 @@ function revalidateRevisionPages(articleId: string) {
   revalidatePath("/admin/revision");
   revalidatePath("/admin/review");
   revalidatePath(`/admin/review/${articleId}`);
+}
+
+function revalidateRestorePublishedPaths(
+  items: RestorePublishedCoreResult["items"]
+) {
+  revalidateAdminNavCountsCache();
+  revalidatePath("/admin/revision");
+  revalidatePath("/admin/published");
+  revalidatePath("/admin/approved");
+  revalidatePath("/admin/review");
+  revalidatePath("/ko");
+  revalidatePath("/en");
+  revalidatePath("/");
+  for (const item of items) {
+    if (!item.ok) continue;
+    revalidatePath(`/admin/review/${item.articleId}`);
+    if (item.koSlug) {
+      revalidatePath(`/ko/article/${item.koSlug}`);
+    }
+    if (item.enSlug) {
+      revalidatePath(`/en/article/${item.enSlug}`);
+    }
+  }
+}
+
+async function requireAdmin(): Promise<
+  { ok: true; email: string | null } | { ok: false; error: string }
+> {
+  const authClient = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+  if (!user || !isAllowedAdminEmail(user.email)) {
+    return { ok: false, error: "관리자만 다시 공개할 수 있습니다." };
+  }
+  return { ok: true, email: user.email ?? null };
+}
+
+function parseRestoreIdsFromFormData(formData: FormData): string[] {
+  const fromMulti = formData
+    .getAll("articleIds")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+  const fromCsv = String(formData.get("articleIdsCsv") ?? "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+  const single = String(formData.get("articleId") ?? "").trim();
+  return [...new Set([...fromMulti, ...fromCsv, ...(single ? [single] : [])])];
+}
+
+export type RestorePublishedActionResult = {
+  ok: boolean;
+  successCount: number;
+  skippedCount: number;
+  failedCount: number;
+  successIds: string[];
+  items: RestorePublishedCoreResult["items"];
+  error?: string;
+};
+
+/**
+ * Restore previously published articles from the revision queue.
+ * No OpenAI. No content rewrite. Preserves published_at and localizations.
+ */
+export async function restorePublishedFromRevisionByIdsAction(
+  formData: FormData
+): Promise<RestorePublishedActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) {
+    return {
+      ok: false,
+      successCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      successIds: [],
+      items: [],
+      error: auth.error,
+    };
+  }
+
+  const articleIds = parseRestoreIdsFromFormData(formData);
+  const result = await restorePublishedFromRevisionCore(articleIds);
+
+  if (result.successCount > 0) {
+    revalidateRestorePublishedPaths(result.items);
+  }
+
+  return {
+    ok: result.ok,
+    successCount: result.successCount,
+    skippedCount: result.skippedCount,
+    failedCount: result.failedCount,
+    successIds: result.successIds,
+    items: result.items,
+    error: result.error,
+  };
 }
 
 /** Lazy-load body for manual edit (list queries omit body columns). */
