@@ -9,6 +9,11 @@ import {
   pickFeaturedHubArticles,
   sortHomeArticlesForDisplay,
 } from "./featuredSelection";
+import {
+  filterHomeCoreEligible,
+  pickDiversifiedByEditorialScore,
+  sortArticlesByEditorialScore,
+} from "./editorialRanking";
 import { pickTrendingIssues } from "./pickTrendingIssues";
 import { pickSidebarLatestArticles } from "./pickSidebarLatest";
 import type { HomeArticleCard, HomePageSections } from "./types";
@@ -24,37 +29,52 @@ export function prepareEditionHomeSections(
   articles: HomeArticleCard[],
   pageLocale: ArticleLocale,
   columnLabels: EditionColumnLabels,
-  options?: { featuredPool?: HomeArticleCard[] }
+  options?: { featuredPool?: HomeArticleCard[]; nowMs?: number }
 ): HomePageSections {
-  const sorted = sortHomeArticlesForDisplay(articles);
-  const featuredSorted = sortHomeArticlesForDisplay(
-    options?.featuredPool ?? articles
-  );
-  const featured = pickFeaturedArticle(featuredSorted);
-  const featuredHub = pickFeaturedHubArticles(
-    options?.featuredPool ?? articles,
-    featured
-  );
+  const nowMs = options?.nowMs ?? Date.now();
+  const featuredPool = options?.featuredPool ?? articles;
+  const corePool = filterHomeCoreEligible(featuredPool, nowMs);
+  const sortedCore = sortHomeArticlesForDisplay(corePool, nowMs);
+
+  const featured = pickFeaturedArticle(corePool, nowMs);
+  const featuredHub = pickFeaturedHubArticles(corePool, featured, { nowMs });
   const featuredKey = featured?.article_id ?? featured?.id;
 
-  const pool = sorted.filter(
+  const coreExclude = new Set<string>();
+  if (featuredKey) coreExclude.add(featuredKey);
+  for (const a of featuredHub.leads) {
+    coreExclude.add(a.article_id ?? a.id);
+  }
+
+  const pool = sortedCore.filter(
     (a) => (a.article_id ?? a.id) !== featuredKey && a.id !== featured?.id
   );
 
   const krPool = pool.filter((a) => getArticleRegion(a) === "kr");
   const usPool = pool.filter((a) => getArticleRegion(a) === "us");
 
-  const left =
-    pageLocale === "ko"
-      ? krPool.slice(0, TOP_STORIES_PER_COLUMN)
-      : usPool.slice(0, TOP_STORIES_PER_COLUMN);
-  const right =
-    pageLocale === "ko"
-      ? usPool.slice(0, TOP_STORIES_PER_COLUMN)
-      : krPool.slice(0, TOP_STORIES_PER_COLUMN);
+  const pickColumn = (regionPool: HomeArticleCard[]) =>
+    pickDiversifiedByEditorialScore(regionPool, {
+      limit: TOP_STORIES_PER_COLUMN,
+      nowMs,
+      sourceCap: 2,
+      balanceRegions: false,
+      suppressTopicClusters: true,
+      excludeKeys: coreExclude,
+    });
 
+  const left =
+    pageLocale === "ko" ? pickColumn(krPool) : pickColumn(usPool);
+  const right =
+    pageLocale === "ko" ? pickColumn(usPool) : pickColumn(krPool);
+
+  for (const a of [...left, ...right]) {
+    coreExclude.add(a.article_id ?? a.id);
+  }
+
+  // Source leads may use full published pool (outlet archive character).
   const sourceLeadMap: Record<string, HomeArticleCard> = {};
-  for (const article of sorted) {
+  for (const article of sortArticlesByEditorialScore(articles, nowMs)) {
     const sourceKey = normalizeSource(article.source);
     if (!sourceLeadMap[sourceKey]) {
       sourceLeadMap[sourceKey] = article;
@@ -77,19 +97,26 @@ export function prepareEditionHomeSections(
     pageLocale
   );
 
-  const sidebar = pickSidebarLatestArticles(sorted, 5);
+  // Featured + 보조 share event-family budget with 「지금 주목」 (max 2).
+  const reservedCore = featuredHub.leads;
+  const sidebar = pickSidebarLatestArticles(corePool, 5, nowMs, {
+    excludeKeys: coreExclude,
+    reservedCoreArticles: reservedCore,
+  });
 
+  // Category archive: full pool (past articles remain reachable via tabs).
   const groupedByCategory: Record<string, HomeArticleCard[]> = {};
-  for (const article of sorted) {
+  for (const article of sortHomeArticlesForDisplay(articles, nowMs)) {
     const key = article.category ?? "other";
     if (!groupedByCategory[key]) groupedByCategory[key] = [];
     groupedByCategory[key].push(article);
   }
   for (const key of Object.keys(groupedByCategory)) {
-    groupedByCategory[key] = sortArticlesForCategorySection(
+    const scored = sortArticlesByEditorialScore(
       groupedByCategory[key],
-      key
+      nowMs
     );
+    groupedByCategory[key] = sortArticlesForCategorySection(scored, key);
   }
 
   const visibleCategories = categoryOrder.filter(
@@ -100,10 +127,12 @@ export function prepareEditionHomeSections(
     .filter((config) => Boolean(sourceLeadMap[config.key]))
     .map((config) => config.label);
 
-  const trendingSorted = sortHomeArticlesForDisplay(
-    options?.featuredPool ?? articles
+  const trendingIssues = pickTrendingIssues(
+    featuredPool,
+    pageLocale,
+    3,
+    nowMs
   );
-  const trendingIssues = pickTrendingIssues(trendingSorted, pageLocale);
   const hasTrending =
     trendingIssues.us.length > 0 || trendingIssues.kr.length > 0;
 

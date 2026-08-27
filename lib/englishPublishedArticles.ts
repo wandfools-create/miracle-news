@@ -27,6 +27,7 @@ type ArticleMeta = ArticlesContentFields & {
   published_at: string | null;
   source_published_at?: string | null;
   editorial_priority?: string | null;
+  editorial_priority_manual?: boolean | null;
   thumbnail_url: string | null;
   original_url: string | null;
   topic_key: string | null;
@@ -86,6 +87,7 @@ export async function fetchEnglishPublishedArticles(
         published_at,
         source_published_at,
         editorial_priority,
+        editorial_priority_manual,
         thumbnail_url,
         original_url,
         topic_key,
@@ -155,6 +157,7 @@ export async function fetchEnglishPublishedArticles(
       published_at: meta.published_at,
       source_published_at: meta.source_published_at ?? null,
       editorial_priority: meta.editorial_priority ?? "normal",
+      editorial_priority_manual: meta.editorial_priority_manual === true,
       thumbnail_url: meta.thumbnail_url,
       title_original: meta.title_original,
       original_url: meta.original_url,

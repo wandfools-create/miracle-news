@@ -19,10 +19,16 @@ export type HomeArticleCard = {
   category: string | null;
   /** 한눈 사이트 공개 시각 */
   published_at: string | null;
-  /** 원문/RSS 발행 시각 — 홈 신선도 정렬 우선 */
+  /** 원문/RSS 발행 시각 — editorial freshness fallback after published_at */
   source_published_at?: string | null;
-  /** normal | issue | special | breaking — 24h 이내만 자동 부스트 */
+  /** normal | issue | special | breaking — site-publish window boost when not manual */
   editorial_priority?: string | null;
+  /** When true, editorial_priority is human-locked and outranks AI grade. */
+  editorial_priority_manual?: boolean;
+  /** Snapshot / joined candidate AI grade (best|priority|normal|low). */
+  ai_recommend_grade?: string | null;
+  /** Snapshot / joined candidate AI score 0–100. */
+  ai_recommend_score?: number | null;
   thumbnail_url: string | null;
   title_original: string;
   /** articles.original_url — used on main hub for YouTube/SNS grouping. */

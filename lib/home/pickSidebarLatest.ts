@@ -1,47 +1,50 @@
 import {
-  filterArticlesForHomeSurface,
-  sortArticlesByFreshness,
-} from "./articleFreshness";
+  filterHomeCoreSurfacePool,
+  homeCoreSpotlightPickOptions,
+  pickDiversifiedByEditorialScore,
+  sortArticlesByEditorialScore,
+} from "./editorialRanking";
 import type { HomeArticleCard } from "./types";
 
 export function articleDedupeKey(article: HomeArticleCard): string {
   return article.article_id ?? article.id;
 }
 
-function takeUnique(
-  articles: HomeArticleCard[],
-  limit: number
-): HomeArticleCard[] {
-  const seen = new Set<string>();
-  const result: HomeArticleCard[] = [];
-  for (const article of articles) {
-    const key = articleDedupeKey(article);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(article);
-    if (result.length >= limit) break;
-  }
-  return result;
-}
+export type PickSidebarLatestOptions = {
+  excludeKeys?: Set<string>;
+  /** Featured (+ 보조) already on the core surface — event-family budget. */
+  reservedCoreArticles?: HomeArticleCard[];
+};
 
 /**
- * 「지금 주목」: prefer last 72h by source freshness, fall back to 7d.
- * If the freshness windows are empty (missing timestamps / very old pool),
- * fall back to the newest published cards so the section still renders.
+ * 「지금 주목」: editorial score within 72h→7d only.
+ * Shares event-family budget with featured (+ 보조): max 2 total,
+ * second slot only for UPDATE / DIFFERENT ANGLE.
+ * Never injects out-of-window top stories; never falls back to full archive.
+ * Prefer fewer slots over filling with months-old pins.
  */
 export function pickSidebarLatestArticles(
   articles: HomeArticleCard[],
   limit = 5,
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  options?: PickSidebarLatestOptions
 ): HomeArticleCard[] {
-  const recent = filterArticlesForHomeSurface(articles, {
+  const recent = filterHomeCoreSurfacePool(articles, {
     nowMs,
     minCount: limit,
-    allowManualTopStory: true,
   });
-  const fromWindow = takeUnique(sortArticlesByFreshness(recent, nowMs), limit);
-  if (fromWindow.length > 0) return fromWindow;
+  const reserved = options?.reservedCoreArticles ?? [];
+  return pickDiversifiedByEditorialScore(recent, {
+    ...homeCoreSpotlightPickOptions(reserved, options?.excludeKeys),
+    limit,
+    nowMs,
+  });
+}
 
-  // Guaranteed fill from published home cards when surface windows yield nothing.
-  return takeUnique(sortArticlesByFreshness(articles, nowMs), limit);
+/** @deprecated Prefer pickDiversifiedByEditorialScore — kept for tests. */
+export function sortSidebarArticlesForTests(
+  articles: HomeArticleCard[],
+  nowMs: number = Date.now()
+): HomeArticleCard[] {
+  return sortArticlesByEditorialScore(articles, nowMs);
 }

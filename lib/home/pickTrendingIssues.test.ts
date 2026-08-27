@@ -38,6 +38,7 @@ describe("pickTrendingIssues", () => {
         category: "politics",
         topic_key: "us-election",
         topic_label: "미국 대선",
+        published_at: hoursAgo(40),
         source_published_at: hoursAgo(40),
       }),
       card({
@@ -46,6 +47,7 @@ describe("pickTrendingIssues", () => {
         category: "politics",
         topic_key: "us-election",
         topic_label: "미국 대선",
+        published_at: hoursAgo(20),
         source_published_at: hoursAgo(20),
       }),
       card({
@@ -53,6 +55,7 @@ describe("pickTrendingIssues", () => {
         source_country: "US",
         category: "economy",
         title: "최신 경제 기사",
+        published_at: hoursAgo(2),
         source_published_at: hoursAgo(2),
       }),
     ];
@@ -62,7 +65,7 @@ describe("pickTrendingIssues", () => {
     assert.equal(us[0]?.id, "topic:us-election");
     assert.equal(us[0]?.primaryArticle?.slug, "a2");
     assert.ok(us[0]?.relatedArticles.some((a) => a.slug === "a1"));
-    assert.ok(us.some((issue) => issue.id.startsWith("cat:economy:")));
+    assert.ok(us.some((issue) => issue.id.startsWith("category:us:economy")));
   });
 
   it("falls back to latest articles across all categories including other", () => {
@@ -74,6 +77,7 @@ describe("pickTrendingIssues", () => {
         original_url: "https://www.yna.co.kr/old",
         category: "other",
         title: "오래된 기사",
+        published_at: hoursAgo(20 * 24),
         source_published_at: hoursAgo(20 * 24),
       }),
       card({
@@ -83,6 +87,7 @@ describe("pickTrendingIssues", () => {
         original_url: "https://www.yna.co.kr/new",
         category: "other",
         title: "최신 기사",
+        published_at: hoursAgo(3),
         source_published_at: hoursAgo(3),
       }),
     ];
@@ -90,7 +95,7 @@ describe("pickTrendingIssues", () => {
     const { kr } = pickTrendingIssues(articles, "ko", 3, NOW);
     assert.equal(kr.length, 1);
     assert.match(kr[0]?.title ?? "", /최신 기사/);
-    assert.equal(kr[0]?.id, "cat:other:kr");
+    assert.equal(kr[0]?.id, "category:kr:other");
     assert.equal(kr[0]?.primaryArticle?.slug, "new");
     assert.equal(kr[0]?.relatedArticles.length, 1);
   });
@@ -121,7 +126,9 @@ describe("pickTrendingIssues", () => {
         original_url: "https://www.yna.co.kr/ancient",
         category: "politics",
         title: "5월 기사",
+        published_at: hoursAgo(30 * 24),
         source_published_at: hoursAgo(30 * 24),
+        created_at: hoursAgo(30 * 24),
       }),
     ];
     const { kr } = pickTrendingIssues(articles, "ko", 3, NOW);

@@ -5,6 +5,7 @@ import {
 } from "@/lib/article/resolveLocaleContent";
 import { fetchEnglishPublishedArticles } from "@/lib/englishPublishedArticles";
 import { fetchKoreanPublishedArticles } from "@/lib/koreanPublishedArticles";
+import { enrichHomeArticlesWithCandidateGrades } from "./enrichHomeArticlesWithCandidateGrades";
 import type { ArticleEditionLocale, HomeArticleCard } from "./types";
 
 type EditionMergeEntry = {
@@ -24,6 +25,7 @@ type EditionMergeEntry = {
     published_at: string | null;
     source_published_at: string | null;
     editorial_priority: string | null;
+    editorial_priority_manual?: boolean;
     listDateKo?: string;
     listDateEn?: string;
     publishedFullKo?: string;
@@ -70,6 +72,7 @@ function buildCard(
     published_at: primary.published_at,
     source_published_at: primary.source_published_at,
     editorial_priority: primary.editorial_priority,
+    editorial_priority_manual: primary.editorial_priority_manual === true,
     listDateKo: primary.listDateKo,
     listDateEn: primary.listDateEn,
     publishedFullKo: primary.publishedFullKo,
@@ -128,6 +131,7 @@ export async function fetchEditionHomeArticles(
         published_at: row.published_at,
         source_published_at: row.source_published_at ?? null,
         editorial_priority: row.editorial_priority ?? "normal",
+        editorial_priority_manual: row.editorial_priority_manual === true,
         listDateKo: row.listDateKo,
         listDateEn: row.listDateEn,
         publishedFullKo: row.publishedFullKo,
@@ -173,6 +177,7 @@ export async function fetchEditionHomeArticles(
         published_at: row.published_at,
         source_published_at: row.source_published_at ?? null,
         editorial_priority: row.editorial_priority ?? "normal",
+        editorial_priority_manual: row.editorial_priority_manual === true,
         listDateKo: row.listDateKo,
         listDateEn: row.listDateEn,
         publishedFullKo: row.publishedFullKo,
@@ -193,8 +198,10 @@ export async function fetchEditionHomeArticles(
     if (card) articles.push(card);
   }
 
+  const enriched = await enrichHomeArticlesWithCandidateGrades(articles);
+
   return {
-    articles,
+    articles: enriched,
     error: koResult.error ?? enResult.error ?? null,
   };
 }
