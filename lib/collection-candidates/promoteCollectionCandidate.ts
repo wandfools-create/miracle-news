@@ -84,7 +84,7 @@ export async function promoteCollectionCandidate(input: {
   const { data: existing, error: fetchError } = await client
     .from("collection_candidates")
     .select(
-      "id, source, original_url, rss_title, rss_summary, rss_title_ko, rss_summary_ko, rss_guid, custom_unique_id, rss_published_at, status, article_id, enrich_attempt_count, thumbnail_url"
+      "id, source, original_url, rss_title, rss_summary, rss_title_ko, rss_summary_ko, rss_guid, custom_unique_id, rss_published_at, status, article_id, enrich_attempt_count, thumbnail_url, ai_recommend_grade, ai_recommend_score"
     )
     .eq("id", candidateId)
     .maybeSingle();
@@ -316,6 +316,20 @@ export async function promoteCollectionCandidate(input: {
       enrich_category: null,
     })
     .eq("id", candidateId);
+
+  // Snapshot denorm only when ARTICLES_AI_RECOMMEND_SNAPSHOT=1 (post-migration).
+  // Pre-migration: skip silently — home ranking joins collection_candidates.article_id.
+  {
+    const { maybeWriteArticleAiRecommendSnapshot } = await import(
+      "@/lib/home/articlesAiRecommendCapability"
+    );
+    await maybeWriteArticleAiRecommendSnapshot({
+      client,
+      articleId: inserted.articleId,
+      grade: (row as { ai_recommend_grade?: string | null }).ai_recommend_grade,
+      score: (row as { ai_recommend_score?: number | null }).ai_recommend_score,
+    });
+  }
 
   if (completeError) {
     console.error("[collection-candidates] mark enriched failed", completeError);

@@ -44,6 +44,7 @@ export function parseTimestamp(value: string | null | undefined): number {
 /**
  * News freshness clock: prefer original source publish time.
  * Fall back to site published_at, then localization created_at.
+ * @deprecated For home ranking prefer getEditorialFreshnessTimestamp (site publish first).
  */
 export function getSourceFreshnessTimestamp(article: HomeArticleCard): number {
   const source = parseTimestamp(article.source_published_at);
@@ -58,6 +59,19 @@ export function getSitePublishedTimestamp(article: HomeArticleCard): number {
   return parseTimestamp(article.published_at);
 }
 
+/**
+ * Home editorial freshness: prefer Hannoon published_at, then source, then created.
+ */
+export function getEditorialFreshnessTimestamp(
+  article: HomeArticleCard
+): number {
+  const site = parseTimestamp(article.published_at);
+  if (site > 0) return site;
+  const source = parseTimestamp(article.source_published_at);
+  if (source > 0) return source;
+  return parseTimestamp(article.created_at);
+}
+
 export function getEditorialPriorityRank(
   article: HomeArticleCard,
   nowMs: number = Date.now()
@@ -65,7 +79,7 @@ export function getEditorialPriorityRank(
   const priority = normalizeEditorialPriority(article.editorial_priority);
   if (priority === "normal") return 0;
 
-  const freshness = getSourceFreshnessTimestamp(article);
+  const freshness = getEditorialFreshnessTimestamp(article);
   if (freshness <= 0) return 0;
   if (nowMs - freshness > EDITORIAL_PRIORITY_WINDOW_MS) return 0;
 
@@ -73,9 +87,8 @@ export function getEditorialPriorityRank(
 }
 
 /**
- * Home / sidebar / trending sort:
- * 1) active editorial boost within rolling 24h (breaking > special > issue)
- * 2) source freshness newest-first
+ * Legacy home / sidebar / trending sort (pre Phase 1).
+ * Prefer compareArticlesByEditorialScore for new home surfaces.
  */
 export function compareArticlesByFreshness(
   a: HomeArticleCard,
@@ -87,7 +100,7 @@ export function compareArticlesByFreshness(
   if (rankDiff !== 0) return rankDiff;
 
   const freshnessDiff =
-    getSourceFreshnessTimestamp(b) - getSourceFreshnessTimestamp(a);
+    getEditorialFreshnessTimestamp(b) - getEditorialFreshnessTimestamp(a);
   if (freshnessDiff !== 0) return freshnessDiff;
 
   return getSitePublishedTimestamp(b) - getSitePublishedTimestamp(a);
@@ -105,7 +118,7 @@ function isWithinWindow(
   nowMs: number,
   windowMs: number
 ): boolean {
-  const freshness = getSourceFreshnessTimestamp(article);
+  const freshness = getEditorialFreshnessTimestamp(article);
   if (freshness <= 0) return false;
   return nowMs - freshness <= windowMs;
 }
@@ -114,6 +127,7 @@ function isWithinWindow(
  * Prefer articles within the primary window; if fewer than `minCount`,
  * expand to the fallback window. Never includes older than fallback
  * unless `allowManualTopStory` and the article is a manual top story.
+ * Windows use site published_at first (editorial freshness).
  */
 export function filterArticlesForHomeSurface(
   articles: HomeArticleCard[],
@@ -142,10 +156,7 @@ export function filterArticlesForHomeSurface(
   const extras = articles.filter((a) => {
     if (a.is_top_story !== true) return false;
     if (pool.some((p) => p.id === a.id)) return false;
-    // Only still-active (24h) top stories may bypass the 7d surface window.
-    const freshness = getSourceFreshnessTimestamp(a);
-    if (freshness <= 0) return false;
-    return nowMs - freshness <= EDITORIAL_PRIORITY_WINDOW_MS;
+    return true;
   });
   return extras.length ? [...pool, ...extras] : pool;
 }

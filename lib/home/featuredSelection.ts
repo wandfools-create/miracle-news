@@ -1,41 +1,37 @@
 import { getSourceFeaturedSortBias } from "@/lib/article/sourcePolicy";
 import { normalizeSource } from "@/lib/article/normalizeSource";
 import {
-  compareArticlesByFreshness,
-  EDITORIAL_PRIORITY_WINDOW_MS,
   filterArticlesForHomeSurface,
-  getSourceFreshnessTimestamp,
   getSitePublishedTimestamp,
-  sortArticlesByFreshness,
 } from "./articleFreshness";
+import {
+  compareArticlesByEditorialScore,
+  getEditorialFreshnessTimestamp,
+  pickDiversifiedByEditorialScore,
+  sortArticlesByEditorialScore,
+} from "./editorialRanking";
 import type { HomeArticleCard } from "./types";
 
-/** Featured hero only considers articles with source freshness within this many days. */
+/** Featured hero only considers articles with site freshness within this many days. */
 export const FEATURED_RECENT_DAYS = 7;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-/** @deprecated Prefer getSourceFreshnessTimestamp — kept for call sites expecting site/legacy clock. */
+/** @deprecated Prefer getEditorialFreshnessTimestamp for ranking. */
 export function getPublishedTimestamp(article: HomeArticleCard): number {
-  return getSourceFreshnessTimestamp(article);
+  return getEditorialFreshnessTimestamp(article);
 }
 
-/** is_top_story boost is active only within rolling 24h of source freshness. */
-export function isActiveTopStory(
-  article: HomeArticleCard,
-  nowMs: number = Date.now()
-): boolean {
-  if (article.is_top_story !== true) return false;
-  const freshness = getSourceFreshnessTimestamp(article);
-  if (freshness <= 0) return false;
-  return nowMs - freshness <= EDITORIAL_PRIORITY_WINDOW_MS;
+/** Manual pin always wins for featured — no age expiry. */
+export function isActiveTopStory(article: HomeArticleCard): boolean {
+  return article.is_top_story === true;
 }
 
 export function isFeaturedCandidate(
   article: HomeArticleCard,
   nowMs: number = Date.now()
 ): boolean {
-  const freshnessMs = getSourceFreshnessTimestamp(article);
+  const freshnessMs = getEditorialFreshnessTimestamp(article);
   if (freshnessMs <= 0) return false;
   const cutoff = nowMs - FEATURED_RECENT_DAYS * MS_PER_DAY;
   return freshnessMs >= cutoff;
@@ -45,7 +41,7 @@ function effectiveFeaturedTimestamp(
   article: HomeArticleCard,
   nowMs: number
 ): number {
-  const freshness = getSourceFreshnessTimestamp(article);
+  const freshness = getEditorialFreshnessTimestamp(article);
   if (freshness <= 0) return 0;
   void nowMs;
   return freshness - getSourceFeaturedSortBias(normalizeSource(article.source));
@@ -60,7 +56,7 @@ function compareActiveTopStories(
   if (orderA !== orderB) return orderA - orderB;
 
   const freshnessDiff =
-    getSourceFreshnessTimestamp(b) - getSourceFreshnessTimestamp(a);
+    getEditorialFreshnessTimestamp(b) - getEditorialFreshnessTimestamp(a);
   if (freshnessDiff !== 0) return freshnessDiff;
 
   return getSitePublishedTimestamp(b) - getSitePublishedTimestamp(a);
@@ -71,8 +67,8 @@ export function compareFeaturedCandidates(
   b: HomeArticleCard,
   nowMs: number = Date.now()
 ): number {
-  const freshnessCmp = compareArticlesByFreshness(a, b, nowMs);
-  if (freshnessCmp !== 0) return freshnessCmp;
+  const scoreCmp = compareArticlesByEditorialScore(a, b, nowMs);
+  if (scoreCmp !== 0) return scoreCmp;
 
   return (
     effectiveFeaturedTimestamp(b, nowMs) - effectiveFeaturedTimestamp(a, nowMs)
@@ -81,14 +77,14 @@ export function compareFeaturedCandidates(
 
 /**
  * 오늘의 주요 기사:
- * 1) active is_top_story within rolling 24h (top_story_order among those)
- * 2) else editorial_priority boost (24h) + source_published_at within 7d
+ * 1) is_top_story pin (always)
+ * 2) else editorial score within 7d site freshness
  */
 export function pickFeaturedArticle(
   articles: HomeArticleCard[],
   nowMs: number = Date.now()
 ): HomeArticleCard | null {
-  const activeTops = articles.filter((a) => isActiveTopStory(a, nowMs));
+  const activeTops = articles.filter((a) => isActiveTopStory(a));
   if (activeTops.length > 0) {
     return [...activeTops].sort(compareActiveTopStories)[0] ?? null;
   }
@@ -96,8 +92,13 @@ export function pickFeaturedArticle(
   const candidates = articles.filter((a) => isFeaturedCandidate(a, nowMs));
   if (candidates.length === 0) return null;
   return (
-    [...candidates].sort((a, b) => compareFeaturedCandidates(a, b, nowMs))[0] ??
-    null
+    pickDiversifiedByEditorialScore(candidates, {
+      limit: 1,
+      nowMs,
+      sourceCap: 1,
+      balanceRegions: false,
+      suppressTopicClusters: true,
+    })[0] ?? null
   );
 }
 
@@ -107,7 +108,7 @@ function articleKey(article: HomeArticleCard): string {
 
 /**
  * Featured combo: secondary lead + numbered related list.
- * Uses 72h then 7d fallback; excludes featured; never older than 7d.
+ * Uses editorial score + diversity; 72h then 7d surface window.
  */
 export function pickFeaturedHubArticles(
   articles: HomeArticleCard[],
@@ -127,14 +128,25 @@ export function pickFeaturedHubArticles(
     minCount: relatedLimit + 1,
     allowManualTopStory: false,
   });
-  const sorted = sortArticlesByFreshness(recent, nowMs);
+
+  const exclude = new Set<string>();
+  if (featuredKey) exclude.add(featuredKey);
+
+  const picked = pickDiversifiedByEditorialScore(recent, {
+    limit: relatedLimit + 1,
+    nowMs,
+    sourceCap: 2,
+    balanceRegions: true,
+    suppressTopicClusters: true,
+    excludeKeys: exclude,
+  });
 
   const leads: HomeArticleCard[] = [];
   if (featured) leads.push(featured);
-  if (sorted[0]) leads.push(sorted[0]);
+  if (picked[0]) leads.push(picked[0]);
 
   const leadKeys = new Set(leads.map(articleKey));
-  const related = sorted
+  const related = picked
     .filter((a) => !leadKeys.has(articleKey(a)))
     .slice(0, relatedLimit);
 
@@ -142,11 +154,11 @@ export function pickFeaturedHubArticles(
 }
 
 /**
- * Site-wide home ordering: editorial boost (rolling 24h) then source freshness.
+ * Site-wide home ordering: editorial score (importance + site freshness).
  */
 export function sortHomeArticlesForDisplay(
   articles: HomeArticleCard[],
   nowMs: number = Date.now()
 ): HomeArticleCard[] {
-  return sortArticlesByFreshness(articles, nowMs);
+  return sortArticlesByEditorialScore(articles, nowMs);
 }

@@ -31,8 +31,16 @@ function card(
 describe("pickSidebarLatestArticles", () => {
   it("returns recent articles within the surface window", () => {
     const articles = [
-      card({ id: "a1", source_published_at: new Date(NOW - 3600_000).toISOString() }),
-      card({ id: "a2", source_published_at: new Date(NOW - 2 * 3600_000).toISOString() }),
+      card({
+        id: "a1",
+        published_at: new Date(NOW - 3600_000).toISOString(),
+        source_published_at: new Date(NOW - 3600_000).toISOString(),
+      }),
+      card({
+        id: "a2",
+        published_at: new Date(NOW - 2 * 3600_000).toISOString(),
+        source_published_at: new Date(NOW - 2 * 3600_000).toISOString(),
+      }),
     ];
     const side = pickSidebarLatestArticles(articles, 5, NOW);
     assert.equal(side.length, 2);

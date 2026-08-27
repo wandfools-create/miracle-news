@@ -17,7 +17,7 @@
 | Vercel project name | 확인 필요 |
 | Supabase project name / ref | 저장소에 비밀값 없는 식별자가 없어 확인 필요 |
 | Stack | Next.js 16.1.7, React 19.2.3, TypeScript 5, Tailwind CSS 4, Supabase JS/SSR, Vercel, OpenAI, Discord, RSS Parser, Playwright |
-| Production main commit | `6c185cfebffc8e9745cac544e8e54d6c19e8a62f` — `Merge pull request #6` (revision-to-published restore) |
+| Production main commit | `90c2b75cf41c008eff808eeb719174674fef2ee3` — `Merge pull request #7` (home sidebar layout) |
 | Vercel Production | 배포 성공 (`https://www.hannoon.co`) |
 
 비밀번호, API key, bot token, service-role key, webhook secret 등은 이 문서에 기록하지 않는다.
@@ -45,7 +45,7 @@ Vercel Production ── https://www.hannoon.co
 - **Supabase:** 기사, 수집 후보, 상태, 검토 및 운영 로그의 데이터 계층이다.
 - **Vercel:** Next.js Production과 두 지역 Desk cron을 실행한다.
 - **GitHub:** `main`이 배포 및 기술 상태의 공식 코드 기준이다.
-- **Production SHA:** `6c185cfebffc8e9745cac544e8e54d6c19e8a62f` — Vercel Production 배포 성공 (PR #6 revision restore 포함).
+- **Production SHA:** `90c2b75cf41c008eff808eeb719174674fef2ee3` — Vercel Production 배포 성공 (PR #7 home sidebar 포함).
 - **Revision restore:** 수정 대기 50건 → 이전 공개 상태 복구 완료 (AI 재작성 없음; `published_at`/localization/slug 보존).
 - **Discord workflow:** `기사 만들기 → quick_review → 사람 확인 → 공개` (PR #3 복구 완료)
 - **SAME EVENT:** 판정 및 공개 차단 유지. `/admin/approved` 차단 시 Application error 대신 안내·override UX (PR #4 배포 완료)
@@ -214,11 +214,11 @@ Git history와 현재 코드에서 확인:
 - `/admin/approved` SAME EVENT 공개 차단 UX 배포 완료 (PR #4) — Digest `272674686` 원인(throw 처리) 해소
 - Miracle News Shorts Studio Phase 1 Production 배포 완료 (PR #1) — `/admin/shorts`
 - 수정 대기 → 이전 공개 상태 복구 Production 배포 및 50건 실제 복구 완료 (PR #6) — AI 재작성 없음; `published_at`/localization/slug 보존; 공개→수정 대기 confirm 추가
-- 홈페이지 정보 구조 개선 로컬 개발: 지금 주목 상단 이동 · 지금 뜨는 이슈 관련 기사 연결 · 카테고리 클릭 패널 복구 (Production 배포 전)
-- 홈페이지 Preview 피드백 반영 로컬 수정: 이슈 sticky 제거 · 지금 주목 본문 강제 표시 · 이슈 카드 내부 스크롤 (Production 배포 전)
-- 홈페이지 신문형 3열 재구성 로컬 수정: 왼쪽 지금 주목 · 중앙 본문 · 오른쪽 지금 뜨는 이슈 / sticky·내부 스크롤 제거 / 이슈 설명 복구 (Production 배포 전)
-- 홈페이지 디지털 신문 편집 디자인 로컬 수정: 카드·그림자 축소 · 대표/보조 위계 · 하단 전체폭 목록 · 카테고리 섹션 내비 (Production 배포 전)
-- 알려진 인계 결과: `npm test` 215 tests 통과, build 성공
+- 홈페이지 신문형 3열·카테고리 내비 Production 반영 완료 (PR #7) — 왼쪽 지금 주목 · 중앙 본문 · 오른쪽 지금 뜨는 이슈
+- 홈 editorial ranking Phase 1: **로컬 개발/검증 중** (`feature/home-editorial-ranking-v1`) — 후보 AI 중요도 연결·editorial score·다양성; Production 배포·migration 적용 전
+  - snapshot 컬럼 write는 `ARTICLES_AI_RECOMMEND_SNAPSHOT=1`일 때만 (기본 OFF → migration 미적용 시 schema error 없음)
+  - 홈 ranking은 `collection_candidates.article_id` 조인 fallback 유지
+- 알려진 인계 결과: `npm test` / `npm run build`는 해당 브랜치에서 재검증
 
 ## 9. 현재 미해결 문제
 
@@ -286,7 +286,7 @@ Git history와 현재 코드에서 확인:
 | 항목 | 값 |
 |---|---|
 | Branch | `main` |
-| Production main commit | `6c185cfebffc8e9745cac544e8e54d6c19e8a62f` |
+| Production main commit | `90c2b75cf41c008eff808eeb719174674fef2ee3` |
 | Vercel Production | 배포 성공 |
 | Production URL | https://www.hannoon.co |
 | Discord workflow | 기사 만들기 → `quick_review` → 사람 확인 → 공개 |
@@ -294,15 +294,18 @@ Git history와 현재 코드에서 확인:
 | Revision restore | PR #6 merged — 50건 복구 완료 |
 | 직접 공개 workflow | 비활성/제거 완료 |
 | Restore PRs | #3 Discord quick_review · #4 approved SAME EVENT UX · #6 revision restore — merged |
+| Home UI | PR #7 merged — Production 반영 완료 |
+| Home editorial ranking | Phase 1 **로컬 개발/검증 중** (`feature/home-editorial-ranking-v1`) — 배포·migration 적용 전 |
 | Shorts Studio | PR #1 merged (Phase 1) · PR #5 OPEN (Phase 2 package, 보존) |
-| Production = main | 예 — `6c185cf` 배포 성공 |
+| Production = main | 예 — `90c2b75` (PR #7 포함) |
 
 ## 12. 다음 최우선 작업
 
-1. Shorts Phase 2 재개 전 2~3일 Production 운영 안정성을 확인하고 날짜별 결과를 이 문서에 기록한다.
-2. Shorts Studio Phase 1(`/admin/shorts`) 실제 운영 확인 — published 기사 조회·날짜·Desk 분류·기사 선택.
-3. Shorts PR #5(AI production package)는 OPEN 상태로 보존; Phase 2 재개 시 별도 review.
-4. 실제 승인→공개, SAME EVENT 차단 안내, 명시적 override가 필요한 사례를 계속 확인한다.
+1. 홈 editorial ranking Phase 1 (`feature/home-editorial-ranking-v1`) 로컬 검증 완료 후 Preview → Production 검토 (migration 파일은 배포 전 별도 적용).
+2. Shorts Phase 2 재개 전 2~3일 Production 운영 안정성을 확인하고 날짜별 결과를 이 문서에 기록한다.
+3. Shorts Studio Phase 1(`/admin/shorts`) 실제 운영 확인 — published 기사 조회·날짜·Desk 분류·기사 선택.
+4. Shorts PR #5(AI production package)는 OPEN 상태로 보존; Phase 2 재개 시 별도 review.
+5. 실제 승인→공개, SAME EVENT 차단 안내, 명시적 override가 필요한 사례를 계속 확인한다.
 
 ## 12A. Miracle News Shorts Studio Phase 1
 
@@ -340,14 +343,16 @@ Git history와 현재 코드에서 확인:
 
 - **Digest 272674686:** 정상 SAME EVENT 차단을 throw로 처리하던 UX 문제 — PR #4로 해소, 데이터 손상 없음
 - **Last Updated:** 2026-08-27 UTC
-- **Latest Commit:** `4b2d9fcf92b64133aaac0c0d83975bf96dd26f89` — PROJECT_STATUS finalize
-- **Production main commit:** `6c185cfebffc8e9745cac544e8e54d6c19e8a62f`
-- **Vercel Production:** 배포 성공 (`https://www.hannoon.co`)
+- **Latest Commit:** `90c2b75cf41c008eff808eeb719174674fef2ee3` — Merge PR #7 home sidebar (main tip; editorial ranking uncommitted)
+- **Production main commit:** `90c2b75cf41c008eff808eeb719174674fef2ee3`
+- **Vercel Production:** 배포 성공 (`https://www.hannoon.co`) — 홈 PR #7 Production 반영 완료
 - **Discord workflow:** 기사 만들기 → quick_review → 사람 확인 → 공개
 - **SAME EVENT:** 판정·공개 차단 유지; `/admin/approved` 차단 안내·명시적 override 배포 완료
 - **Revision restore (PR #6):** Production 배포 완료; 수정 대기 50건 복구 완료 (AI 재작성 없음; `published_at`/localization/slug 보존)
 - **Operational Validation:** IN PROGRESS — 50건 복구 결과 기록 완료
 - **Shorts Studio Phase 1:** Production 반영 완료 (`/admin/shorts`, PR #1)
 - **Shorts PR #5:** OPEN — Phase 2 package 보존 (변경·병합 없음)
-- **Current Priority:** 홈페이지 UI 개선 로컬 개발 (배포 전) · Shorts Phase 2 재개는 PR #5 보존 상태
-- **Next Review:** 홈페이지 UI Preview 확인 후 Production 배포 검토 · Shorts Phase 2는 별도
+- **Home PR #7:** Production 반영 완료 (신문형 3열·카테고리 내비)
+- **Home editorial ranking Phase 1:** 로컬 개발/검증 중 (`feature/home-editorial-ranking-v1`) — Production 배포·migration 적용 전
+- **Current Priority:** 홈 editorial ranking Phase 1 검증 · Shorts Phase 2는 PR #5 보존
+- **Next Review:** editorial ranking Preview 후 Production 검토 · Shorts Phase 2는 별도

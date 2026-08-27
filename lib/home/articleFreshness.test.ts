@@ -89,7 +89,7 @@ describe("home freshness priority", () => {
     assert.equal(sortArticlesByFreshness([older, recent], NOW)[0]?.id, "recent");
   });
 
-  it("D: expired is_top_story (40h) no longer wins featured over fresh normal", () => {
+  it("D: is_top_story always wins featured (no age expiry)", () => {
     const manual = card({
       id: "manual",
       title: "manual top",
@@ -105,7 +105,7 @@ describe("home freshness priority", () => {
       published_at: hoursAgo(0.1),
     });
     const featured = pickFeaturedArticle([fresh, manual], NOW);
-    assert.equal(featured?.id, "fresh");
+    assert.equal(featured?.id, "manual");
   });
 
   it("active is_top_story within 24h still wins featured", () => {

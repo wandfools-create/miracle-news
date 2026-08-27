@@ -1,10 +1,12 @@
 import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
 import { categoryOrder } from "@/lib/koreanArticleDisplay";
+import { filterArticlesForHomeSurface } from "./articleFreshness";
 import {
-  compareArticlesByFreshness,
-  filterArticlesForHomeSurface,
-} from "./articleFreshness";
+  compareArticlesByEditorialScore,
+  sortArticlesByEditorialScore,
+} from "./editorialRanking";
 import { getArticleRegion, type ArticleRegion } from "./articleRegion";
+import { normalizeTopicClusterKey } from "./topicClusterKey";
 import type {
   HomeArticleCard,
   TrendingIssue,
@@ -59,12 +61,12 @@ export function relatedArticlesFromBucket(
   nowMs: number,
   max = 3
 ): TrendingIssueRelatedArticle[] {
-  const sorted = [...items].sort((a, b) =>
-    compareArticlesByFreshness(a, b, nowMs)
-  );
+  const sorted = sortArticlesByEditorialScore(items, nowMs);
   const ordered = [
     lead,
-    ...sorted.filter((a) => (a.article_id ?? a.id) !== (lead.article_id ?? lead.id)),
+    ...sorted.filter(
+      (a) => (a.article_id ?? a.id) !== (lead.article_id ?? lead.id)
+    ),
   ];
   const out: TrendingIssueRelatedArticle[] = [];
   const seen = new Set<string>();
@@ -94,12 +96,15 @@ function categorySortIndex(category: string): number {
   return index === -1 ? categoryOrder.length : index;
 }
 
-function leadByFreshness(
+function leadByEditorialScore(
   items: HomeArticleCard[],
   nowMs: number
 ): HomeArticleCard | null {
   if (!items.length) return null;
-  return [...items].sort((a, b) => compareArticlesByFreshness(a, b, nowMs))[0] ?? null;
+  return (
+    [...items].sort((a, b) => compareArticlesByEditorialScore(a, b, nowMs))[0] ??
+    null
+  );
 }
 
 function buildIssue(
@@ -139,14 +144,18 @@ function pickForRegion(
 
   for (const article of pool) {
     const category = article.category ?? "other";
-    const topicKey = article.topic_key?.trim();
+    const cluster = normalizeTopicClusterKey({
+      topic_key: article.topic_key,
+      topic_label: article.topic_label,
+      title: article.title,
+    });
     const topicLabel = article.topic_label?.trim();
 
-    if (topicKey && topicLabel) {
-      const id = `topic:${topicKey}`;
+    if (cluster) {
+      const id = `topic:${cluster}`;
       const existing = topicBuckets.get(id) ?? {
         id,
-        title: topicLabel,
+        title: topicLabel || issueTitleFromArticle(article),
         category,
         items: [],
       };
@@ -163,15 +172,15 @@ function pickForRegion(
   const usedCategories = new Set<string>();
 
   const topicSorted = [...topicBuckets.values()].sort((a, b) => {
-    const leadA = leadByFreshness(a.items, nowMs);
-    const leadB = leadByFreshness(b.items, nowMs);
+    const leadA = leadByEditorialScore(a.items, nowMs);
+    const leadB = leadByEditorialScore(b.items, nowMs);
     if (!leadA || !leadB) return 0;
-    return compareArticlesByFreshness(leadA, leadB, nowMs);
+    return compareArticlesByEditorialScore(leadA, leadB, nowMs);
   });
 
   for (const bucket of topicSorted) {
     if (issues.length >= max) break;
-    const lead = leadByFreshness(bucket.items, nowMs);
+    const lead = leadByEditorialScore(bucket.items, nowMs);
     if (!lead) continue;
     issues.push(
       buildIssue(bucket.id, bucket.title, lead, bucket.items, region, nowMs)
@@ -179,34 +188,28 @@ function pickForRegion(
     usedCategories.add(bucket.category);
   }
 
-  const categoryCandidates: Array<{
-    category: string;
-    lead: HomeArticleCard;
-    items: HomeArticleCard[];
-  }> = [];
+  const categoryBuckets = [...byCategory.entries()]
+    .filter(([category]) => !usedCategories.has(category))
+    .sort((a, b) => {
+      const leadA = leadByEditorialScore(a[1], nowMs);
+      const leadB = leadByEditorialScore(b[1], nowMs);
+      if (leadA && leadB) {
+        const scoreCmp = compareArticlesByEditorialScore(leadA, leadB, nowMs);
+        if (scoreCmp !== 0) return scoreCmp;
+      }
+      return categorySortIndex(a[0]) - categorySortIndex(b[0]);
+    });
 
-  for (const [category, items] of byCategory) {
-    if (usedCategories.has(category) || !items.length) continue;
-    const lead = leadByFreshness(items, nowMs);
-    if (!lead) continue;
-    categoryCandidates.push({ category, lead, items });
-  }
-
-  categoryCandidates.sort((a, b) => {
-    const cmp = compareArticlesByFreshness(a.lead, b.lead, nowMs);
-    if (cmp !== 0) return cmp;
-    return categorySortIndex(a.category) - categorySortIndex(b.category);
-  });
-
-  for (const candidate of categoryCandidates) {
+  for (const [category, items] of categoryBuckets) {
     if (issues.length >= max) break;
-
+    const lead = leadByEditorialScore(items, nowMs);
+    if (!lead) continue;
     issues.push(
       buildIssue(
-        `cat:${candidate.category}:${region}`,
-        issueTitleFromArticle(candidate.lead),
-        candidate.lead,
-        candidate.items,
+        `category:${region}:${category}`,
+        issueTitleFromArticle(lead),
+        lead,
+        items,
         region,
         nowMs
       )

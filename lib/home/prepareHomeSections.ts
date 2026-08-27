@@ -4,16 +4,19 @@ import { featuredSourceConfigs, normalizeSource } from "@/lib/koreanArticleDispl
 import { sortSourceLeadCards } from "@/lib/sourceLeadOrder";
 import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
 import { balanceLatestByRegion } from "./balanceLatestByRegion";
+import { sortArticlesByEditorialScore } from "./editorialRanking";
 import {
   pickFeaturedArticle,
   sortHomeArticlesForDisplay,
 } from "./featuredSelection";
+import { pickSidebarLatestArticles } from "./pickSidebarLatest";
 import type { HomeArticleCard, HomePageSections } from "./types";
 
 export type PrepareHomeSectionsOptions = {
   /** Main hub (/): interleave US & Korea ~50:50 in latest list. */
   balanceLatestByRegion?: boolean;
   latestLimit?: number;
+  nowMs?: number;
 };
 
 export function prepareHomeSections(
@@ -21,8 +24,9 @@ export function prepareHomeSections(
   locale: ArticleLocale,
   options?: PrepareHomeSectionsOptions
 ): HomePageSections {
-  const sorted = sortHomeArticlesForDisplay(articles);
-  const featured = pickFeaturedArticle(sorted);
+  const nowMs = options?.nowMs ?? Date.now();
+  const sorted = sortHomeArticlesForDisplay(articles, nowMs);
+  const featured = pickFeaturedArticle(sorted, nowMs);
   const featuredId = featured?.id;
   const latestLimit = options?.latestLimit ?? 8;
 
@@ -32,7 +36,7 @@ export function prepareHomeSections(
     : latestPool.slice(0, latestLimit);
 
   const sourceLeadMap: Record<string, HomeArticleCard> = {};
-  for (const article of sorted) {
+  for (const article of sortArticlesByEditorialScore(articles, nowMs)) {
     const sourceKey = normalizeSource(article.source);
     if (!sourceLeadMap[sourceKey]) {
       sourceLeadMap[sourceKey] = article;
@@ -55,12 +59,7 @@ export function prepareHomeSections(
     locale
   );
 
-  const excludedIds = new Set(sourceLeadCards.map((item) => item.article.id));
-  if (featuredId) excludedIds.add(featuredId);
-
-  const sidebarBase = sorted.filter((a) => !excludedIds.has(a.id));
-  const sidebar =
-    sidebarBase.length > 0 ? sidebarBase.slice(0, 5) : sorted.slice(0, 5);
+  const sidebar = pickSidebarLatestArticles(sorted, 5, nowMs);
 
   const groupedByCategory: Record<string, HomeArticleCard[]> = {};
   for (const article of sorted) {
@@ -69,10 +68,8 @@ export function prepareHomeSections(
     groupedByCategory[key].push(article);
   }
   for (const key of Object.keys(groupedByCategory)) {
-    groupedByCategory[key] = sortArticlesForCategorySection(
-      groupedByCategory[key],
-      key
-    );
+    const scored = sortArticlesByEditorialScore(groupedByCategory[key], nowMs);
+    groupedByCategory[key] = sortArticlesForCategorySection(scored, key);
   }
 
   const visibleCategories = categoryOrder.filter(
