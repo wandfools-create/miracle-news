@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Shorts Phase 2 local package drafts (not committed)
+/data/shorts-packages/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
