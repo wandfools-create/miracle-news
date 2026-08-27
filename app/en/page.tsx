@@ -4,6 +4,7 @@ import { enHomeLabels } from "@/lib/home/enHomeLabels";
 import { prepareEditionHomeSections } from "@/lib/home/prepareEditionHomeSections";
 import { enHomeSearchLabels } from "@/lib/home/enSearchLabels";
 import { formatServerHeaderDate } from "@/lib/home/serverDateLabels";
+import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -25,22 +26,30 @@ export default async function EnglishHomePage() {
   const sourceOptions = sections.activeSourceLabels;
 
   return (
-    <HomeNewsView
-      pageRole="en"
-      locale="en"
-      labels={enHomeLabels}
-      sections={sections}
-      articleHrefPrefix="/en/article"
-      homeHref="/en"
-      alternateLangHref="/ko"
-      sourceFilterOptions={sourceOptions}
-      sourceFilterAllLabel="All outlets"
-      errorMessage={error?.message ?? null}
-      showDateInHeader
-      headerDateText={headerDateText}
-      searchArticles={articles}
-      searchPath="/en/search"
-      searchLabels={enHomeSearchLabels}
-    />
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-white px-4 py-10 text-neutral-600">
+          Loading…
+        </main>
+      }
+    >
+      <HomeNewsView
+        pageRole="en"
+        locale="en"
+        labels={enHomeLabels}
+        sections={sections}
+        articleHrefPrefix="/en/article"
+        homeHref="/en"
+        alternateLangHref="/ko"
+        sourceFilterOptions={sourceOptions}
+        sourceFilterAllLabel="All outlets"
+        errorMessage={error?.message ?? null}
+        showDateInHeader
+        headerDateText={headerDateText}
+        searchArticles={articles}
+        searchPath="/en/search"
+        searchLabels={enHomeSearchLabels}
+      />
+    </Suspense>
   );
 }

@@ -18,8 +18,11 @@ export const enHomeLabels: HomeNewsLabels = {
   trendingTitle: "Trending Issues",
   trendingRegionUs: "United States",
   trendingRegionKr: "Korea",
+  trendingRelatedLabel: "Related stories",
+  trendingOriginalLabel: "Original source",
   categoriesEyebrow: "Categories",
   categoriesTitle: "Stories by category",
+  categoriesEmpty: "No published stories in this category.",
   sourcesEyebrow: "Sources",
   sourcesTitle: "Major outlets",
   sourcesDesc:

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ArticleLocale } from "@/lib/article/formatPublishedDate";
 import { getCategoryLabel } from "@/lib/article/categoryLabels";
 import {
@@ -20,7 +21,9 @@ import NewsThumbnail, {
   type NewsThumbVariant,
 } from "@/components/home/NewsThumbnail";
 import {
-  newsMainGrid,
+  newsHomeLeftOnlyGrid,
+  newsHomeRightOnlyGrid,
+  newsHomeThreeColGrid,
   newsPageShell,
   type NewsPageRole,
 } from "@/lib/home/newsPageLayout";
@@ -59,6 +62,9 @@ export type HomeNewsLabels = {
   trendingTitle: string;
   trendingRegionUs: string;
   trendingRegionKr: string;
+  trendingRelatedLabel: string;
+  trendingOriginalLabel: string;
+  categoriesEmpty: string;
 };
 
 function formatCategoryCount(locale: ArticleLocale, n: number): string {
@@ -111,13 +117,13 @@ function NavPill({
   variant?: "default" | "primary" | "ghost";
 }) {
   const base =
-    "inline-flex shrink-0 items-center justify-center rounded-md px-3 py-2 text-xs font-semibold whitespace-nowrap transition sm:text-sm";
+    "inline-flex shrink-0 items-center justify-center px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap transition sm:text-sm";
   const styles =
     variant === "primary"
       ? `${base} bg-news-navy text-white hover:brightness-110`
       : variant === "ghost"
         ? `${base} text-neutral-500 hover:text-news-navy`
-        : `${base} border border-neutral-200 bg-white text-neutral-800 hover:bg-neutral-50`;
+        : `${base} text-neutral-700 hover:text-news-navy`;
 
   if (href.startsWith("#")) {
     return (
@@ -138,21 +144,30 @@ function SectionHeading({
   eyebrow,
   title,
   description,
+  showEyebrow = false,
 }: {
   eyebrow: string;
   title: string;
   description?: string;
+  /** English/eyebrow labels are quiet — only show when explicitly useful. */
+  showEyebrow?: boolean;
 }) {
   return (
-    <header className="mb-4 border-b border-neutral-200/80 pb-3 sm:mb-5 sm:pb-4">
-      <p className="text-[13px] font-bold uppercase tracking-[0.14em] text-news-red">
-        {eyebrow}
-      </p>
-      <h2 className="mt-1 text-[1.375rem] font-bold tracking-tight text-news-navy sm:text-[1.625rem]">
+    <header className="mb-4 border-b border-neutral-300 pb-2.5 sm:mb-5">
+      {showEyebrow ? (
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+          {eyebrow}
+        </p>
+      ) : null}
+      <h2
+        className={`font-bold tracking-tight text-news-navy ${
+          showEyebrow ? "mt-1 text-xl sm:text-[1.375rem]" : "text-xl sm:text-[1.375rem]"
+        }`}
+      >
         {title}
       </h2>
       {description ? (
-        <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-neutral-600 sm:text-base">
+        <p className="mt-1.5 text-[14px] leading-relaxed text-neutral-600 sm:text-[15px]">
           {description}
         </p>
       ) : null}
@@ -201,17 +216,11 @@ function StoryMetaLine({
   const date = listDateText(article, displayLocale);
 
   return (
-    <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] font-medium text-neutral-500 sm:text-sm">
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] font-medium text-neutral-500 sm:text-[13px]">
       {article.locale ? (
         <>
-          <span
-            className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
-              article.locale === "ko"
-                ? "bg-neutral-900 text-white"
-                : "border border-neutral-300 bg-white text-neutral-700"
-            }`}
-          >
-            {article.locale === "ko" ? "한국어" : "English"}
+          <span className="font-semibold uppercase tracking-wide text-neutral-700">
+            {article.locale === "ko" ? "KO" : "EN"}
           </span>
           <span aria-hidden className="text-neutral-300">
             ·
@@ -239,145 +248,119 @@ function FeaturedHero({
   labels,
   articleHrefPrefix,
   articleHrefFor,
-  splitLayout = false,
 }: {
   article: HomeArticleCard;
   locale: ArticleLocale;
   labels: HomeNewsLabels;
   articleHrefPrefix: string;
   articleHrefFor?: (article: HomeArticleCard) => string;
-  splitLayout?: boolean;
 }) {
   const displayLocale = article.locale ?? locale;
   const href = resolveArticleHref(article, articleHrefPrefix, articleHrefFor);
   const published = publishedFullText(article, displayLocale);
 
-  const body = (
-    <>
-      <StoryMetaLine article={article} locale={displayLocale} />
-
-      <h2
-        className={`mt-3 font-bold leading-[1.28] tracking-[-0.02em] text-news-navy ${
-          splitLayout
-            ? "text-[1.375rem] sm:text-[1.5rem] lg:text-[1.625rem]"
-            : "text-[1.625rem] sm:text-2xl lg:text-[2.25rem]"
-        }`}
-      >
-        <Link
-          href={href}
-          className="hover:text-news-red hover:underline decoration-neutral-300 underline-offset-4"
-        >
-          {article.title}
-        </Link>
-      </h2>
-
-      {article.summary ? (
-        <p
-          className={`mt-4 text-neutral-700 ${
-            splitLayout
-              ? "line-clamp-2 text-[15px] leading-relaxed sm:text-base"
-              : "max-w-3xl border-l-[3px] border-news-navy pl-4 text-[17px] font-medium leading-[1.65] sm:text-lg"
-          }`}
-        >
-          {truncateSummary(article.summary, splitLayout ? 110 : 220, displayLocale)}
-        </p>
-      ) : null}
-
-      <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
-        {published ? <p className="text-[15px] text-neutral-500">{published}</p> : null}
-        <Link
-          href={href}
-          className="inline-flex items-center justify-center rounded-md bg-news-navy px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
-        >
-          {labels.readArticle}
-        </Link>
-      </div>
-    </>
-  );
-
-  if (splitLayout) {
-    return (
-      <article className="overflow-hidden rounded-lg bg-white shadow-sm lg:grid lg:grid-cols-[1.05fr_minmax(0,0.95fr)] lg:items-stretch">
-        <Link href={href} className="block bg-white lg:min-h-[220px]">
-          <div
-            className={`${newsThumbFrameClass} aspect-video w-full lg:aspect-[16/10] lg:h-full lg:min-h-[220px]`}
-          >
-            <ArticleThumb
-              article={article}
-              noImageLabel={labels.noImage}
-              priority
-              sizes="(max-width: 1024px) 100vw, 55vw"
-            />
-          </div>
-        </Link>
-        <div className="flex flex-col justify-center p-4 sm:p-5 lg:p-5">{body}</div>
-      </article>
-    );
-  }
-
   return (
-    <article className="overflow-hidden rounded-lg bg-white shadow-sm">
+    <article className="border-b border-neutral-300 pb-6">
       <Link href={href} className="block">
-        <div
-          className={`${newsThumbFrameClass} aspect-video w-full max-h-[560px]`}
-        >
+        <div className={`${newsThumbFrameClass} aspect-[16/10] w-full`}>
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
             priority
-            sizes="(max-width: 1024px) 100vw, 70vw"
+            objectFit="cover"
+            sizes="(max-width: 1024px) 100vw, 55vw"
           />
         </div>
       </Link>
-      <div className="p-5 sm:p-7 lg:p-8">{body}</div>
+      <div className="pt-4">
+        <StoryMetaLine article={article} locale={displayLocale} />
+        <h2 className="mt-2 text-[1.5rem] font-bold leading-[1.25] tracking-[-0.02em] text-news-navy sm:text-[1.75rem] lg:text-[2rem]">
+          <Link
+            href={href}
+            className="hover:text-news-red hover:underline decoration-neutral-300 underline-offset-4"
+          >
+            {article.title}
+          </Link>
+        </h2>
+        {article.summary ? (
+          <p className="mt-3 border-l-2 border-news-navy pl-3 text-[15px] font-medium leading-relaxed text-neutral-700 sm:text-[16px] sm:leading-[1.65]">
+            {truncateSummary(article.summary, 220, displayLocale)}
+          </p>
+        ) : null}
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+          {published ? (
+            <p className="text-[13px] text-neutral-500">{published}</p>
+          ) : null}
+          <Link
+            href={href}
+            className="text-[13px] font-semibold text-news-navy underline-offset-2 hover:underline"
+          >
+            {labels.readArticle}
+          </Link>
+        </div>
+      </div>
     </article>
   );
 }
 
-/** 주요 기사 목록 썸네일: 좌·우 컬럼 동일 규격 (16:10). */
-const TOP_STORY_THUMB_LINK_CLASS =
-  "relative block h-[70px] w-28 shrink-0 overflow-hidden rounded-md bg-white sm:h-[90px] sm:w-36";
-const TOP_STORY_THUMB_FRAME_CLASS = `${newsThumbFrameClass} h-full w-full aspect-[16/10]`;
-
-function TopStoriesColumnCard({
+/** Horizontal story row — image + title + short dek + time (no outer card). */
+function StoryListRow({
   article,
   locale,
   labels,
   articleHrefPrefix,
   articleHrefFor,
+  summaryLen = 110,
+  titleClamp = 2,
+  thumbClass = "relative block h-[72px] w-[112px] shrink-0 overflow-hidden bg-neutral-100 sm:h-[88px] sm:w-[140px]",
 }: {
   article: HomeArticleCard;
   locale: ArticleLocale;
   labels: HomeNewsLabels;
   articleHrefPrefix: string;
   articleHrefFor?: (article: HomeArticleCard) => string;
+  summaryLen?: number;
+  titleClamp?: 2 | 3;
+  thumbClass?: string;
 }) {
   const displayLocale = article.locale ?? locale;
   const href = resolveArticleHref(article, articleHrefPrefix, articleHrefFor);
 
   return (
-    <article className="border-b border-neutral-200 py-3.5 last:border-b-0 last:pb-0 sm:py-4">
+    <article className="border-b border-neutral-200 py-3.5 last:border-b-0 sm:py-4">
       <div className="flex gap-3 sm:gap-4">
-        <Link href={href} className={TOP_STORY_THUMB_LINK_CLASS}>
-          <div className={TOP_STORY_THUMB_FRAME_CLASS}>
+        <Link href={href} className={thumbClass}>
+          <div className={`${newsThumbFrameClass} h-full w-full aspect-[16/10]`}>
             <ArticleThumb
               article={article}
               noImageLabel={labels.noImage}
               objectFit="cover"
-              sizes="(max-width: 640px) 112px, 144px"
+              sizes="(max-width: 640px) 112px, 140px"
             />
           </div>
         </Link>
         <div className="min-w-0 flex-1">
-          <StoryMetaLine article={article} locale={displayLocale} />
-          <h3 className="mt-1.5 text-[15px] font-bold leading-snug text-neutral-950 sm:text-base">
-            <Link href={href} className="line-clamp-3 hover:underline">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+            {getSourceLabel(article.source, article.original_url)}
+            <span className="mx-1.5 font-normal text-neutral-300">·</span>
+            <time
+              dateTime={article.published_at ?? article.created_at}
+              className="font-normal normal-case tracking-normal text-neutral-500"
+            >
+              {listDateText(article, displayLocale)}
+            </time>
+          </p>
+          <h3 className="mt-1 text-[15px] font-bold leading-snug text-neutral-950 sm:text-[16px]">
+            <Link
+              href={href}
+              className={`${titleClamp === 3 ? "line-clamp-3" : "line-clamp-2"} hover:underline`}
+            >
               {article.title}
             </Link>
           </h3>
           {article.summary ? (
-            <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-neutral-600 sm:text-[15px]">
-              {truncateSummary(article.summary, 120, displayLocale)}
+            <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-neutral-600">
+              {truncateSummary(article.summary, summaryLen, displayLocale)}
             </p>
           ) : null}
         </div>
@@ -386,104 +369,49 @@ function TopStoriesColumnCard({
   );
 }
 
-/** 주요 기사 카드 이미지: 행 내 동일 높이 (width 100% + 16:10). */
-const FEATURED_LEAD_THUMB_FRAME_CLASS = `${newsThumbFrameClass} aspect-[16/10] w-full`;
-
-function FeaturedLeadCard({
+function FeaturedSecondary({
   article,
   locale,
   labels,
   articleHrefPrefix,
   articleHrefFor,
-  priority = false,
 }: {
   article: HomeArticleCard;
   locale: ArticleLocale;
   labels: HomeNewsLabels;
   articleHrefPrefix: string;
   articleHrefFor?: (article: HomeArticleCard) => string;
-  priority?: boolean;
 }) {
   const displayLocale = article.locale ?? locale;
   const href = resolveArticleHref(article, articleHrefPrefix, articleHrefFor);
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-lg bg-white shadow-sm">
-      <Link href={href} className="block shrink-0 bg-white">
-        <div className={FEATURED_LEAD_THUMB_FRAME_CLASS}>
+    <article className="border-b border-neutral-200 pb-4 sm:border-b-0 sm:border-l sm:border-neutral-200 sm:pb-0 sm:pl-5">
+      <Link href={href} className="block">
+        <div className={`${newsThumbFrameClass} aspect-[16/10] w-full`}>
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
-            priority={priority}
             objectFit="cover"
-            sizes="(max-width: 640px) 100vw, 50vw"
+            sizes="(max-width: 640px) 100vw, 30vw"
           />
         </div>
       </Link>
-      <div className="flex flex-1 flex-col p-3.5 sm:p-4">
+      <div className="pt-3">
         <StoryMetaLine article={article} locale={displayLocale} />
-        <h2 className="mt-2 text-[17px] font-bold leading-snug tracking-[-0.01em] text-news-navy sm:text-xl">
+        <h3 className="mt-1.5 text-[17px] font-bold leading-snug tracking-[-0.01em] text-news-navy sm:text-lg">
           <Link
             href={href}
             className="line-clamp-3 hover:text-news-red hover:underline decoration-neutral-300 underline-offset-2"
           >
             {article.title}
           </Link>
-        </h2>
+        </h3>
         {article.summary ? (
-          <p className="mt-2 line-clamp-2 text-[15px] leading-relaxed text-neutral-600">
-            {truncateSummary(article.summary, 100, displayLocale)}
+          <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-neutral-600">
+            {truncateSummary(article.summary, 90, displayLocale)}
           </p>
         ) : null}
-      </div>
-    </article>
-  );
-}
-
-function FeaturedRelatedItem({
-  article,
-  locale,
-  labels,
-  articleHrefPrefix,
-  articleHrefFor,
-  index,
-}: {
-  article: HomeArticleCard;
-  locale: ArticleLocale;
-  labels: HomeNewsLabels;
-  articleHrefPrefix: string;
-  articleHrefFor?: (article: HomeArticleCard) => string;
-  index: number;
-}) {
-  const displayLocale = article.locale ?? locale;
-  const href = resolveArticleHref(article, articleHrefPrefix, articleHrefFor);
-
-  return (
-    <article className="border-b border-neutral-200 py-3.5 last:border-b-0 last:pb-0 sm:py-4">
-      <div className="flex gap-3 sm:gap-4">
-        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-[11px] font-bold text-white">
-          {index + 1}
-        </span>
-        <Link
-          href={href}
-          className="relative block w-24 shrink-0 overflow-hidden rounded-md bg-white ring-1 ring-neutral-200/80 sm:w-28"
-        >
-          <div className={`${newsThumbFrameClass} aspect-video w-full`}>
-            <ArticleThumb
-              article={article}
-              noImageLabel={labels.noImage}
-              sizes="(max-width: 640px) 96px, 112px"
-            />
-          </div>
-        </Link>
-        <div className="min-w-0 flex-1">
-          <StoryMetaLine article={article} locale={displayLocale} />
-          <h3 className="mt-1.5 text-[15px] font-bold leading-snug text-neutral-950 sm:text-base">
-            <Link href={href} className="line-clamp-2 hover:underline">
-              {article.title}
-            </Link>
-          </h3>
-        </div>
       </div>
     </article>
   );
@@ -504,40 +432,57 @@ function FeaturedWithRelated({
   articleHrefPrefix: string;
   articleHrefFor?: (article: HomeArticleCard) => string;
 }) {
+  const primary = leads[0];
+  const secondary = leads[1];
+
   return (
-    <div className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        {leads.map((article, index) => (
-          <FeaturedLeadCard
-            key={article.id}
-            article={article}
+    <div className="space-y-5">
+      {primary ? (
+        <div
+          className={
+            secondary
+              ? "grid gap-5 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,0.85fr)] sm:gap-0 sm:items-start"
+              : undefined
+          }
+        >
+          <FeaturedHero
+            article={primary}
             locale={locale}
             labels={labels}
             articleHrefPrefix={articleHrefPrefix}
             articleHrefFor={articleHrefFor}
-            priority={index === 0}
           />
-        ))}
-      </div>
+          {secondary ? (
+            <FeaturedSecondary
+              article={secondary}
+              locale={locale}
+              labels={labels}
+              articleHrefPrefix={articleHrefPrefix}
+              articleHrefFor={articleHrefFor}
+            />
+          ) : null}
+        </div>
+      ) : null}
+
       {related.length > 0 ? (
-        <aside className="rounded-lg border border-neutral-200 bg-white px-3 py-2 shadow-sm sm:px-3.5 sm:py-2.5">
-          <h3 className="border-b border-neutral-200 pb-2 text-[15px] font-bold uppercase tracking-wide text-neutral-700">
+        <div>
+          <h3 className="border-b border-neutral-300 pb-2 text-[13px] font-bold uppercase tracking-[0.08em] text-neutral-500">
             {labels.latestTitle}
           </h3>
-          <div className="mt-1">
-            {related.map((article, index) => (
-              <FeaturedRelatedItem
+          <div>
+            {related.map((article) => (
+              <StoryListRow
                 key={article.id}
                 article={article}
                 locale={locale}
                 labels={labels}
                 articleHrefPrefix={articleHrefPrefix}
                 articleHrefFor={articleHrefFor}
-                index={index}
+                summaryLen={90}
               />
             ))}
           </div>
-        </aside>
+        </div>
       ) : null}
     </div>
   );
@@ -563,18 +508,16 @@ function TopStoriesColumn({
   accentClass: string;
 }) {
   return (
-    <div
-      className={`flex min-w-0 flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm`}
-    >
-      <div className={`border-t-4 ${accentClass} px-4 py-3 sm:px-5`}>
-        <h3 className="text-xl font-bold text-news-navy">{title}</h3>
+    <div className="min-w-0">
+      <div className={`border-b border-neutral-300 border-t-2 ${accentClass} pb-2 pt-1`}>
+        <h3 className="text-[15px] font-bold text-news-navy sm:text-base">{title}</h3>
       </div>
-      <div className="flex-1 px-3 py-2 sm:px-4 sm:py-3">
+      <div>
         {articles.length === 0 ? (
-          <p className="py-8 text-center text-[15px] text-neutral-500">{emptyLabel}</p>
+          <p className="py-8 text-center text-[14px] text-neutral-500">{emptyLabel}</p>
         ) : (
           articles.map((article) => (
-            <TopStoriesColumnCard
+            <StoryListRow
               key={article.id}
               article={article}
               locale={locale}
@@ -595,61 +538,30 @@ function LatestRow({
   labels,
   articleHrefPrefix,
   articleHrefFor,
-  index,
-  showRank = false,
 }: {
   article: HomeArticleCard;
   locale: ArticleLocale;
   labels: HomeNewsLabels;
   articleHrefPrefix: string;
   articleHrefFor?: (article: HomeArticleCard) => string;
-  index: number;
+  index?: number;
   showRank?: boolean;
 }) {
-  const displayLocale = article.locale ?? locale;
-  const href = resolveArticleHref(article, articleHrefPrefix, articleHrefFor);
-
   return (
-    <article className="group border-b border-neutral-200 py-4 first:pt-1 last:border-b-0 last:pb-1 sm:py-5">
-      <div className="flex gap-4 sm:gap-5">
-        <Link
-          href={href}
-          className="relative block w-32 shrink-0 overflow-hidden rounded-md bg-white sm:w-44"
-        >
-          <div className={`${newsThumbFrameClass} aspect-video w-full`}>
-            <ArticleThumb
-              article={article}
-              noImageLabel={labels.noImage}
-              sizes="(max-width: 640px) 128px, 176px"
-            />
-          </div>
-          {showRank ? (
-            <span className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded bg-news-navy text-[11px] font-bold text-white">
-              {index + 1}
-            </span>
-          ) : null}
-        </Link>
-
-        <div className="min-w-0 flex-1 py-0.5">
-          <StoryMetaLine article={article} locale={displayLocale} />
-          <h3 className="mt-2 text-[1.1875rem] font-bold leading-snug text-neutral-950 sm:text-xl">
-            <Link
-              href={href}
-              className="line-clamp-3 hover:underline decoration-neutral-300 underline-offset-2 [text-wrap:pretty]"
-            >
-              {article.title}
-            </Link>
-          </h3>
-          <p className="mt-2 line-clamp-2 text-[15px] leading-relaxed text-neutral-600">
-            {truncateSummary(article.summary, 140, displayLocale)}
-          </p>
-        </div>
-      </div>
-    </article>
+    <StoryListRow
+      article={article}
+      locale={locale}
+      labels={labels}
+      articleHrefPrefix={articleHrefPrefix}
+      articleHrefFor={articleHrefFor}
+      summaryLen={140}
+      titleClamp={3}
+      thumbClass="relative block h-[80px] w-[128px] shrink-0 overflow-hidden bg-neutral-100 sm:h-[100px] sm:w-[160px]"
+    />
   );
 }
 
-function CategoryCard({
+function CategoryLead({
   article,
   locale,
   labels,
@@ -666,30 +578,30 @@ function CategoryCard({
   const href = resolveArticleHref(article, articleHrefPrefix, articleHrefFor);
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-xl border border-neutral-200/90 bg-white">
-      <Link href={href} className="block shrink-0 bg-white">
+    <article className="min-w-0 border-b border-neutral-200 pb-5 sm:border-b-0 sm:pb-0 sm:pr-6 lg:border-r lg:border-neutral-200">
+      <Link href={href} className="block">
         <div className={newsThumbFrameForVariant("categoryCard")}>
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
             variant="categoryCard"
-            sizes="(max-width: 640px) 100vw, (max-width: 1280px) 33vw, 25vw"
+            objectFit="cover"
+            sizes="(max-width: 640px) 100vw, (max-width: 1280px) 40vw, 28vw"
           />
         </div>
       </Link>
-      <div className="flex flex-1 flex-col p-4 sm:p-5">
+      <div className="pt-3">
         <StoryMetaLine article={article} locale={displayLocale} />
-        <h3 className="mt-2.5 text-[17px] font-bold leading-snug text-neutral-950 sm:text-[1.1875rem]">
-          <Link
-            href={href}
-            className="line-clamp-3 hover:underline decoration-neutral-300 underline-offset-2"
-          >
+        <h3 className="mt-2 text-lg font-bold leading-snug text-neutral-950 sm:text-xl">
+          <Link href={href} className="line-clamp-3 hover:underline">
             {article.title}
           </Link>
         </h3>
-        <p className="mt-2 line-clamp-3 flex-1 text-[15px] leading-relaxed text-neutral-600">
-          {truncateSummary(article.summary, 120, displayLocale)}
-        </p>
+        {article.summary ? (
+          <p className="mt-2 line-clamp-3 text-[14px] leading-relaxed text-neutral-600">
+            {truncateSummary(article.summary, 140, displayLocale)}
+          </p>
+        ) : null}
       </div>
     </article>
   );
@@ -709,26 +621,34 @@ function SidebarItem({
   index: number;
 }) {
   const displayLocale = article.locale ?? locale;
-  const href = resolveArticleHref(article, articleHrefPrefix, articleHrefFor);
+  const slugOk = Boolean(article.slug?.trim());
+  const href =
+    articleHrefFor || slugOk
+      ? resolveArticleHref(article, articleHrefPrefix, articleHrefFor)
+      : null;
 
   return (
-    <article className="border-b border-neutral-200/80 pb-3.5 last:border-b-0 last:pb-0">
-      <div className="flex gap-3">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-[11px] font-bold text-white">
+    <article className="border-b border-neutral-200 py-3 last:border-b-0 last:pb-0">
+      <div className="flex gap-2.5">
+        <span className="mt-0.5 w-5 shrink-0 text-[13px] font-bold tabular-nums text-news-red">
           {index + 1}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-semibold uppercase tracking-wide text-neutral-500">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
             {getSourceLabel(article.source, article.original_url)}
           </p>
-          <h3 className="mt-1 text-[15px] font-semibold leading-snug text-neutral-900">
-            <Link href={href} className="line-clamp-2 hover:underline">
-              {article.title}
-            </Link>
+          <h3 className="mt-0.5 text-[14px] font-semibold leading-snug text-neutral-900">
+            {href ? (
+              <Link href={href} className="line-clamp-2 hover:underline">
+                {article.title}
+              </Link>
+            ) : (
+              <span className="line-clamp-2">{article.title}</span>
+            )}
           </h3>
           <time
             dateTime={article.published_at ?? article.created_at}
-            className="mt-1 block text-[13px] text-neutral-500"
+            className="mt-1 block text-[12px] text-neutral-500"
           >
             {listDateText(article, displayLocale)}
           </time>
@@ -738,8 +658,46 @@ function SidebarItem({
   );
 }
 
-/** Desktop default: 3×2 photo-first source leads. */
-const SOURCE_LEAD_DISPLAY_LIMIT = 6;
+/** Vertical ranked list — left rail on desktop, after trending on mobile. */
+function SpotlightRail({
+  articles,
+  locale,
+  labels,
+  articleHrefPrefix,
+  articleHrefFor,
+}: {
+  articles: HomeArticleCard[];
+  locale: ArticleLocale;
+  labels: HomeNewsLabels;
+  articleHrefPrefix: string;
+  articleHrefFor?: (article: HomeArticleCard) => string;
+}) {
+  return (
+    <section id="sidebar" className="min-w-0 scroll-mt-6 border-t border-neutral-300 pt-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
+        {labels.sidebarEyebrow}
+      </p>
+      <h2 className="mt-1 border-b border-neutral-200 pb-2 text-[15px] font-bold text-news-navy">
+        {labels.sidebarTitle}
+      </h2>
+      <div className="mt-1">
+        {articles.map((article, index) => (
+          <SidebarItem
+            key={article.id}
+            article={article}
+            locale={locale}
+            articleHrefPrefix={articleHrefPrefix}
+            articleHrefFor={articleHrefFor}
+            index={index}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Desktop default: up to 8 photo leads across a fluid 3–4 column grid. */
+const SOURCE_LEAD_DISPLAY_LIMIT = 8;
 
 function SourceLeadMini({
   article,
@@ -757,22 +715,23 @@ function SourceLeadMini({
   const href = resolveArticleHref(article, articleHrefPrefix, articleHrefFor);
 
   return (
-    <article className="flex flex-col bg-white">
-      <Link href={href} className="block shrink-0 bg-white">
+    <article className="min-w-0">
+      <Link href={href} className="block">
         <div className={newsThumbFrameForVariant("sourceCard")}>
           <ArticleThumb
             article={article}
             noImageLabel={labels.noImage}
             variant="sourceCard"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            objectFit="cover"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
           />
         </div>
       </Link>
-      <div className="pt-3">
+      <div className="border-b border-neutral-200 pb-3 pt-2.5">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
           {sourceLabel}
         </p>
-        <h3 className="mt-1.5 text-[15px] font-semibold leading-snug text-neutral-950 sm:text-base">
+        <h3 className="mt-1 text-[14px] font-semibold leading-snug text-neutral-950 sm:text-[15px]">
           <Link href={href} className="line-clamp-2 hover:underline">
             {article.title}
           </Link>
@@ -804,6 +763,9 @@ export default function HomeNewsView({
     null
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const handleSearchQueryChange = useCallback((query: string) => {
     setSearchQuery(query);
   }, []);
@@ -863,7 +825,16 @@ export default function HomeNewsView({
     trendingIssues &&
       (trendingIssues.us.length > 0 || trendingIssues.kr.length > 0)
   );
-  const showAside = showTrending || showSidebar;
+  /** Desktop newspaper rails: left spotlight, right trending (no sticky). */
+  const showLeftRail = showSidebar;
+  const showRightRail = showTrending;
+  const homeGridClass = showLeftRail && showRightRail
+    ? newsHomeThreeColGrid
+    : showLeftRail
+      ? newsHomeLeftOnlyGrid
+      : showRightRail
+        ? newsHomeRightOnlyGrid
+        : "min-w-0";
   const filteredSourceLeadCards = useMemo(() => {
     if (!selectedSourceLabel) {
       return displaySections.sourceLeadCards.slice(0, SOURCE_LEAD_DISPLAY_LIMIT);
@@ -893,6 +864,66 @@ export default function HomeNewsView({
     [displaySections.visibleCategories, filteredGroupedByCategory]
   );
   const showCategories = filteredVisibleCategories.length > 0;
+
+  /** Category click panel — mirrors EditionFilterBar `?category=` URL pattern. */
+  const categoryFromUrl = searchParams.get("category");
+  const selectedCategory = useMemo(() => {
+    if (
+      categoryFromUrl &&
+      filteredVisibleCategories.includes(categoryFromUrl)
+    ) {
+      return categoryFromUrl;
+    }
+    return filteredVisibleCategories[0] ?? null;
+  }, [categoryFromUrl, filteredVisibleCategories]);
+
+  useEffect(() => {
+    if (!categoryFromUrl) return;
+    if (filteredVisibleCategories.includes(categoryFromUrl)) return;
+    if (filteredVisibleCategories.length === 0) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("category");
+    const q = params.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+  }, [
+    categoryFromUrl,
+    filteredVisibleCategories,
+    pathname,
+    router,
+    searchParams,
+  ]);
+
+  const selectCategory = useCallback(
+    (category: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("category", category);
+      const q = params.toString();
+      router.replace(`${pathname}?${q}`, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
+
+  const selectedCategoryArticles = selectedCategory
+    ? (filteredGroupedByCategory[selectedCategory] ?? []).slice(0, 6)
+    : [];
+  const selectedCategoryTotal = selectedCategory
+    ? filteredGroupedByCategory[selectedCategory]?.length ?? 0
+    : 0;
+
+  const trendingPanel = showTrending && trendingIssues ? (
+    <TrendingIssuesPanel
+      block={trendingIssues}
+      articleHrefPrefix={articleHrefPrefix}
+      labels={{
+        title: labels.trendingTitle,
+        regionUs: labels.trendingRegionUs,
+        regionKr: labels.trendingRegionKr,
+        relatedArticlesLabel: labels.trendingRelatedLabel,
+        originalSourceLabel: labels.trendingOriginalLabel,
+      }}
+    />
+  ) : null;
+
   const showSources =
     filteredSourceLeadCards.length > 0 || sourceFilterOptions.length > 0;
   const pageTitle = getBrandName(pageRole);
@@ -907,18 +938,18 @@ export default function HomeNewsView({
   const headerDate = headerDateText ?? labels.edition;
 
   return (
-    <main className="min-h-screen bg-[#f4f3ef] text-neutral-950">
-      <header className="border-b-4 border-news-red bg-white">
-        <div className={`${newsPageShell} py-5 sm:py-6`}>
+    <main className="min-h-screen bg-neutral-50 text-neutral-950">
+      <header className="border-b-2 border-news-red bg-white">
+        <div className={`${newsPageShell} py-4 sm:py-5`}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
             <div className="min-w-0 flex-1">
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-news-red">
                 {showDateInHeader ? headerDate : labels.edition}
               </p>
-              <h1 className="mt-1 text-2xl font-bold tracking-tight text-news-navy sm:text-4xl">
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-news-navy sm:text-[2.125rem]">
                 {pageTitle}
               </h1>
-              <p className="mt-2 max-w-2xl text-[13px] leading-snug text-neutral-600 sm:text-sm sm:leading-relaxed lg:max-w-[34rem]">
+              <p className="mt-1.5 max-w-2xl text-[13px] leading-snug text-neutral-600 sm:text-sm">
                 {labels.tagline}
               </p>
             </div>
@@ -934,36 +965,36 @@ export default function HomeNewsView({
                   onQueryChange={handleSearchQueryChange}
                 />
               ) : null}
-            <nav
-              aria-label="Section navigation"
-              className="flex shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-2 lg:justify-end [&::-webkit-scrollbar]:hidden"
-            >
-              {hasArticles ? (
-                <>
-                  {showFeatured ? (
-                    <NavPill href="#featured">{labels.featuredTitle}</NavPill>
-                  ) : null}
-                  <NavPill href="#latest">{labels.navLatest}</NavPill>
-                  {showSidebar ? (
-                    <NavPill href="#sidebar">{labels.sidebarTitle}</NavPill>
-                  ) : null}
-                  <NavPill href="#sources">{labels.navSources}</NavPill>
-                  <NavPill href="#categories">{labels.navCategories}</NavPill>
-                </>
-              ) : null}
-              <NavPill href={homeHref}>{labels.navHome}</NavPill>
-              <NavPill href={alternateLangHref} variant="primary">
-                {labels.alternateLang}
-              </NavPill>
-            </nav>
+              <nav
+                aria-label="Section navigation"
+                className="flex shrink-0 flex-nowrap items-center gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-1.5 lg:justify-end [&::-webkit-scrollbar]:hidden"
+              >
+                {hasArticles ? (
+                  <>
+                    {showFeatured ? (
+                      <NavPill href="#featured">{labels.featuredTitle}</NavPill>
+                    ) : null}
+                    <NavPill href="#latest">{labels.navLatest}</NavPill>
+                    {showSidebar ? (
+                      <NavPill href="#sidebar">{labels.sidebarTitle}</NavPill>
+                    ) : null}
+                    <NavPill href="#sources">{labels.navSources}</NavPill>
+                    <NavPill href="#categories">{labels.navCategories}</NavPill>
+                  </>
+                ) : null}
+                <NavPill href={homeHref}>{labels.navHome}</NavPill>
+                <NavPill href={alternateLangHref} variant="primary">
+                  {labels.alternateLang}
+                </NavPill>
+              </nav>
             </div>
           </div>
         </div>
       </header>
 
-      <div className={`${newsPageShell} py-8 sm:py-10 lg:py-12`}>
+      <div className={`${newsPageShell} py-6 sm:py-8 lg:py-10`}>
         {normalizedSearch ? (
-          <p className="mb-6 rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700">
+          <p className="mb-6 border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700">
             {locale === "ko" ? (
               <>
                 검색어 <span className="font-semibold text-news-navy">“{searchQuery.trim()}”</span>
@@ -982,7 +1013,7 @@ export default function HomeNewsView({
         ) : null}
         {errorMessage ? (
           <div
-            className="mb-8 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+            className="mb-8 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
             role="alert"
           >
             {labels.errorPrefix} {errorMessage}
@@ -990,251 +1021,337 @@ export default function HomeNewsView({
         ) : null}
 
         {!errorMessage && !hasArticles ? (
-          <p className="rounded-xl border border-neutral-200/90 bg-white py-14 text-center text-neutral-600">
+          <p className="border border-neutral-200 bg-white py-14 text-center text-neutral-600">
             {labels.empty}
           </p>
         ) : null}
 
         {!errorMessage && hasArticles ? (
-          <div className={showAside ? newsMainGrid : "min-w-0"}>
-            <div className="min-w-0 space-y-10 lg:space-y-12">
-              {showFeatured && displaySections.featured ? (
-                <section id="featured" className="scroll-mt-6" aria-labelledby="home-featured">
-                  <SectionHeading
-                    eyebrow={labels.featuredEyebrow}
-                    title={labels.featuredTitle}
+          <div className={homeGridClass}>
+            {/* Left rail */}
+            {showLeftRail ? (
+              <aside className="order-3 min-w-0 xl:order-none xl:col-start-1 xl:row-start-1">
+                <SpotlightRail
+                  articles={displaySections.sidebar}
+                  locale={locale}
+                  labels={labels}
+                  articleHrefPrefix={articleHrefPrefix}
+                  articleHrefFor={articleHrefFor}
+                />
+              </aside>
+            ) : null}
+
+            {/* Center: featured only in top band */}
+            {showFeatured && displaySections.featured ? (
+              <section
+                id="featured"
+                className={`order-1 min-w-0 scroll-mt-6 xl:order-none xl:row-start-1 ${
+                  showLeftRail ? "xl:col-start-2" : "xl:col-start-1"
+                }`}
+                aria-labelledby="home-featured"
+              >
+                <SectionHeading
+                  eyebrow={labels.featuredEyebrow}
+                  title={labels.featuredTitle}
+                />
+                {useFeaturedComboLayout ? (
+                  <FeaturedWithRelated
+                    leads={featuredHub.leads}
+                    related={[]}
+                    locale={locale}
+                    labels={labels}
+                    articleHrefPrefix={articleHrefPrefix}
+                    articleHrefFor={articleHrefFor}
                   />
-                  {useFeaturedComboLayout ? (
-                    <FeaturedWithRelated
-                      leads={featuredHub.leads}
-                      related={featuredHub.related}
+                ) : (
+                  <FeaturedHero
+                    article={displaySections.featured}
+                    locale={locale}
+                    labels={labels}
+                    articleHrefPrefix={articleHrefPrefix}
+                    articleHrefFor={articleHrefFor}
+                  />
+                )}
+              </section>
+            ) : null}
+
+            {/* Right rail — spans beside featured + mid stories when present */}
+            {showRightRail && trendingPanel ? (
+              <aside
+                className={
+                  showLeftRail
+                    ? "order-2 min-w-0 xl:order-none xl:col-start-3 xl:row-start-1 xl:row-span-2"
+                    : "order-2 min-w-0 xl:order-none xl:col-start-2 xl:row-start-1 xl:row-span-2"
+                }
+              >
+                {trendingPanel}
+              </aside>
+            ) : null}
+
+            {/* Mid band: latest / top stories — left+center while issues continue */}
+            {showTopStories && topStories ? (
+              <section
+                id="latest"
+                className={`order-1 min-w-0 scroll-mt-6 xl:order-none xl:row-start-2 ${
+                  showLeftRail && showRightRail
+                    ? "xl:col-span-2 xl:col-start-1"
+                    : showLeftRail
+                      ? "xl:col-span-2 xl:col-start-1"
+                      : showRightRail
+                        ? "xl:col-start-1"
+                        : ""
+                }`}
+              >
+                <SectionHeading
+                  eyebrow={labels.latestEyebrow}
+                  title={labels.latestTitle}
+                  description={labels.latestDesc}
+                />
+                <div className="grid gap-8 sm:grid-cols-2 sm:gap-10">
+                  <TopStoriesColumn
+                    title={topStories.leftTitle}
+                    articles={topStories.left}
+                    emptyLabel={labels.columnEmpty}
+                    locale={locale}
+                    labels={labels}
+                    articleHrefPrefix={articleHrefPrefix}
+                    articleHrefFor={articleHrefFor}
+                    accentClass={
+                      pageRole === "ko" ? "border-news-red" : "border-news-navy"
+                    }
+                  />
+                  <TopStoriesColumn
+                    title={topStories.rightTitle}
+                    articles={topStories.right}
+                    emptyLabel={labels.columnEmpty}
+                    locale={locale}
+                    labels={labels}
+                    articleHrefPrefix={articleHrefPrefix}
+                    articleHrefFor={articleHrefFor}
+                    accentClass={
+                      pageRole === "ko" ? "border-news-navy" : "border-news-red"
+                    }
+                  />
+                </div>
+              </section>
+            ) : null}
+
+            {!showTopStories &&
+            (displaySections.latest.length > 0 ||
+              (useFeaturedComboLayout && (featuredHub.related?.length ?? 0) > 0)) ? (
+              <section
+                id="latest"
+                className={`order-1 min-w-0 scroll-mt-6 xl:order-none xl:row-start-2 ${
+                  showLeftRail && showRightRail
+                    ? "xl:col-span-2 xl:col-start-1"
+                    : showLeftRail
+                      ? "xl:col-span-2 xl:col-start-1"
+                      : showRightRail
+                        ? "xl:col-start-1"
+                        : ""
+                }`}
+              >
+                <SectionHeading
+                  eyebrow={labels.latestEyebrow}
+                  title={labels.latestTitle}
+                  description={labels.latestDesc}
+                />
+                <div>
+                  {(featuredHub.related.length > 0
+                    ? featuredHub.related
+                    : displaySections.latest
+                  ).map((article, index) => (
+                    <LatestRow
+                      key={article.id}
+                      article={article}
                       locale={locale}
                       labels={labels}
                       articleHrefPrefix={articleHrefPrefix}
                       articleHrefFor={articleHrefFor}
+                      index={index}
                     />
-                  ) : (
-                    <FeaturedHero
-                      article={displaySections.featured}
-                      locale={locale}
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {/* Full-bleed lower sections */}
+            {showSources ? (
+              <section
+                id="sources"
+                className={`order-4 min-w-0 scroll-mt-6 border-t border-neutral-300 pt-8 xl:order-none xl:col-span-full xl:row-start-3`}
+              >
+                <SectionHeading
+                  eyebrow={labels.sourcesEyebrow}
+                  title={labels.sourcesTitle}
+                  description={labels.sourcesDesc}
+                />
+
+                <div className="mb-5 flex flex-wrap gap-x-1 gap-y-1 border-b border-neutral-200">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSourceLabel(null)}
+                    className={`px-3 py-2 text-xs font-semibold transition sm:text-sm ${
+                      selectedSourceLabel
+                        ? "text-neutral-600 hover:text-news-navy"
+                        : "border-b-2 border-news-navy text-news-navy"
+                    }`}
+                  >
+                    {sourceFilterAllLabel}
+                  </button>
+                  {sourceFilterOptions.map((label) => {
+                    const hasSource =
+                      displaySections.activeSourceLabels.includes(label);
+                    const selected = selectedSourceLabel === label;
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => setSelectedSourceLabel(label)}
+                        className={`px-3 py-2 text-xs font-semibold transition sm:text-sm ${
+                          selected
+                            ? "border-b-2 border-news-navy text-news-navy"
+                            : hasSource
+                              ? "text-neutral-600 hover:text-news-navy"
+                              : "text-neutral-400"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <h3 className="mb-4 text-[15px] font-bold text-news-navy">
+                  {labels.sourceLeadsTitle}
+                </h3>
+                <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {filteredSourceLeadCards.map((item) => (
+                    <SourceLeadMini
+                      key={item.key}
+                      article={item.article}
+                      sourceLabel={item.label}
                       labels={labels}
                       articleHrefPrefix={articleHrefPrefix}
                       articleHrefFor={articleHrefFor}
                     />
-                  )}
-                </section>
-              ) : null}
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
-              {showTopStories && topStories ? (
-                <section id="latest" className="scroll-mt-6">
-                  <SectionHeading
-                    eyebrow={labels.latestEyebrow}
-                    title={labels.latestTitle}
-                    description={labels.latestDesc}
-                  />
-                  <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
-                    <TopStoriesColumn
-                      title={topStories.leftTitle}
-                      articles={topStories.left}
-                      emptyLabel={labels.columnEmpty}
-                      locale={locale}
-                      labels={labels}
-                      articleHrefPrefix={articleHrefPrefix}
-                      articleHrefFor={articleHrefFor}
-                      accentClass={
-                        pageRole === "ko" ? "border-news-red" : "border-blue-800"
-                      }
-                    />
-                    <TopStoriesColumn
-                      title={topStories.rightTitle}
-                      articles={topStories.right}
-                      emptyLabel={labels.columnEmpty}
-                      locale={locale}
-                      labels={labels}
-                      articleHrefPrefix={articleHrefPrefix}
-                      articleHrefFor={articleHrefFor}
-                      accentClass={
-                        pageRole === "ko" ? "border-blue-800" : "border-news-red"
-                      }
-                    />
-                  </div>
-                </section>
-              ) : null}
+            {showCategories ? (
+              <section
+                id="categories"
+                className="order-5 min-w-0 scroll-mt-6 border-t border-neutral-300 pt-8 xl:order-none xl:col-span-full xl:row-start-4"
+              >
+                <SectionHeading
+                  eyebrow={labels.categoriesEyebrow}
+                  title={labels.categoriesTitle}
+                />
+                <div
+                  role="tablist"
+                  aria-label={labels.categoriesTitle}
+                  className="mb-5 flex flex-wrap gap-x-1 gap-y-0 border-b border-neutral-200"
+                >
+                  {filteredVisibleCategories.map((category) => {
+                    const selected = selectedCategory === category;
+                    const total =
+                      filteredGroupedByCategory[category]?.length ?? 0;
+                    return (
+                      <button
+                        key={category}
+                        type="button"
+                        role="tab"
+                        id={`category-tab-${category}`}
+                        aria-selected={selected}
+                        aria-controls="category-panel"
+                        tabIndex={selected ? 0 : -1}
+                        onClick={() => selectCategory(category)}
+                        onKeyDown={(event) => {
+                          if (
+                            event.key !== "ArrowRight" &&
+                            event.key !== "ArrowLeft"
+                          ) {
+                            return;
+                          }
+                          event.preventDefault();
+                          const idx =
+                            filteredVisibleCategories.indexOf(category);
+                          const nextIdx =
+                            event.key === "ArrowRight"
+                              ? (idx + 1) % filteredVisibleCategories.length
+                              : (idx - 1 + filteredVisibleCategories.length) %
+                                filteredVisibleCategories.length;
+                          selectCategory(filteredVisibleCategories[nextIdx]);
+                        }}
+                        className={`px-3 py-2.5 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy sm:text-sm ${
+                          selected
+                            ? "border-b-2 border-news-navy text-news-navy"
+                            : "text-neutral-600 hover:text-news-navy"
+                        }`}
+                      >
+                        {getCategoryLabel(category, locale)}
+                        <span className="ml-1.5 font-normal opacity-60">
+                          {formatCategoryCount(locale, total)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
 
-              {!showTopStories && displaySections.latest.length > 0 ? (
-                <section id="latest" className="scroll-mt-6">
-                  <SectionHeading
-                    eyebrow={labels.latestEyebrow}
-                    title={labels.latestTitle}
-                    description={labels.latestDesc}
-                  />
-                  <div className="rounded-lg border border-neutral-200 bg-white px-4 py-1 sm:px-6 sm:py-2">
-                    {displaySections.latest.map((article, index) => (
-                      <LatestRow
-                        key={article.id}
-                        article={article}
-                        locale={locale}
-                        labels={labels}
-                        articleHrefPrefix={articleHrefPrefix}
-                        articleHrefFor={articleHrefFor}
-                        index={index}
-                        showRank
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {showSources ? (
-                <section id="sources" className="scroll-mt-6">
-                  <SectionHeading
-                    eyebrow={labels.sourcesEyebrow}
-                    title={labels.sourcesTitle}
-                    description={labels.sourcesDesc}
-                  />
-
-                  <div className="mb-5 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedSourceLabel(null)}
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        selectedSourceLabel
-                          ? "border border-neutral-200 bg-white text-neutral-600"
-                          : "bg-neutral-900 text-white"
-                      }`}
-                    >
-                      {sourceFilterAllLabel}
-                    </button>
-                    {sourceFilterOptions.map((label) => {
-                      const hasSource =
-                        displaySections.activeSourceLabels.includes(label);
-                      const selected = selectedSourceLabel === label;
-                      return (
-                        <button
-                          key={label}
-                          type="button"
-                          onClick={() => setSelectedSourceLabel(label)}
-                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                            selected
-                              ? "bg-neutral-900 text-white"
-                              : hasSource
-                                ? "border border-neutral-200 bg-white text-neutral-700"
-                                : "border border-neutral-200 bg-white text-neutral-400"
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <h3 className="mb-5 text-[17px] font-bold text-news-navy">
-                    {labels.sourceLeadsTitle}
-                  </h3>
-                  <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-10 lg:grid-cols-3 lg:gap-x-8 lg:gap-y-12">
-                    {filteredSourceLeadCards.map((item) => (
-                      <SourceLeadMini
-                        key={item.key}
-                        article={item.article}
-                        sourceLabel={item.label}
-                        labels={labels}
-                        articleHrefPrefix={articleHrefPrefix}
-                        articleHrefFor={articleHrefFor}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {showCategories ? (
-                <section id="categories" className="scroll-mt-6">
-                  <SectionHeading
-                    eyebrow={labels.categoriesEyebrow}
-                    title={labels.categoriesTitle}
-                  />
-                  <div className="space-y-10">
-                    {filteredVisibleCategories.map((category) => {
-                      const items = filteredGroupedByCategory[category].slice(
-                        0,
-                        3
-                      );
-                      const total =
-                        filteredGroupedByCategory[category].length;
-
-                      return (
-                        <div key={category}>
-                          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-news-red/70 pb-2">
-                            <h3 className="text-xl font-bold text-news-navy">
-                              {getCategoryLabel(category, locale)}
-                            </h3>
-                            <span className="text-sm text-neutral-500">
-                              {formatCategoryCount(locale, total)}
-                            </span>
-                          </div>
-                          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-5">
-                            {items.map((article) => (
-                              <CategoryCard
+                <div
+                  id="category-panel"
+                  role="tabpanel"
+                  aria-labelledby={
+                    selectedCategory
+                      ? `category-tab-${selectedCategory}`
+                      : undefined
+                  }
+                  className="min-w-0"
+                >
+                  {selectedCategory && selectedCategoryTotal > 0 ? (
+                    <>
+                      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2 border-b border-neutral-300 pb-2">
+                        <h3 className="text-lg font-bold text-news-navy">
+                          {getCategoryLabel(selectedCategory, locale)}
+                        </h3>
+                        <span className="text-sm text-neutral-500">
+                          {formatCategoryCount(locale, selectedCategoryTotal)}
+                        </span>
+                      </div>
+                      {selectedCategoryArticles.length > 0 ? (
+                        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-8">
+                          <CategoryLead
+                            article={selectedCategoryArticles[0]}
+                            locale={locale}
+                            labels={labels}
+                            articleHrefPrefix={articleHrefPrefix}
+                            articleHrefFor={articleHrefFor}
+                          />
+                          <div>
+                            {selectedCategoryArticles.slice(1).map((article) => (
+                              <StoryListRow
                                 key={article.id}
                                 article={article}
                                 locale={locale}
                                 labels={labels}
                                 articleHrefPrefix={articleHrefPrefix}
                                 articleHrefFor={articleHrefFor}
+                                summaryLen={90}
                               />
                             ))}
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              ) : null}
-            </div>
-
-            {showAside ? (
-              <aside
-                className="scroll-mt-6 space-y-5 lg:sticky lg:top-6 lg:self-start"
-              >
-                {showTrending && trendingIssues ? (
-                  <TrendingIssuesPanel
-                    block={trendingIssues}
-                    labels={{
-                      title: labels.trendingTitle,
-                      regionUs: labels.trendingRegionUs,
-                      regionKr: labels.trendingRegionKr,
-                    }}
-                  />
-                ) : null}
-
-                {showSidebar ? (
-                <section
-                  id="sidebar"
-                  className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm"
-                >
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
-                    {labels.sidebarEyebrow}
-                  </p>
-                  <h2 className="mt-1 text-[17px] font-bold text-neutral-950">
-                    {labels.sidebarTitle}
-                  </h2>
-                  <p className="mt-2 text-[15px] leading-relaxed text-neutral-600">
-                    {labels.sidebarDesc}
-                  </p>
-                  <div className="mt-4 space-y-1">
-                    {displaySections.sidebar.map((article, index) => (
-                      <SidebarItem
-                        key={article.id}
-                        article={article}
-                        locale={locale}
-                        articleHrefPrefix={articleHrefPrefix}
-                        articleHrefFor={articleHrefFor}
-                        index={index}
-                      />
-                    ))}
-                  </div>
-                </section>
-                ) : null}
-              </aside>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className="border border-neutral-200 bg-white px-4 py-10 text-center text-sm text-neutral-600">
+                      {labels.categoriesEmpty}
+                    </p>
+                  )}
+                </div>
+              </section>
             ) : null}
           </div>
         ) : null}

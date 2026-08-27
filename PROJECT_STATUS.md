@@ -214,6 +214,10 @@ Git history와 현재 코드에서 확인:
 - `/admin/approved` SAME EVENT 공개 차단 UX 배포 완료 (PR #4) — Digest `272674686` 원인(throw 처리) 해소
 - Miracle News Shorts Studio Phase 1 Production 배포 완료 (PR #1) — `/admin/shorts`
 - 수정 대기 → 이전 공개 상태 복구 Production 배포 및 50건 실제 복구 완료 (PR #6) — AI 재작성 없음; `published_at`/localization/slug 보존; 공개→수정 대기 confirm 추가
+- 홈페이지 정보 구조 개선 로컬 개발: 지금 주목 상단 이동 · 지금 뜨는 이슈 관련 기사 연결 · 카테고리 클릭 패널 복구 (Production 배포 전)
+- 홈페이지 Preview 피드백 반영 로컬 수정: 이슈 sticky 제거 · 지금 주목 본문 강제 표시 · 이슈 카드 내부 스크롤 (Production 배포 전)
+- 홈페이지 신문형 3열 재구성 로컬 수정: 왼쪽 지금 주목 · 중앙 본문 · 오른쪽 지금 뜨는 이슈 / sticky·내부 스크롤 제거 / 이슈 설명 복구 (Production 배포 전)
+- 홈페이지 디지털 신문 편집 디자인 로컬 수정: 카드·그림자 축소 · 대표/보조 위계 · 하단 전체폭 목록 · 카테고리 섹션 내비 (Production 배포 전)
 - 알려진 인계 결과: `npm test` 215 tests 통과, build 성공
 
 ## 9. 현재 미해결 문제
@@ -345,5 +349,5 @@ Git history와 현재 코드에서 확인:
 - **Operational Validation:** IN PROGRESS — 50건 복구 결과 기록 완료
 - **Shorts Studio Phase 1:** Production 반영 완료 (`/admin/shorts`, PR #1)
 - **Shorts PR #5:** OPEN — Phase 2 package 보존 (변경·병합 없음)
-- **Current Priority:** Shorts Phase 2 재개 전 Production 안정성 확인 (2~3일)
-- **Next Review:** Desk·Discord·관리자 운영 결과 확인 후 Shorts Phase 2 재개 검토
+- **Current Priority:** 홈페이지 UI 개선 로컬 개발 (배포 전) · Shorts Phase 2 재개는 PR #5 보존 상태
+- **Next Review:** 홈페이지 UI Preview 확인 후 Production 배포 검토 · Shorts Phase 2는 별도

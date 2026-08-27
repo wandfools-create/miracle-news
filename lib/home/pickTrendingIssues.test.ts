@@ -60,6 +60,8 @@ describe("pickTrendingIssues", () => {
     const { us } = pickTrendingIssues(articles, "ko", 3, NOW);
     assert.equal(us[0]?.title, "미국 대선");
     assert.equal(us[0]?.id, "topic:us-election");
+    assert.equal(us[0]?.primaryArticle?.slug, "a2");
+    assert.ok(us[0]?.relatedArticles.some((a) => a.slug === "a1"));
     assert.ok(us.some((issue) => issue.id.startsWith("cat:economy:")));
   });
 
@@ -89,6 +91,25 @@ describe("pickTrendingIssues", () => {
     assert.equal(kr.length, 1);
     assert.match(kr[0]?.title ?? "", /최신 기사/);
     assert.equal(kr[0]?.id, "cat:other:kr");
+    assert.equal(kr[0]?.primaryArticle?.slug, "new");
+    assert.equal(kr[0]?.relatedArticles.length, 1);
+  });
+
+  it("omits related article links when slug is missing", () => {
+    const articles = [
+      card({
+        id: "noslug",
+        slug: "",
+        source_country: "US",
+        category: "politics",
+        title: "슬러그 없는 기사",
+        source_published_at: hoursAgo(2),
+      }),
+    ];
+    const { us } = pickTrendingIssues(articles, "en", 3, NOW);
+    assert.equal(us.length, 1);
+    assert.equal(us[0]?.primaryArticle, null);
+    assert.equal(us[0]?.relatedArticles.length, 0);
   });
 
   it("excludes articles older than 7 days from trending", () => {

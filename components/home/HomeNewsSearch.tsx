@@ -162,7 +162,7 @@ export default function HomeNewsSearch({
         }}
         placeholder={labels.placeholder}
         aria-label={labels.ariaLabel}
-        className="w-full rounded-md border border-neutral-300 bg-white py-2 pl-9 pr-3 text-sm text-neutral-900 placeholder:text-neutral-400 shadow-sm focus:border-news-navy focus:outline-none focus:ring-2 focus:ring-news-navy/15"
+        className="w-full rounded-md border border-neutral-300 bg-white py-2 pl-9 pr-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-news-navy focus:outline-none focus:ring-2 focus:ring-news-navy/15"
       />
       {showPanel ? (
         <div className="absolute right-0 z-50 mt-1.5 w-full min-w-[280px] overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg sm:min-w-[320px]">
@@ -202,7 +202,7 @@ export default function HomeNewsSearch({
         <button
           type="button"
           onClick={() => setMobileOpen((open) => !open)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-neutral-200 bg-white text-news-navy shadow-sm lg:hidden"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-neutral-200 bg-white text-news-navy lg:hidden"
           aria-label={mobileOpen ? labels.closeSearch : labels.openSearch}
           aria-expanded={mobileOpen}
         >
