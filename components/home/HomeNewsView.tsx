@@ -21,7 +21,9 @@ import NewsThumbnail, {
   type NewsThumbVariant,
 } from "@/components/home/NewsThumbnail";
 import {
-  newsMainGrid,
+  newsHomeLeftOnlyGrid,
+  newsHomeRightOnlyGrid,
+  newsHomeThreeColGrid,
   newsPageShell,
   type NewsPageRole,
 } from "@/lib/home/newsPageLayout";
@@ -702,65 +704,22 @@ function CategoryCard({
 function SidebarItem({
   article,
   locale,
-  labels,
   articleHrefPrefix,
   articleHrefFor,
   index,
-  compact = false,
 }: {
   article: HomeArticleCard;
   locale: ArticleLocale;
-  labels: HomeNewsLabels;
   articleHrefPrefix: string;
   articleHrefFor?: (article: HomeArticleCard) => string;
   index: number;
-  compact?: boolean;
 }) {
   const displayLocale = article.locale ?? locale;
-  const href = resolveArticleHref(article, articleHrefPrefix, articleHrefFor);
-
-  if (compact) {
-    return (
-      <article className="min-w-[220px] max-w-[280px] shrink-0 snap-start overflow-hidden rounded-xl border border-neutral-200 bg-white sm:min-w-0 sm:max-w-none">
-        <Link
-          href={href}
-          className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy"
-        >
-          <div className={`${newsThumbFrameClass} aspect-video w-full`}>
-            <ArticleThumb
-              article={article}
-              noImageLabel={labels.noImage}
-              sizes="(max-width: 640px) 70vw, 20vw"
-            />
-          </div>
-        </Link>
-        <div className="p-3">
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-[10px] font-bold text-white">
-              {index + 1}
-            </span>
-            <span className="truncate">
-              {getSourceLabel(article.source, article.original_url)}
-            </span>
-          </div>
-          <h3 className="mt-1.5 text-[14px] font-semibold leading-snug text-neutral-900 sm:text-[15px]">
-            <Link
-              href={href}
-              className="line-clamp-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy"
-            >
-              {article.title}
-            </Link>
-          </h3>
-          <time
-            dateTime={article.published_at ?? article.created_at}
-            className="mt-1 block text-[12px] text-neutral-500"
-          >
-            {listDateText(article, displayLocale)}
-          </time>
-        </div>
-      </article>
-    );
-  }
+  const slugOk = Boolean(article.slug?.trim());
+  const href =
+    articleHrefFor || slugOk
+      ? resolveArticleHref(article, articleHrefPrefix, articleHrefFor)
+      : null;
 
   return (
     <article className="border-b border-neutral-200/80 pb-3.5 last:border-b-0 last:pb-0">
@@ -773,9 +732,13 @@ function SidebarItem({
             {getSourceLabel(article.source, article.original_url)}
           </p>
           <h3 className="mt-1 text-[15px] font-semibold leading-snug text-neutral-900">
-            <Link href={href} className="line-clamp-2 hover:underline">
-              {article.title}
-            </Link>
+            {href ? (
+              <Link href={href} className="line-clamp-2 hover:underline">
+                {article.title}
+              </Link>
+            ) : (
+              <span className="line-clamp-2">{article.title}</span>
+            )}
           </h3>
           <time
             dateTime={article.published_at ?? article.created_at}
@@ -789,7 +752,8 @@ function SidebarItem({
   );
 }
 
-function SpotlightSection({
+/** Vertical ranked list — left rail on desktop, after trending on mobile. */
+function SpotlightRail({
   articles,
   locale,
   labels,
@@ -803,23 +767,28 @@ function SpotlightSection({
   articleHrefFor?: (article: HomeArticleCard) => string;
 }) {
   return (
-    <section id="sidebar" className="scroll-mt-6">
-      <SectionHeading
-        eyebrow={labels.sidebarEyebrow}
-        title={labels.sidebarTitle}
-        description={labels.sidebarDesc}
-      />
-      <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 snap-x snap-mandatory sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3 xl:grid-cols-5">
+    <section
+      id="sidebar"
+      className="min-w-0 scroll-mt-6 rounded-lg border border-neutral-200 bg-white p-5 shadow-sm"
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
+        {labels.sidebarEyebrow}
+      </p>
+      <h2 className="mt-1 text-[17px] font-bold text-neutral-950">
+        {labels.sidebarTitle}
+      </h2>
+      <p className="mt-2 text-[15px] leading-relaxed text-neutral-600">
+        {labels.sidebarDesc}
+      </p>
+      <div className="mt-4 space-y-1">
         {articles.map((article, index) => (
           <SidebarItem
             key={article.id}
             article={article}
             locale={locale}
-            labels={labels}
             articleHrefPrefix={articleHrefPrefix}
             articleHrefFor={articleHrefFor}
             index={index}
-            compact
           />
         ))}
       </div>
@@ -955,8 +924,16 @@ export default function HomeNewsView({
     trendingIssues &&
       (trendingIssues.us.length > 0 || trendingIssues.kr.length > 0)
   );
-  /** Desktop right rail: trending only (spotlight moved to main column). */
-  const showAside = showTrending;
+  /** Desktop newspaper rails: left spotlight, right trending (no sticky). */
+  const showLeftRail = showSidebar;
+  const showRightRail = showTrending;
+  const homeGridClass = showLeftRail && showRightRail
+    ? newsHomeThreeColGrid
+    : showLeftRail
+      ? newsHomeLeftOnlyGrid
+      : showRightRail
+        ? newsHomeRightOnlyGrid
+        : "min-w-0";
   const filteredSourceLeadCards = useMemo(() => {
     if (!selectedSourceLabel) {
       return displaySections.sourceLeadCards.slice(0, SOURCE_LEAD_DISPLAY_LIMIT);
@@ -1149,8 +1126,36 @@ export default function HomeNewsView({
         ) : null}
 
         {!errorMessage && hasArticles ? (
-          <div className={showAside ? newsMainGrid : "min-w-0"}>
-            <div className="flex min-w-0 flex-col gap-10 lg:gap-12">
+          <div className={homeGridClass}>
+            {/* Left rail: 지금 주목 — vertical list (mobile: after trending) */}
+            {showLeftRail ? (
+              <aside className="order-3 min-w-0 xl:order-none xl:col-start-1 xl:row-start-1">
+                <SpotlightRail
+                  articles={displaySections.sidebar}
+                  locale={locale}
+                  labels={labels}
+                  articleHrefPrefix={articleHrefPrefix}
+                  articleHrefFor={articleHrefFor}
+                />
+              </aside>
+            ) : null}
+
+            {/*
+              Center column. `contents` on <xl lets children participate in the
+              parent flex order (featured → trending → spotlight → sources → cats).
+              At xl+, this becomes the middle newspaper column.
+            */}
+            <div
+              className={
+                showLeftRail || showRightRail
+                  ? `contents xl:row-start-1 xl:flex xl:min-w-0 xl:flex-col xl:gap-12 ${
+                      showLeftRail
+                        ? "xl:col-start-2"
+                        : "xl:col-start-1"
+                    }`
+                  : "flex min-w-0 flex-col gap-10 lg:gap-12"
+              }
+            >
               {showFeatured && displaySections.featured ? (
                 <section
                   id="featured"
@@ -1182,21 +1187,8 @@ export default function HomeNewsView({
                 </section>
               ) : null}
 
-              {/* Desktop: spotlight directly under featured. Mobile: after trending (order-4). */}
-              {showSidebar ? (
-                <div className="order-4 min-w-0 lg:order-2">
-                  <SpotlightSection
-                    articles={displaySections.sidebar}
-                    locale={locale}
-                    labels={labels}
-                    articleHrefPrefix={articleHrefPrefix}
-                    articleHrefFor={articleHrefFor}
-                  />
-                </div>
-              ) : null}
-
               {showTopStories && topStories ? (
-                <section id="latest" className="order-2 scroll-mt-6 lg:order-3">
+                <section id="latest" className="order-1 scroll-mt-6">
                   <SectionHeading
                     eyebrow={labels.latestEyebrow}
                     title={labels.latestTitle}
@@ -1232,7 +1224,7 @@ export default function HomeNewsView({
               ) : null}
 
               {!showTopStories && displaySections.latest.length > 0 ? (
-                <section id="latest" className="order-2 scroll-mt-6 lg:order-3">
+                <section id="latest" className="order-1 scroll-mt-6">
                   <SectionHeading
                     eyebrow={labels.latestEyebrow}
                     title={labels.latestTitle}
@@ -1255,13 +1247,8 @@ export default function HomeNewsView({
                 </section>
               ) : null}
 
-              {/* Mobile only: trending after main stories, before spotlight */}
-              {trendingPanel ? (
-                <div className="order-3 min-w-0 lg:hidden">{trendingPanel}</div>
-              ) : null}
-
               {showSources ? (
-                <section id="sources" className="order-5 scroll-mt-6">
+                <section id="sources" className="order-4 scroll-mt-6">
                   <SectionHeading
                     eyebrow={labels.sourcesEyebrow}
                     title={labels.sourcesTitle}
@@ -1322,7 +1309,7 @@ export default function HomeNewsView({
               ) : null}
 
               {showCategories ? (
-                <section id="categories" className="order-6 scroll-mt-6">
+                <section id="categories" className="order-5 scroll-mt-6">
                   <SectionHeading
                     eyebrow={labels.categoriesEyebrow}
                     title={labels.categoriesTitle}
@@ -1426,8 +1413,15 @@ export default function HomeNewsView({
               ) : null}
             </div>
 
-            {showAside ? (
-              <aside className="scroll-mt-6 hidden self-start lg:block">
+            {/* Right rail: 지금 뜨는 이슈 (mobile: after featured/latest) */}
+            {showRightRail && trendingPanel ? (
+              <aside
+                className={
+                  showLeftRail
+                    ? "order-2 min-w-0 xl:order-none xl:col-start-3 xl:row-start-1"
+                    : "order-2 min-w-0 xl:order-none xl:col-start-2 xl:row-start-1"
+                }
+              >
                 {trendingPanel}
               </aside>
             ) : null}

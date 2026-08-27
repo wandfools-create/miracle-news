@@ -1,6 +1,6 @@
 /**
  * Home layout policy fixtures — no DB / OpenAI.
- * Documents sidebar→main spotlight move, trending rail, category panel URL.
+ * Documents newspaper 3-col rails, non-sticky panels, category panel URL.
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -69,22 +69,25 @@ describe("home sidebar layout and category nav (fixture)", () => {
     );
   });
 
-  it("HomeNewsView keeps trending in right rail without sticky follow", () => {
+  it("HomeNewsView uses 3-col rails without sticky or fixed follow", () => {
     const view = readFileSync(
       join(process.cwd(), "components/home/HomeNewsView.tsx"),
       "utf8"
     );
-    assert.match(view, /SpotlightSection/);
-    assert.match(view, /showAside = showTrending/);
-    assert.match(view, /lg:order-2/);
-    assert.match(view, /order-4/);
-    assert.doesNotMatch(view, /lg:sticky/);
+    assert.match(view, /SpotlightRail/);
+    assert.match(view, /newsHomeThreeColGrid/);
+    assert.match(view, /showLeftRail/);
+    assert.match(view, /showRightRail/);
+    assert.match(view, /order-3.*xl:col-start-1|xl:col-start-1[\s\S]*order-3/);
+    assert.match(view, /order-2.*xl:col-start-3|xl:col-start-3/);
+    assert.doesNotMatch(view, /lg:sticky|sticky |fixed |position:\s*sticky/);
+    assert.doesNotMatch(view, /SpotlightSection/);
     assert.match(view, /role="tablist"/);
     assert.match(view, /aria-selected/);
     assert.match(view, /searchParams\.get\("category"\)/);
   });
 
-  it("TrendingIssuesPanel links with articleHrefPrefix and internal scroll", () => {
+  it("TrendingIssuesPanel keeps full descriptions and article links without internal scroll", () => {
     const panel = readFileSync(
       join(process.cwd(), "components/home/TrendingIssuesPanel.tsx"),
       "utf8"
@@ -92,19 +95,21 @@ describe("home sidebar layout and category nav (fixture)", () => {
     assert.match(panel, /articleHrefPrefix/);
     assert.match(panel, /primaryArticle/);
     assert.match(panel, /relatedArticles/);
-    assert.match(panel, /max-h-\[min\(70vh,28rem\)\]/);
-    assert.match(panel, /overflow-y-auto/);
+    assert.match(panel, /issue\.description/);
+    assert.doesNotMatch(panel, /max-h-\[|overflow-y-auto|line-clamp-2/);
+    assert.doesNotMatch(panel, /maxPerRegion/);
     assert.doesNotMatch(panel, /similarity|fuzzy|matchTitle/i);
   });
 
-  it("documents desktop spotlight under featured and mobile trending before spotlight", () => {
+  it("documents mobile order featured → trending → spotlight → sources → categories", () => {
     const view = readFileSync(
       join(process.cwd(), "components/home/HomeNewsView.tsx"),
       "utf8"
     );
-    assert.match(view, /order-1[\s\S]*featured|featured[\s\S]*order-1/);
-    assert.match(view, /lg:order-2/);
-    assert.match(view, /order-3 min-w-0 lg:hidden/);
-    assert.match(view, /order-4 min-w-0 lg:order-2/);
+    assert.match(view, /id="featured"[\s\S]*order-1/);
+    assert.match(view, /order-2 min-w-0 xl:order-none/);
+    assert.match(view, /order-3 min-w-0 xl:order-none xl:col-start-1/);
+    assert.match(view, /id="sources"[\s\S]*order-4|order-4 scroll-mt-6/);
+    assert.match(view, /id="categories"[\s\S]*order-5|order-5 scroll-mt-6/);
   });
 });
