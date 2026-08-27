@@ -18,6 +18,7 @@ import { pickFeaturedArticle } from "./featuredSelection";
 import { pickSidebarLatestArticles } from "./pickSidebarLatest";
 import { prepareEditionHomeSections } from "./prepareEditionHomeSections";
 import { pickTrendingIssues } from "./pickTrendingIssues";
+import { normalizeTopicClusterKey } from "./topicClusterKey";
 import type { HomeArticleCard } from "./types";
 
 const NOW = Date.parse("2026-08-27T12:00:00.000Z");
@@ -340,5 +341,400 @@ describe("diversity still works inside window", () => {
     });
     const kh = picked.filter((a) => a.source.includes("Herald")).length;
     assert.ok(kh <= 2);
+  });
+
+  it("relaxes source cap when the eligible pool is thin", () => {
+    const onlyHerald = [
+      card({
+        id: "h1",
+        source: "The Korea Herald",
+        source_country: "KR",
+        original_url: "https://www.koreaherald.com/1",
+        published_at: hoursAgo(1),
+      }),
+      card({
+        id: "h2",
+        source: "The Korea Herald",
+        source_country: "KR",
+        original_url: "https://www.koreaherald.com/2",
+        published_at: hoursAgo(2),
+      }),
+      card({
+        id: "h3",
+        source: "The Korea Herald",
+        source_country: "KR",
+        original_url: "https://www.koreaherald.com/3",
+        published_at: hoursAgo(3),
+      }),
+    ];
+    const relaxed = pickDiversifiedByEditorialScore(onlyHerald, {
+      limit: 3,
+      nowMs: NOW,
+      sourceCap: 2,
+    });
+    assert.equal(relaxed.length, 3);
+  });
+});
+
+describe("phase-1 ranking coverage restored", () => {
+  it("best 90 outranks newer normal without AI grade", () => {
+    const best = card({
+      id: "best-90",
+      ai_recommend_grade: "best",
+      ai_recommend_score: 90,
+      published_at: hoursAgo(6),
+    });
+    const freshNormal = card({
+      id: "fresh-normal",
+      published_at: hoursAgo(0.4),
+    });
+    const sorted = sortArticlesByEditorialScore([freshNormal, best], NOW);
+    assert.equal(sorted[0]?.id, "best-90");
+  });
+
+  it("priority 70+ outranks low 18 even when low is newer", () => {
+    const priority = card({
+      id: "priority-72",
+      ai_recommend_grade: "priority",
+      ai_recommend_score: 72,
+      published_at: hoursAgo(5),
+    });
+    const low = card({
+      id: "low-18",
+      ai_recommend_grade: "low",
+      ai_recommend_score: 18,
+      published_at: hoursAgo(0.2),
+    });
+    assert.ok(
+      sortArticlesByEditorialScore([low, priority], NOW).findIndex(
+        (a) => a.id === "priority-72"
+      ) <
+        sortArticlesByEditorialScore([low, priority], NOW).findIndex(
+          (a) => a.id === "low-18"
+        )
+    );
+  });
+
+  it("old breaking does not stay permanently pinned", () => {
+    const oldBreaking = card({
+      id: "old-breaking",
+      editorial_priority: "breaking",
+      editorial_priority_manual: false,
+      published_at: hoursAgo(72),
+    });
+    const fresh = card({
+      id: "fresh",
+      published_at: hoursAgo(1),
+    });
+    const score = computeEditorialScore(oldBreaking, NOW);
+    assert.equal(score.editorialPriority, 0);
+    assert.notEqual(
+      sortArticlesByEditorialScore([oldBreaking, fresh], NOW)[0]?.id,
+      "old-breaking"
+    );
+  });
+
+  it("legacy articles without AI grade still sort by priority + published_at", () => {
+    const sorted = sortArticlesByEditorialScore(
+      [
+        card({
+          id: "n",
+          published_at: hoursAgo(1),
+          editorial_priority: "normal",
+        }),
+        card({
+          id: "s",
+          published_at: hoursAgo(3),
+          editorial_priority: "special",
+        }),
+      ],
+      NOW
+    );
+    assert.equal(sorted[0]?.id, "s");
+  });
+
+  it("priority ladder inside 7d: pin > manual > AI best > auto > freshness > low", () => {
+    const ladder = [
+      card({
+        id: "fresh-low",
+        published_at: hoursAgo(0.1),
+        ai_recommend_grade: "low",
+        ai_recommend_score: 5,
+      }),
+      card({
+        id: "fresh-normal",
+        published_at: hoursAgo(0.2),
+        editorial_priority: "normal",
+      }),
+      card({
+        id: "auto-special",
+        published_at: hoursAgo(2),
+        editorial_priority: "special",
+        editorial_priority_manual: false,
+      }),
+      card({
+        id: "ai-best",
+        published_at: hoursAgo(8),
+        ai_recommend_grade: "best",
+        ai_recommend_score: 95,
+      }),
+      card({
+        id: "manual",
+        published_at: hoursAgo(20),
+        editorial_priority: "issue",
+        editorial_priority_manual: true,
+        ai_recommend_grade: "best",
+        ai_recommend_score: 99,
+      }),
+      card({
+        id: "pinned",
+        is_top_story: true,
+        top_story_order: 1,
+        published_at: hoursAgo(40),
+        ai_recommend_grade: "low",
+        ai_recommend_score: 1,
+      }),
+    ];
+    assert.deepEqual(
+      sortArticlesByEditorialScore(ladder, NOW).map((a) => a.id),
+      ["pinned", "manual", "ai-best", "auto-special", "fresh-normal", "fresh-low"]
+    );
+  });
+
+  it("AI low does not weaken human manual priority score", () => {
+    const manualLowAi = card({
+      id: "m",
+      editorial_priority: "issue",
+      editorial_priority_manual: true,
+      ai_recommend_grade: "low",
+      ai_recommend_score: 1,
+      published_at: hoursAgo(5),
+    });
+    const score = computeEditorialScore(manualLowAi, NOW);
+    assert.equal(score.aiGrade, 0);
+    assert.equal(score.aiScore, 0);
+    assert.ok(score.manualPriority > 0);
+  });
+
+  it("AI score only fine-tunes within the same grade", () => {
+    const bestLow = card({
+      id: "b1",
+      ai_recommend_grade: "best",
+      ai_recommend_score: 1,
+      published_at: hoursAgo(5),
+    });
+    const bestHigh = card({
+      id: "b2",
+      ai_recommend_grade: "best",
+      ai_recommend_score: 99,
+      published_at: hoursAgo(5),
+    });
+    const priorityHigh = card({
+      id: "p",
+      ai_recommend_grade: "priority",
+      ai_recommend_score: 100,
+      published_at: hoursAgo(1),
+    });
+    assert.ok(
+      computeEditorialScore(bestHigh, NOW).total >
+        computeEditorialScore(bestLow, NOW).total
+    );
+    assert.ok(
+      computeEditorialScore(bestLow, NOW).total >
+        computeEditorialScore(priorityHigh, NOW).total
+    );
+  });
+
+  it("very old best loses AI band and does not permanently pin", () => {
+    const ancientBest = card({
+      id: "ancient-best",
+      ai_recommend_grade: "best",
+      ai_recommend_score: 99,
+      published_at: hoursAgo(10 * 24),
+      source_published_at: hoursAgo(10 * 24),
+      created_at: hoursAgo(10 * 24),
+    });
+    const freshNormal = card({
+      id: "fresh",
+      published_at: hoursAgo(1),
+      editorial_priority: "normal",
+    });
+    const ancientScore = computeEditorialScore(ancientBest, NOW);
+    assert.equal(ancientScore.aiGrade, 0);
+    assert.equal(ancientScore.aiScore, 0);
+    assert.equal(
+      sortArticlesByEditorialScore([ancientBest, freshNormal], NOW)[0]?.id,
+      "fresh"
+    );
+  });
+
+  it("suppresses near-duplicate Nepal flood topic clusters", () => {
+    const a = normalizeTopicClusterKey({
+      topic_key: "nepal-china-flood",
+      topic_label: "네팔 홍수",
+    });
+    const b = normalizeTopicClusterKey({
+      topic_key: "nepal-glacier-floods",
+      topic_label: "네팔 빙하 홍수",
+    });
+    assert.equal(a, b);
+
+    const picked = pickDiversifiedByEditorialScore(
+      [
+        card({
+          id: "nepal-a",
+          topic_key: "nepal-china-flood",
+          topic_label: "네팔 홍수",
+          published_at: hoursAgo(3),
+          ai_recommend_grade: "priority",
+          ai_recommend_score: 65,
+        }),
+        card({
+          id: "nepal-b",
+          topic_key: "nepal-glacier-floods",
+          topic_label: "네팔 빙하 홍수",
+          published_at: hoursAgo(3.5),
+          ai_recommend_grade: "priority",
+          ai_recommend_score: 60,
+        }),
+        card({
+          id: "best-90",
+          ai_recommend_grade: "best",
+          ai_recommend_score: 90,
+          published_at: hoursAgo(4),
+        }),
+      ],
+      { limit: 3, nowMs: NOW, suppressTopicClusters: true }
+    );
+    assert.equal(picked.filter((x) => x.id.startsWith("nepal")).length, 1);
+  });
+
+  it("keeps UPDATE / DIFFERENT ANGLE distinct from base SAME EVENT", () => {
+    const base = normalizeTopicClusterKey({
+      topic_key: "nepal-china-flood",
+      topic_label: "네팔 홍수",
+    });
+    const deathTollUpdate = normalizeTopicClusterKey({
+      topic_key: "nepal-flood-death-toll-update",
+      topic_label: "네팔 홍수 사망자 갱신",
+    });
+    const govResponse = normalizeTopicClusterKey({
+      topic_key: "nepal-flood-government-response",
+      topic_label: "네팔 홍수 정부 대응",
+    });
+    assert.equal(base, "nepal-flood");
+    assert.notEqual(deathTollUpdate, base);
+    assert.notEqual(govResponse, base);
+  });
+
+  it("does not merge different countries that only share flood", () => {
+    const nepal = normalizeTopicClusterKey({
+      topic_key: "nepal-flood",
+      topic_label: "네팔 홍수",
+    });
+    const pakistan = normalizeTopicClusterKey({
+      topic_key: "pakistan-flood",
+      topic_label: "Pakistan flood",
+    });
+    assert.notEqual(nepal, pakistan);
+  });
+
+  it("picks highest candidate grade then score deterministically", async () => {
+    const { pickBestCandidateGradeRow } = await import("./aiRecommendSnapshot");
+    const best = pickBestCandidateGradeRow([
+      {
+        article_id: "a1",
+        ai_recommend_grade: "normal",
+        ai_recommend_score: 90,
+      },
+      {
+        article_id: "a1",
+        ai_recommend_grade: "priority",
+        ai_recommend_score: 40,
+      },
+      {
+        article_id: "a1",
+        ai_recommend_grade: "priority",
+        ai_recommend_score: 80,
+      },
+      {
+        article_id: "a1",
+        ai_recommend_grade: "best",
+        ai_recommend_score: 10,
+      },
+    ]);
+    assert.equal(best?.ai_recommend_grade, "best");
+    assert.equal(best?.ai_recommend_score, 10);
+  });
+
+  it("skips snapshot writes when env capability is off (no schema probe)", async () => {
+    const {
+      maybeWriteArticleAiRecommendSnapshot,
+      resetArticlesAiRecommendSnapshotCapabilityForTests,
+      isArticlesAiRecommendSnapshotEnabled,
+    } = await import("./articlesAiRecommendCapability");
+    resetArticlesAiRecommendSnapshotCapabilityForTests();
+    const prev = process.env.ARTICLES_AI_RECOMMEND_SNAPSHOT;
+    delete process.env.ARTICLES_AI_RECOMMEND_SNAPSHOT;
+    assert.equal(isArticlesAiRecommendSnapshotEnabled(), false);
+
+    let updates = 0;
+    const result = await maybeWriteArticleAiRecommendSnapshot({
+      client: {
+        from: () => ({
+          update: () => {
+            updates += 1;
+            return {
+              eq: async () => ({ error: null }),
+            };
+          },
+        }),
+      },
+      articleId: "art-1",
+      grade: "best",
+      score: 90,
+    });
+    assert.equal(result, "skipped");
+    assert.equal(updates, 0);
+    if (prev === undefined) delete process.env.ARTICLES_AI_RECOMMEND_SNAPSHOT;
+    else process.env.ARTICLES_AI_RECOMMEND_SNAPSHOT = prev;
+  });
+
+  it("before/after: importance rises vs pure freshness ordering", async () => {
+    const { sortArticlesByFreshness } = await import("./articleFreshness");
+    const pool = [
+      card({
+        id: "fresh-normal",
+        published_at: hoursAgo(0.4),
+      }),
+      card({
+        id: "best-90",
+        ai_recommend_grade: "best",
+        ai_recommend_score: 90,
+        published_at: hoursAgo(6),
+      }),
+      card({
+        id: "low-18",
+        ai_recommend_grade: "low",
+        ai_recommend_score: 18,
+        published_at: hoursAgo(0.2),
+      }),
+      card({
+        id: "manual-issue",
+        editorial_priority: "issue",
+        editorial_priority_manual: true,
+        published_at: hoursAgo(10),
+        ai_recommend_grade: "low",
+        ai_recommend_score: 10,
+      }),
+    ];
+    const before = sortArticlesByFreshness(pool, NOW).slice(0, 5).map((a) => a.id);
+    const after = sortArticlesByEditorialScore(pool, NOW)
+      .slice(0, 5)
+      .map((a) => a.id);
+    assert.ok(before.includes("low-18") || before.includes("fresh-normal"));
+    assert.ok(after.includes("manual-issue"));
+    assert.ok(after.includes("best-90"));
+    assert.ok(!after.slice(0, 3).includes("low-18"));
   });
 });
