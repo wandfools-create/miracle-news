@@ -11,6 +11,11 @@ import {
   pickDiversifiedByEditorialScore,
   sortArticlesByEditorialScore,
 } from "./editorialRanking";
+import {
+  filterEventFamilyLeaders,
+  resolveEventFamilyLeadership,
+  withInheritedEventFamilyGrades,
+} from "./eventFamilyUpdate";
 import type { HomeArticleCard } from "./types";
 
 /** Featured / core rails: max site-publish age (days). */
@@ -62,18 +67,35 @@ export function compareFeaturedCandidates(
   );
 }
 
+function articleKey(article: HomeArticleCard): string {
+  return article.article_id ?? article.id;
+}
+
 /**
- * 오늘의 주요 기사: build ≤7d eligible pool first, then editorial rank
- * (72h top-story force boost → manual → AI → auto → freshness).
+ * Core eligible pool with event-family leadership applied:
+ * superseded backgrounds excluded; leaders may inherit sibling AI grades.
+ */
+export function prepareHomeRankingPool(
+  articles: HomeArticleCard[],
+  nowMs: number = Date.now()
+): HomeArticleCard[] {
+  const eligible = filterHomeCoreEligible(articles, nowMs);
+  // Inherit from the full family (including backgrounds), then drop backgrounds.
+  const withGrades = withInheritedEventFamilyGrades(eligible);
+  return filterEventFamilyLeaders(withGrades);
+}
+
+/**
+ * 오늘의 주요 기사: ≤7d pool → event-family UPDATE leadership → editorial rank.
  */
 export function pickFeaturedArticle(
   articles: HomeArticleCard[],
   nowMs: number = Date.now()
 ): HomeArticleCard | null {
-  const eligible = filterHomeCoreEligible(articles, nowMs);
-  if (eligible.length === 0) return null;
+  const pool = prepareHomeRankingPool(articles, nowMs);
+  if (pool.length === 0) return null;
   return (
-    pickDiversifiedByEditorialScore(eligible, {
+    pickDiversifiedByEditorialScore(pool, {
       limit: 1,
       nowMs,
       sourceCap: 1,
@@ -83,13 +105,10 @@ export function pickFeaturedArticle(
   );
 }
 
-function articleKey(article: HomeArticleCard): string {
-  return article.article_id ?? article.id;
-}
-
 /**
  * Featured combo: secondary lead + numbered related list.
- * 72h then 7d surface window — never past 7d, no stale pin inject.
+ * Support prefers other families / DIFFERENT ANGLE; superseded backgrounds
+ * may appear only in related as context.
  */
 export function pickFeaturedHubArticles(
   articles: HomeArticleCard[],
@@ -100,11 +119,20 @@ export function pickFeaturedHubArticles(
   const relatedLimit = options?.relatedLimit ?? 5;
   const featuredKey = featured ? articleKey(featured) : null;
 
-  const withoutFeatured = articles.filter(
+  const leadership = resolveEventFamilyLeadership(articles);
+  const gradedAll = withInheritedEventFamilyGrades(articles);
+  const withoutFeatured = gradedAll.filter(
     (a) => articleKey(a) !== featuredKey && a.id !== featured?.id
   );
 
-  const recent = filterHomeCoreSurfacePool(withoutFeatured, {
+  const leadersOnly = withoutFeatured.filter(
+    (a) => !leadership.backgroundKeys.has(articleKey(a))
+  );
+  const backgrounds = withoutFeatured.filter((a) =>
+    leadership.backgroundKeys.has(articleKey(a))
+  );
+
+  const recentLeaders = filterHomeCoreSurfacePool(leadersOnly, {
     nowMs,
     minCount: relatedLimit + 1,
   });
@@ -112,7 +140,7 @@ export function pickFeaturedHubArticles(
   const exclude = new Set<string>();
   if (featuredKey) exclude.add(featuredKey);
 
-  const picked = pickDiversifiedByEditorialScore(recent, {
+  const picked = pickDiversifiedByEditorialScore(recentLeaders, {
     limit: relatedLimit + 1,
     nowMs,
     sourceCap: 2,
@@ -129,15 +157,25 @@ export function pickFeaturedHubArticles(
   if (picked[0]) leads.push(picked[0]);
 
   const leadKeys = new Set(leads.map(articleKey));
-  const related = picked
+  const relatedFromLeaders = picked
     .filter((a) => !leadKeys.has(articleKey(a)))
     .slice(0, relatedLimit);
+
+  const related: HomeArticleCard[] = [...relatedFromLeaders];
+  if (featured && related.length < relatedLimit) {
+    for (const bg of sortArticlesByEditorialScore(backgrounds, nowMs)) {
+      if (related.length >= relatedLimit) break;
+      if (leadKeys.has(articleKey(bg))) continue;
+      related.push(bg);
+    }
+  }
 
   return { leads, related };
 }
 
 /**
  * Site-wide home ordering: editorial score (importance + site freshness).
+ * Does not drop event-family backgrounds (category archive needs the full set).
  */
 export function sortHomeArticlesForDisplay(
   articles: HomeArticleCard[],

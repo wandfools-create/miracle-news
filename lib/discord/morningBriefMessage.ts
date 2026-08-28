@@ -1,4 +1,5 @@
 import type { AiRecommendGrade } from "@/lib/collection-candidates/candidateRecommend";
+import type { EditorialBeat } from "@/lib/editorialPolicy/signals";
 import {
   buildDismissCustomId,
   buildMakeArticleCustomId,
@@ -16,6 +17,10 @@ export type MorningBriefItem = {
   aiRecommendGrade: AiRecommendGrade;
   aiRecommendScore: number | null;
   aiRecommendReason: string | null;
+  /** Optional desk section from editorial policy. */
+  editorialBeat?: EditorialBeat;
+  /** One-line DIFFERENT ANGLE / viewpoint note. */
+  viewpointNote?: string | null;
 };
 
 export type MorningBriefMessageState =
@@ -65,9 +70,25 @@ export function formatMorningBriefMessageContent(
   const sourceLabel = item.feedLabel?.trim() || item.source;
   const published = formatPublishedAtKo(item.rssPublishedAt);
   const reason = item.aiRecommendReason?.trim() || "";
+  const section =
+    item.editorialBeat === "us_politics_economy"
+      ? "미국 정치·경제"
+      : item.editorialBeat === "kr_politics_economy"
+        ? "한국 정치·경제"
+        : item.editorialBeat === "mega_event"
+          ? "대형 사건"
+          : item.editorialBeat === "foreign_security"
+            ? "국제·외교·안보"
+            : null;
 
-  const lines = [badge, item.title.trim(), "", `${sourceLabel} · ${published}`];
+  const lines = [badge, item.title.trim(), ""];
+  if (section) lines.push(`[${section}]`);
+  lines.push(`${sourceLabel} · ${published}`);
   if (reason) lines.push(reason);
+  if (item.viewpointNote?.trim() && !reason.includes(item.viewpointNote.trim())) {
+    lines.push(item.viewpointNote.trim());
+  }
+  lines.push("", "⚠️ AI 추천 ≠ 자동 공개 · 사람 확인 후 기사화하세요");
 
   if (state === "shortlisted") {
     lines.push("", "✅ 편집 보관함에 담김");

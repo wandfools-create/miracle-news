@@ -4,6 +4,10 @@ import {
   pickDiversifiedByEditorialScore,
   sortArticlesByEditorialScore,
 } from "./editorialRanking";
+import {
+  filterEventFamilyLeaders,
+  withInheritedEventFamilyGrades,
+} from "./eventFamilyUpdate";
 import type { HomeArticleCard } from "./types";
 
 export function articleDedupeKey(article: HomeArticleCard): string {
@@ -18,10 +22,9 @@ export type PickSidebarLatestOptions = {
 
 /**
  * 「지금 주목」: editorial score within 72h→7d only.
+ * Event-family superseded backgrounds are excluded so meaningful UPDATEs lead.
  * Shares event-family budget with featured (+ 보조): max 2 total,
  * second slot only for UPDATE / DIFFERENT ANGLE.
- * Never injects out-of-window top stories; never falls back to full archive.
- * Prefer fewer slots over filling with months-old pins.
  */
 export function pickSidebarLatestArticles(
   articles: HomeArticleCard[],
@@ -33,8 +36,12 @@ export function pickSidebarLatestArticles(
     nowMs,
     minCount: limit,
   });
+  // Inherit grades from full family before dropping superseded backgrounds.
+  const leaders = filterEventFamilyLeaders(
+    withInheritedEventFamilyGrades(recent)
+  );
   const reserved = options?.reservedCoreArticles ?? [];
-  return pickDiversifiedByEditorialScore(recent, {
+  return pickDiversifiedByEditorialScore(leaders, {
     ...homeCoreSpotlightPickOptions(reserved, options?.excludeKeys),
     limit,
     nowMs,

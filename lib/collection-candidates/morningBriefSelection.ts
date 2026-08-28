@@ -3,6 +3,12 @@ import {
   normalizeAiRecommendGrade,
 } from "@/lib/collection-candidates/candidateRecommend";
 import { applyAiRecommendPostProcess } from "@/lib/collection-candidates/candidateRecommendPostProcess";
+import {
+  detectEditorialBeat,
+  describeViewpointAngle,
+  homePolicyPoints,
+  type EditorialBeat,
+} from "@/lib/editorialPolicy/signals";
 import type { MorningBriefItem } from "@/lib/discord/morningBriefMessage";
 import type { CollectionCandidateRow } from "@/lib/collection-candidates/types";
 
@@ -17,6 +23,25 @@ export function isMorningBriefSendEligible(
 ): boolean {
   if (!row.ai_recommended_at || row.discord_brief_sent_at) return false;
   return (ACTIONABLE_STATUSES as readonly string[]).includes(row.status);
+}
+
+function briefSectionRank(beat: EditorialBeat): number {
+  switch (beat) {
+    case "mega_event":
+      return 0;
+    case "us_politics_economy":
+      return 1;
+    case "kr_politics_economy":
+      return 2;
+    case "foreign_security":
+      return 3;
+    case "science_society_impact":
+      return 4;
+    case "general":
+      return 5;
+    case "soft_news":
+      return 6;
+  }
 }
 
 export function selectMorningBriefItemsFromRows(
@@ -42,12 +67,14 @@ export function selectMorningBriefItemsFromRows(
             : null,
         aiRecommendReason: row.ai_recommend_reason,
         createdAt: row.created_at,
+        category: row.category ?? null,
       };
     })
     .filter(Boolean) as Array<
     MorningBriefItem & {
       summary: string;
       createdAt: string;
+      category: string | null;
       aiRecommendGrade: NonNullable<
         ReturnType<typeof normalizeAiRecommendGrade>
       >;
@@ -76,6 +103,18 @@ export function selectMorningBriefItemsFromRows(
     const adjusted = gradeById.get(item.id);
     if (!adjusted) continue;
     if (adjusted.grade !== "best" && adjusted.grade !== "priority") continue;
+
+    const signal = {
+      title: item.title,
+      summary: item.summary,
+      source: item.source,
+      category: item.category,
+    };
+    const beat = detectEditorialBeat(signal);
+    const angle = describeViewpointAngle(signal);
+    const reasonParts = [adjusted.reason.trim()].filter(Boolean);
+    if (angle) reasonParts.push(angle);
+
     filtered.push({
       id: item.id,
       source: item.source,
@@ -85,12 +124,30 @@ export function selectMorningBriefItemsFromRows(
       rssPublishedAt: item.rssPublishedAt,
       aiRecommendGrade: adjusted.grade,
       aiRecommendScore: adjusted.score,
-      aiRecommendReason: adjusted.reason,
+      aiRecommendReason: reasonParts.join(" · ") || null,
+      editorialBeat: beat,
+      viewpointNote: angle,
     });
   }
 
-  filtered.sort((a, b) =>
-    compareCandidatesByAiRecommend(
+  filtered.sort((a, b) => {
+    const beatDiff =
+      briefSectionRank(a.editorialBeat ?? "general") -
+      briefSectionRank(b.editorialBeat ?? "general");
+    if (beatDiff !== 0) return beatDiff;
+
+    const policyDiff =
+      homePolicyPoints({
+        title: b.title,
+        source: b.source,
+      }) -
+      homePolicyPoints({
+        title: a.title,
+        source: a.source,
+      });
+    if (policyDiff !== 0) return policyDiff;
+
+    return compareCandidatesByAiRecommend(
       {
         aiRecommendGrade: a.aiRecommendGrade,
         rssPublishedAt: a.rssPublishedAt,
@@ -99,8 +156,8 @@ export function selectMorningBriefItemsFromRows(
         aiRecommendGrade: b.aiRecommendGrade,
         rssPublishedAt: b.rssPublishedAt,
       }
-    )
-  );
+    );
+  });
 
   return filtered.slice(0, maxItems);
 }

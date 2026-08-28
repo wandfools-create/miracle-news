@@ -5,6 +5,10 @@
 
 import type { AiRecommendGrade } from "@/lib/collection-candidates/candidateRecommend";
 import { getSportsCollectionSkipReason } from "@/lib/rss/sportsCollectionPolicy";
+import {
+  policyGradeNudge,
+  policyScoreDelta,
+} from "@/lib/editorialPolicy/signals";
 
 export type AiRecommendPostProcessInput = {
   id: string;
@@ -345,8 +349,9 @@ function mergeReason(item: AiRecommendPostProcessOutput): string {
 }
 
 /**
- * Post-process AI grades: sports/gossip demotion, then same-event BEST cap.
- * Does not promote grades; high-importance only blocks demotion.
+ * Post-process AI grades: sports/gossip demotion, editorial policy score/grade
+ * nudges, then same-event BEST cap.
+ * Does not invent best from thin politics; mega-events may rise to priority.
  */
 export function applyAiRecommendPostProcess(
   items: AiRecommendPostProcessInput[]
@@ -354,10 +359,39 @@ export function applyAiRecommendPostProcess(
   if (items.length === 0) return [];
 
   const afterSports = items.map((item) => applySportsGossipDemotion(item));
-  const afterCluster = applySameEventBestCap(afterSports);
+  const afterPolicy = afterSports.map((item) => applyEditorialPolicyNudge(item));
+  const afterCluster = applySameEventBestCap(afterPolicy);
 
   return afterCluster.map((item) => ({
     ...item,
     reason: mergeReason(item),
   }));
+}
+
+function applyEditorialPolicyNudge(
+  item: AiRecommendPostProcessOutput
+): AiRecommendPostProcessOutput {
+  const signal = {
+    title: item.title,
+    summary: item.summary,
+    source: item.source,
+  };
+  const delta = policyScoreDelta(signal);
+  const nextScore = Math.max(0, Math.min(100, item.score + delta));
+  const nudged = policyGradeNudge(item.grade, nextScore, signal);
+
+  if (nudged.grade === item.grade && nextScore === item.score) {
+    return item;
+  }
+
+  return {
+    ...item,
+    grade: nudged.grade,
+    score: nextScore,
+    postProcessNote: nudged.note
+      ? item.postProcessNote
+        ? `${item.postProcessNote}; ${nudged.note}`
+        : nudged.note
+      : item.postProcessNote,
+  };
 }
