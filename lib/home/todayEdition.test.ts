@@ -10,10 +10,12 @@ import { formatHomeRelativeTime } from "./homeRelativeTime";
 import { prepareEditionHomeSections } from "./prepareEditionHomeSections";
 import {
   buildTodayEdition,
+  collectUsedSurfaceArticleKeys,
   filterBySitePublishAge,
   getEditionDateKey,
   isTodayArticleBySitePublish,
   pickPreviousHighlights,
+  pickTodayTopStoriesColumns,
   previousHighlightsDateKeyRange,
   SPOTLIGHT_MAX_MS,
   TRENDING_MAX_MS,
@@ -262,28 +264,236 @@ describe("todayEdition", () => {
     assert.ok(!allIssueSlugs.includes("ancient"));
   });
 
-  it("previous highlights only include 2–7 NY day window", () => {
+  it("previous highlights include yesterday through 7 NY days ago", () => {
     const editionKey = getEditionDateKey(NOW_AUG28_NOON_ET);
     const range = previousHighlightsDateKeyRange(editionKey);
-    assert.equal(range.maxKey, "2026-08-26");
+    assert.equal(range.maxKey, "2026-08-27");
     assert.equal(range.minKey, "2026-08-21");
 
     const articles = [
-      card({ id: "d1", published_at: nyDaysAgoAt(1) }),
+      card({ id: "d1", published_at: nyDaysAgoAt(1), ai_recommend_grade: "priority" }),
       card({
         id: "d3",
         published_at: nyDaysAgoAt(3),
-        ai_recommend_grade: "priority",
+        ai_recommend_grade: "normal",
       }),
       card({ id: "d8", published_at: nyDaysAgoAt(8) }),
     ];
 
     const picks = pickPreviousHighlights(articles, editionKey, NOW_AUG28_NOON_ET);
     const ids = picks.map((a) => a.id);
-    assert.ok(!ids.includes("d1"));
+    assert.ok(ids.includes("d1"));
     assert.ok(ids.includes("d3"));
     assert.ok(!ids.includes("d8"));
     assert.ok(picks.length <= 5);
+  });
+
+  it("25h-old article is excluded from spotlight but included in previous highlights", () => {
+    const editionKey = getEditionDateKey(NOW_AUG28_NOON_ET);
+    const published25h = new Date(
+      NOW_AUG28_NOON_ET - 25 * 3600_000
+    ).toISOString();
+
+    const articles = [
+      card({
+        id: "yesterday-spotlight-candidate",
+        published_at: published25h,
+        ai_recommend_grade: "priority",
+      }),
+    ];
+
+    const edition = buildTodayEdition(articles, { nowMs: NOW_AUG28_NOON_ET });
+    assert.equal(edition.spotlight.length, 0);
+
+    const picks = pickPreviousHighlights(articles, editionKey, NOW_AUG28_NOON_ET);
+    assert.ok(picks.some((a) => a.id === "yesterday-spotlight-candidate"));
+  });
+
+  it("previous highlights exclude today and already-used surface articles", () => {
+    const editionKey = getEditionDateKey(NOW_AUG28_NOON_ET);
+    const articles = [
+      card({ id: "today-used", published_at: nyTodayAt(8) }),
+      card({ id: "yesterday-a", published_at: nyDaysAgoAt(1), ai_recommend_grade: "best" }),
+      card({ id: "yesterday-b", published_at: nyDaysAgoAt(1, 11), ai_recommend_grade: "priority" }),
+    ];
+
+    const edition = buildTodayEdition(articles, { nowMs: NOW_AUG28_NOON_ET });
+    const ids = edition.previousHighlights.map((a) => a.id);
+    assert.ok(!ids.includes("today-used"));
+    if (edition.featured?.id === "yesterday-a") {
+      assert.ok(!ids.includes("yesterday-a"));
+    }
+  });
+
+  it("pickTodayTopStoriesColumns uses only unused today articles split by region", () => {
+    const articles = [
+      card({
+        id: "today-kr-1",
+        published_at: nyTodayAt(7),
+        source: "연합뉴스",
+        source_country: "KR",
+        original_url: "https://www.yna.co.kr/a",
+        ai_recommend_grade: "best",
+      }),
+      card({
+        id: "today-kr-2",
+        published_at: nyTodayAt(8),
+        source: "조선일보",
+        source_country: "KR",
+        original_url: "https://www.chosun.com/a",
+        ai_recommend_grade: "priority",
+      }),
+      card({
+        id: "today-us-1",
+        published_at: nyTodayAt(9),
+        source: "AP",
+        source_country: "US",
+        ai_recommend_grade: "priority",
+      }),
+      card({
+        id: "yesterday-fill",
+        published_at: nyDaysAgoAt(1),
+        source: "AP",
+        source_country: "US",
+        ai_recommend_grade: "best",
+      }),
+    ];
+
+    const edition = buildTodayEdition(articles, { nowMs: NOW_AUG28_NOON_ET });
+    const exclude = new Set<string>();
+    if (edition.featured) exclude.add(edition.featured.id);
+    if (edition.secondaryFeatured) exclude.add(edition.secondaryFeatured.id);
+
+    const columns = pickTodayTopStoriesColumns(
+      edition.todayArticles,
+      "ko",
+      { leftTitle: "한국 기사", rightTitle: "영어 · 미국 기사" },
+      NOW_AUG28_NOON_ET,
+      { excludeKeys: exclude }
+    );
+
+    assert.ok(columns);
+    const allIds = [...columns!.left, ...columns!.right].map((a) => a.id);
+    assert.ok(allIds.every((id) => id.startsWith("today-")));
+    assert.ok(!allIds.includes("yesterday-fill"));
+    assert.ok(columns!.left.every((a) => a.source_country === "KR" || a.original_url?.includes("yna") || a.original_url?.includes("chosun")));
+  });
+
+  it("pickTodayTopStoriesColumns returns null when no unused today candidates", () => {
+    const articles = [
+      card({ id: "only-one", published_at: nyTodayAt(8), ai_recommend_grade: "best" }),
+    ];
+    const edition = buildTodayEdition(articles, { nowMs: NOW_AUG28_NOON_ET });
+    const exclude = new Set([edition.featured!.id]);
+
+    const columns = pickTodayTopStoriesColumns(
+      edition.todayArticles,
+      "ko",
+      { leftTitle: "KR", rightTitle: "US" },
+      NOW_AUG28_NOON_ET,
+      { excludeKeys: exclude }
+    );
+    assert.equal(columns, null);
+  });
+
+  it("prepareEditionHomeSections restores topStories for extra today articles", () => {
+    const articles = [
+      card({
+        id: "today-kr-featured",
+        published_at: nyTodayAt(7),
+        source: "연합뉴스",
+        source_country: "KR",
+        original_url: "https://www.yna.co.kr/lead",
+        ai_recommend_grade: "best",
+      }),
+      card({
+        id: "today-kr-secondary",
+        published_at: nyTodayAt(7, 30),
+        source: "조선일보",
+        source_country: "KR",
+        original_url: "https://www.chosun.com/secondary",
+        ai_recommend_grade: "priority",
+        topic_key: "kr-event-b",
+        title: "Different angle secondary",
+        summary: "analysis from another outlet",
+      }),
+      card({
+        id: "today-kr-extra",
+        published_at: nyTodayAt(8),
+        source: "한겨레",
+        source_country: "KR",
+        original_url: "https://www.hani.co.kr/extra",
+        ai_recommend_grade: "normal",
+      }),
+      card({
+        id: "today-us-extra",
+        published_at: nyTodayAt(9),
+        source: "AP",
+        source_country: "US",
+        ai_recommend_grade: "normal",
+      }),
+      card({
+        id: "today-us-more",
+        published_at: nyTodayAt(10),
+        source: "Reuters",
+        source_country: "US",
+        ai_recommend_grade: "normal",
+        topic_key: "us-trade",
+        title: "Trade talks continue",
+        summary: "negotiations ongoing",
+      }),
+      card({
+        id: "today-us-tail",
+        published_at: nyTodayAt(11),
+        source: "NYT",
+        source_country: "US",
+        ai_recommend_grade: "normal",
+        topic_key: "us-policy",
+        title: "Policy update today",
+        summary: "latest from Washington",
+      }),
+      card({
+        id: "today-kr-column",
+        published_at: nyTodayAt(12),
+        source: "KBS",
+        source_country: "KR",
+        original_url: "https://news.kbs.co.kr/column",
+        ai_recommend_grade: "normal",
+        topic_key: "kr-culture",
+        title: "Culture story today",
+        summary: "Korea culture desk",
+      }),
+      card({
+        id: "today-us-column",
+        published_at: nyTodayAt(13),
+        source: "WSJ",
+        source_country: "US",
+        ai_recommend_grade: "normal",
+        topic_key: "us-markets",
+        title: "Markets wrap today",
+        summary: "Wall Street close",
+      }),
+    ];
+
+    const sections = prepareEditionHomeSections(
+      articles,
+      "ko",
+      { leftTitle: "한국 기사", rightTitle: "영어 · 미국 기사" },
+      { nowMs: NOW_AUG28_NOON_ET }
+    );
+
+    assert.ok(sections.topStories);
+    const usedInHero = new Set([
+      ...(sections.featuredLeads ?? []).map((a) => a.id),
+      ...(sections.featuredRelated ?? []).map((a) => a.id),
+    ]);
+    const columnIds = [
+      ...(sections.topStories?.left ?? []),
+      ...(sections.topStories?.right ?? []),
+    ].map((a) => a.id);
+    assert.ok(columnIds.every((id) => !usedInHero.has(id)));
+    assert.ok(columnIds.length > 0);
+    assert.ok(columnIds.every((id) => id.startsWith("today-")));
   });
 
   it("7+ day articles excluded from today featured and spotlight backfill", () => {

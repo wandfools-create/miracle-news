@@ -28,12 +28,14 @@ import type {
   TrendingIssue,
   TrendingIssuesBlock,
 } from "./types";
+import { getArticleRegion } from "./articleRegion";
 
 export const SPOTLIGHT_MAX_MS = 24 * 60 * 60 * 1000;
 export const TRENDING_MAX_MS = 48 * 60 * 60 * 1000;
-export const PREVIOUS_HIGHLIGHTS_MIN_DAYS = 2;
+export const PREVIOUS_HIGHLIGHTS_MIN_DAYS = 1;
 export const PREVIOUS_HIGHLIGHTS_MAX_DAYS = 7;
 export const PREVIOUS_HIGHLIGHTS_LIMIT = 5;
+export const TODAY_TOP_STORIES_PER_COLUMN = 6;
 
 export type TodayEditionStatus = "ready" | "preparing";
 
@@ -105,8 +107,7 @@ export function filterBySitePublishAge(
 
 function isWithinPreviousHighlightsWindow(
   article: HomeArticleCard,
-  editionDateKey: string,
-  nowMs: number
+  editionDateKey: string
 ): boolean {
   const key = getArticleSitePublishNyDateKey(article);
   if (!key || key === editionDateKey) return false;
@@ -115,11 +116,57 @@ function isWithinPreviousHighlightsWindow(
   if (ageDays < PREVIOUS_HIGHLIGHTS_MIN_DAYS) return false;
   if (ageDays > PREVIOUS_HIGHLIGHTS_MAX_DAYS) return false;
 
-  const ts = getSitePublishedTimestamp(article);
-  if (ts <= 0) return false;
-  if (nowMs - ts <= SPOTLIGHT_MAX_MS) return false;
+  return getSitePublishedTimestamp(article) > 0;
+}
 
-  return true;
+export function collectTrendingArticleKeys(
+  block: TrendingIssuesBlock | null,
+  articles: HomeArticleCard[]
+): Set<string> {
+  const bySlug = new Map(
+    articles
+      .filter((a) => a.slug?.trim())
+      .map((a) => [a.slug!.trim(), a])
+  );
+  const keys = new Set<string>();
+  if (!block) return keys;
+
+  for (const issue of [...block.us, ...block.kr]) {
+    const related = [
+      issue.primaryArticle,
+      ...issue.relatedArticles,
+    ].filter(Boolean);
+    for (const item of related) {
+      const art = bySlug.get(item!.slug.trim());
+      if (art) keys.add(articleKey(art));
+    }
+  }
+  return keys;
+}
+
+export function collectUsedSurfaceArticleKeys(input: {
+  featured?: HomeArticleCard | null;
+  secondaryFeatured?: HomeArticleCard | null;
+  featuredRelated?: HomeArticleCard[];
+  spotlight?: HomeArticleCard[];
+  trending?: TrendingIssuesBlock | null;
+  allArticles?: HomeArticleCard[];
+}): Set<string> {
+  const keys = new Set<string>();
+  for (const a of [
+    input.featured,
+    input.secondaryFeatured,
+    ...(input.featuredRelated ?? []),
+    ...(input.spotlight ?? []),
+  ]) {
+    if (a) keys.add(articleKey(a));
+  }
+  if (input.trending && input.allArticles) {
+    for (const k of collectTrendingArticleKeys(input.trending, input.allArticles)) {
+      keys.add(k);
+    }
+  }
+  return keys;
 }
 
 function formatEditionHeaderDate(nowMs: number, locale: ArticleLocale): string {
@@ -310,10 +357,13 @@ export function pickTodayEditionTrendingIssues(
 export function pickPreviousHighlights(
   articles: HomeArticleCard[],
   editionDateKey: string,
-  nowMs: number
+  nowMs: number,
+  options?: { excludeKeys?: Set<string> }
 ): HomeArticleCard[] {
-  const pool = articles.filter((a) =>
-    isWithinPreviousHighlightsWindow(a, editionDateKey, nowMs)
+  const pool = articles.filter(
+    (a) =>
+      isWithinPreviousHighlightsWindow(a, editionDateKey) &&
+      !options?.excludeKeys?.has(articleKey(a))
   );
   const eligible = filterHomeCoreEligible(pool, nowMs);
   const leaders = filterEventFamilyLeaders(
@@ -326,7 +376,60 @@ export function pickPreviousHighlights(
     sourceCap: 2,
     balanceRegions: true,
     suppressTopicClusters: true,
+    excludeKeys: options?.excludeKeys,
   });
+}
+
+export type TodayTopStoriesColumns = {
+  leftTitle: string;
+  rightTitle: string;
+  left: HomeArticleCard[];
+  right: HomeArticleCard[];
+};
+
+export function pickTodayTopStoriesColumns(
+  todayArticles: HomeArticleCard[],
+  pageLocale: ArticleLocale,
+  columnLabels: { leftTitle: string; rightTitle: string },
+  nowMs: number,
+  options?: { excludeKeys?: Set<string> }
+): TodayTopStoriesColumns | null {
+  const exclude = options?.excludeKeys ?? new Set<string>();
+  const pool = todayArticles.filter((a) => !exclude.has(articleKey(a)));
+  if (pool.length === 0) return null;
+
+  const eligible = filterHomeCoreEligible(pool, nowMs);
+  const leaders = filterEventFamilyLeaders(
+    withInheritedEventFamilyGrades(eligible)
+  );
+  if (leaders.length === 0) return null;
+
+  const krPool = leaders.filter((a) => getArticleRegion(a) === "kr");
+  const usPool = leaders.filter((a) => getArticleRegion(a) === "us");
+
+  const pickColumn = (regionPool: HomeArticleCard[]) =>
+    pickDiversifiedByEditorialScore(regionPool, {
+      limit: TODAY_TOP_STORIES_PER_COLUMN,
+      nowMs,
+      sourceCap: 2,
+      balanceRegions: false,
+      suppressTopicClusters: true,
+      excludeKeys: exclude,
+    });
+
+  const left =
+    pageLocale === "ko" ? pickColumn(krPool) : pickColumn(usPool);
+  const right =
+    pageLocale === "ko" ? pickColumn(usPool) : pickColumn(krPool);
+
+  if (left.length === 0 && right.length === 0) return null;
+
+  return {
+    leftTitle: columnLabels.leftTitle,
+    rightTitle: columnLabels.rightTitle,
+    left,
+    right,
+  };
 }
 
 export type BuildTodayEditionOptions = {
@@ -351,6 +454,7 @@ export function buildTodayEdition(
 
   let featured: HomeArticleCard | null = null;
   let secondaryFeatured: HomeArticleCard | null = null;
+  let featuredRelated: HomeArticleCard[] = [];
   let status: TodayEditionStatus = "ready";
 
   if (todayCount === 0) {
@@ -360,6 +464,7 @@ export function buildTodayEdition(
     if (todayCount >= 2 && featured) {
       const hub = pickFeaturedHubArticles(todayCore, featured, { nowMs });
       secondaryFeatured = hub.leads[1] ?? null;
+      featuredRelated = hub.related;
     }
   }
 
@@ -383,10 +488,20 @@ export function buildTodayEdition(
     3
   );
 
+  const usedSurfaceKeys = collectUsedSurfaceArticleKeys({
+    featured,
+    secondaryFeatured,
+    featuredRelated,
+    spotlight,
+    trending,
+    allArticles: articles,
+  });
+
   const previousHighlights = pickPreviousHighlights(
     articles,
     editionDateKey,
-    nowMs
+    nowMs,
+    { excludeKeys: usedSurfaceKeys }
   );
 
   const previousArticles = articles.filter(
@@ -434,7 +549,7 @@ export function buildTodayEdition(
   };
 }
 
-/** NY date keys for the previous-highlights window (inclusive). */
+/** NY date keys for the previous-highlights window (inclusive): yesterday through 7 days ago. */
 export function previousHighlightsDateKeyRange(
   editionDateKey: string
 ): { minKey: string; maxKey: string } {

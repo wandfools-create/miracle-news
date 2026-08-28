@@ -56,7 +56,8 @@
 | 오늘 0건 | 준비 중 UI — 어제 featured 승격 없음 |
 | 지금 주목 | 오늘 우선 · 24h site publish 한도 |
 | 지금 뜨는 이슈 | 오늘 우선 · 48h · 진행 중 topic만 「계속되는 이슈」 |
-| 지난 주요뉴스 | NY 2–7일 · 최대 5건 · hero 분리 |
+| 지난 주요뉴스 | NY **1–7일**(어제 포함) · 최대 5건 · 상단 surface 중복 제외 |
+| 오늘 더보기 | featured/related 제외 **오늘** 기사만 KR/US 2열 |
 | Operational Validation | **IN PROGRESS** |
 
 ## 1. 프로젝트 기본 정보

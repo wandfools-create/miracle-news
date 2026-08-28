@@ -11,7 +11,10 @@ import {
   filterHomeCoreEligible,
   sortArticlesByEditorialScore,
 } from "./editorialRanking";
-import { buildTodayEdition } from "./todayEdition";
+import {
+  buildTodayEdition,
+  pickTodayTopStoriesColumns,
+} from "./todayEdition";
 import { repairHomeCategory } from "@/lib/editorialPolicy/homeCategoryRepair";
 import type { HomeArticleCard, HomePageSections } from "./types";
 
@@ -31,6 +34,10 @@ function withRepairedCategories(articles: HomeArticleCard[]): HomeArticleCard[] 
     if (next === (article.category ?? "other")) return article;
     return { ...article, category: next };
   });
+}
+
+function articleKey(article: HomeArticleCard): string {
+  return article.article_id ?? article.id;
 }
 
 export function prepareEditionHomeSections(
@@ -61,6 +68,18 @@ export function prepareEditionHomeSections(
     featuredLeads = hub.leads;
     featuredRelated = hub.related;
   }
+
+  const featuredExclude = new Set<string>();
+  for (const a of featuredLeads) featuredExclude.add(articleKey(a));
+  for (const a of featuredRelated) featuredExclude.add(articleKey(a));
+
+  const topStories = pickTodayTopStoriesColumns(
+    todayEdition.todayArticles,
+    pageLocale,
+    columnLabels,
+    nowMs,
+    { excludeKeys: featuredExclude }
+  );
 
   const sourceLeadMap: Record<string, HomeArticleCard> = {};
   for (const article of sortArticlesByEditorialScore(allArticles, nowMs)) {
@@ -133,7 +152,7 @@ export function prepareEditionHomeSections(
     featuredLeads,
     featuredRelated,
     latest: [],
-    topStories: null,
+    topStories,
     trendingIssues,
     sidebar,
     previousHighlights,

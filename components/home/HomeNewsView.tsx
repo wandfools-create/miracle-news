@@ -890,7 +890,11 @@ export default function HomeNewsView({
   const showPreviousHighlights =
     (displaySections.previousHighlights?.length ?? 0) > 0;
   const topStories = displaySections.topStories;
-  const showTopStories = Boolean(topStories);
+  const topStoriesHasLeft = (topStories?.left.length ?? 0) > 0;
+  const topStoriesHasRight = (topStories?.right.length ?? 0) > 0;
+  const showTopStories = Boolean(
+    topStories && (topStoriesHasLeft || topStoriesHasRight)
+  );
   const featuredHub = useMemo(() => {
     if (
       displaySections.featuredLeads &&
@@ -1225,31 +1229,41 @@ export default function HomeNewsView({
                   title={labels.latestTitle}
                   description={labels.latestDesc}
                 />
-                <div className="grid gap-8 sm:grid-cols-2 sm:gap-10">
-                  <TopStoriesColumn
-                    title={topStories.leftTitle}
-                    articles={topStories.left}
-                    emptyLabel={labels.columnEmpty}
-                    locale={locale}
-                    labels={labels}
-                    articleHrefPrefix={articleHrefPrefix}
-                    articleHrefFor={articleHrefFor}
-                    accentClass={
-                      pageRole === "ko" ? "border-news-red" : "border-news-navy"
-                    }
-                  />
-                  <TopStoriesColumn
-                    title={topStories.rightTitle}
-                    articles={topStories.right}
-                    emptyLabel={labels.columnEmpty}
-                    locale={locale}
-                    labels={labels}
-                    articleHrefPrefix={articleHrefPrefix}
-                    articleHrefFor={articleHrefFor}
-                    accentClass={
-                      pageRole === "ko" ? "border-news-navy" : "border-news-red"
-                    }
-                  />
+                <div
+                  className={
+                    topStoriesHasLeft && topStoriesHasRight
+                      ? "grid min-w-0 gap-8 sm:grid-cols-2 sm:gap-10"
+                      : "min-w-0"
+                  }
+                >
+                  {topStoriesHasLeft ? (
+                    <TopStoriesColumn
+                      title={topStories.leftTitle}
+                      articles={topStories.left}
+                      emptyLabel={labels.columnEmpty}
+                      locale={locale}
+                      labels={labels}
+                      articleHrefPrefix={articleHrefPrefix}
+                      articleHrefFor={articleHrefFor}
+                      accentClass={
+                        pageRole === "ko" ? "border-news-red" : "border-news-navy"
+                      }
+                    />
+                  ) : null}
+                  {topStoriesHasRight ? (
+                    <TopStoriesColumn
+                      title={topStories.rightTitle}
+                      articles={topStories.right}
+                      emptyLabel={labels.columnEmpty}
+                      locale={locale}
+                      labels={labels}
+                      articleHrefPrefix={articleHrefPrefix}
+                      articleHrefFor={articleHrefFor}
+                      accentClass={
+                        pageRole === "ko" ? "border-news-navy" : "border-news-red"
+                      }
+                    />
+                  ) : null}
                 </div>
               </section>
             ) : null}
