@@ -4,6 +4,19 @@
 >
 > 모든 AI/개발 작업은 먼저 최신 `main`과 이 문서를 읽고 시작한다. 이 문서는 비밀값을 저장하지 않는다.
 
+## 0. 로컬 개발 중 (승인 완료 공개 · SAME EVENT 조기 검토)
+
+| 항목 | 상태 |
+|---|---|
+| Branch | `fix/approved-human-publish-and-early-same-event-review` (origin/main `a9598ed…` — PR #10 병합 후) |
+| 승인 완료 명시적 사람 공개 | 최종 결정 — `publishApprovedArticleToLive()` 전용 entry |
+| SAME EVENT | 수집 후보 관련 기사 패널 (classifier 재사용, 14일·400건 pool) |
+| AI 자동 공개 | 금지 유지 |
+| quick_review / Discord | 변경 없음 |
+| Production 적용 | **전** — Draft PR만 |
+| 실제 기사 일괄 공개 | **미실행** |
+| Production DB write | **금지** |
+
 ## 1. 프로젝트 기본 정보
 
 | 항목 | 현재 값 |
