@@ -31,17 +31,33 @@
 | 관리자 수집망 표시 | **적용 완료** — config-only는 「설정됨」(실제 fetch 성공 아님) |
 | Operational Validation | **IN PROGRESS** |
 | PBS/Fox parser failure | **원인 확정** — `pickRssCategories`가 null-prototype `{_,$}`에 `String(c)` 호출 → feed 전체 실패. 영향 기간 **2026-08-25~** (checked=0). 기존 후보·기사 데이터 손상 **없음**. 누락 후보는 **자동 복원되지 않음**. |
-| PBS/Fox parser hotfix | **PR 진행 중** — `fix/pbs-fox-rss-category-parser` (Production 미적용) |
+| PBS/Fox parser hotfix | **PR #16 MERGED** — Production 적용 완료 (`7828c70`) |
+| Bulk candidate enrich isolation | **PR #17 MERGED** — Production 적용 완료 (`0a218f9`) |
 | 중앙일보 수집 | **미구현** (`joongang` key 예약만) — 후속 |
 | AP·Fox 정치/경제 전용 feed | **후속** |
 | 관점 보존형 SAME EVENT 정책 | **후속** |
 
 **Current Priority**
 
-1. PBS/Fox parser P0 hotfix merge · Production 적용
+1. Today Edition v1 Draft PR 검토 (`feature/home-today-edition-v1`)
 2. 다음 승인 기사 일괄 공개 실제 운영 확인
 3. Shorts PR #5에 최신 main 통합
 4. 균형 브리핑 패키지 연결
+
+## 0B. Today Edition v1 (Draft PR — Production 미적용)
+
+| 항목 | 상태 |
+|---|---|
+| Branch | `feature/home-today-edition-v1` |
+| Baseline | `origin/main` @ `0a218f9` (PR #16 · PR #17 포함) |
+| Today Edition v1 | **Draft PR 단계** — Production **미적용** |
+| 실제 운영 검증 | **미실행** |
+| 오늘 판정 | `published_at` · America/New_York 달력일 (source_published_at 미사용) |
+| 오늘 0건 | 준비 중 UI — 어제 featured 승격 없음 |
+| 지금 주목 | 오늘 우선 · 24h site publish 한도 |
+| 지금 뜨는 이슈 | 오늘 우선 · 48h · 진행 중 topic만 「계속되는 이슈」 |
+| 지난 주요뉴스 | NY 2–7일 · 최대 5건 · hero 분리 |
+| Operational Validation | **IN PROGRESS** |
 
 ## 1. 프로젝트 기본 정보
 

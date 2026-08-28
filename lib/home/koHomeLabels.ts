@@ -35,4 +35,9 @@ export const koHomeLabels: HomeNewsLabels = {
   empty: "현재 공개된 한국어 기사가 없습니다.",
   errorPrefix: "데이터를 불러오는 중 오류가 발생했습니다:",
   noImage: "이미지 없음",
+  previousHighlightsTitle: "지난 주요뉴스",
+  previousHighlightsDesc:
+    "최근 2~7일 사이 놓치면 안 될 기사입니다.",
+  editionHeaderTodayLabel: "오늘의 한눈",
+  continuingIssueLabel: "계속되는 이슈",
 };

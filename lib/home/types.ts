@@ -89,6 +89,27 @@ export type TrendingIssue = {
   primaryArticle: TrendingIssueRelatedArticle | null;
   /** Up to 3 related published articles from the same topic/category bucket. */
   relatedArticles: TrendingIssueRelatedArticle[];
+  /** Site publish >24h but ≤48h and topic/event still active. */
+  continuingIssue?: boolean;
+};
+
+export type TodayEditionStatus = "ready" | "preparing";
+
+export type TodayEditionMeta = {
+  editionDateKey: string;
+  todayCount: number;
+  lastUpdatedAt: string | null;
+  status: TodayEditionStatus;
+  headerDateKo: string;
+  headerDateEn: string;
+  editionTitleKo: string;
+  editionTitleEn: string;
+  statusLineKo: string;
+  statusLineEn: string;
+  preparingMessageKo: string;
+  preparingMessageEn: string;
+  preparingPhaseKo: string;
+  preparingPhaseEn: string;
 };
 
 export type TrendingIssuesBlock = {
@@ -107,6 +128,9 @@ export type HomePageSections = {
   topStories?: EditionTopStoriesColumns | null;
   trendingIssues?: TrendingIssuesBlock | null;
   sidebar: HomeArticleCard[];
+  /** 지난 주요뉴스 — 2–7 NY days, separate from today hero. */
+  previousHighlights?: HomeArticleCard[];
+  todayEdition?: TodayEditionMeta;
   groupedByCategory: Record<string, HomeArticleCard[]>;
   visibleCategories: string[];
   sourceLeadCards: SourceLeadCard[];

@@ -35,4 +35,9 @@ export const enHomeLabels: HomeNewsLabels = {
   empty: "There are no published English articles yet.",
   errorPrefix: "Error loading data:",
   noImage: "No image",
+  previousHighlightsTitle: "Previous Top Stories",
+  previousHighlightsDesc:
+    "Important stories from the past 2–7 days.",
+  editionHeaderTodayLabel: "Today's Hannoon",
+  continuingIssueLabel: "Ongoing issue",
 };

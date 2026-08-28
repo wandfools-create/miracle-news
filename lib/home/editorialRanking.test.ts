@@ -169,7 +169,8 @@ describe("stale top-story expiry", () => {
     );
     assert.equal(sections.featured, null);
     assert.equal(sections.sidebar.length, 0);
-    assert.equal(sections.topStories?.left.length, 0);
+    assert.equal(sections.topStories, null);
+    assert.equal(sections.todayEdition?.status, "preparing");
   });
 });
 
