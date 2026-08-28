@@ -30,14 +30,15 @@
 | PBS politics feed | **적용 완료** (`pbs-newshour` · politics · us-intl) |
 | 관리자 수집망 표시 | **적용 완료** — config-only는 「설정됨」(실제 fetch 성공 아님) |
 | Operational Validation | **IN PROGRESS** |
-| PBS/Fox parser failure | **Critical** — investigation required (08-25~ checked=0) |
+| PBS/Fox parser failure | **원인 확정** — `pickRssCategories`가 null-prototype `{_,$}`에 `String(c)` 호출 → feed 전체 실패. 영향 기간 **2026-08-25~** (checked=0). 기존 후보·기사 데이터 손상 **없음**. 누락 후보는 **자동 복원되지 않음**. |
+| PBS/Fox parser hotfix | **PR 진행 중** — `fix/pbs-fox-rss-category-parser` (Production 미적용) |
 | 중앙일보 수집 | **미구현** (`joongang` key 예약만) — 후속 |
 | AP·Fox 정치/경제 전용 feed | **후속** |
 | 관점 보존형 SAME EVENT 정책 | **후속** |
 
 **Current Priority**
 
-1. PBS/Fox parser failure Critical 조사·hotfix
+1. PBS/Fox parser P0 hotfix merge · Production 적용
 2. 다음 승인 기사 일괄 공개 실제 운영 확인
 3. Shorts PR #5에 최신 main 통합
 4. 균형 브리핑 패키지 연결
