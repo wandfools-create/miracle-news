@@ -19,24 +19,28 @@
 | 실제 Production 일괄 공개 운영 검증 | **아직 미실행** |
 | Operational Validation | **IN PROGRESS** |
 
-## 0A. 로컬 개발 중 (RSS coverage/fairness)
+## 0A. Production 반영 (RSS coverage/fairness · PR #14)
 
 | 항목 | 상태 |
 |---|---|
-| Branch | `fix/rss-source-coverage-and-fairness-v1` (Draft PR 단계) |
-| 목표 | publisher 최소 1차 기회 · category feed 순환 · PBS politics feed |
-| Production 적용 | **미적용** |
-| 실제 RSS 운영 검증 | **미실행** |
-| 중앙일보 수집 | **미구현** (`joongang` key 예약만) |
+| PR #14 | **MERGED** — Improve RSS source coverage and publisher fairness |
+| Production merge SHA | `f1b00accd5389eacd00e1376922b3ffcb77ae31e` |
+| RSS publisher seed | **적용 완료** (Pass 0: main publisher당 최소 1건 기회) |
+| category rotation | **적용 완료** (least-saved feed 우선; publisher cap 공유) |
+| PBS politics feed | **적용 완료** (`pbs-newshour` · politics · us-intl) |
+| 관리자 수집망 표시 | **적용 완료** — config-only는 「설정됨」(실제 fetch 성공 아님) |
+| Operational Validation | **IN PROGRESS** |
+| PBS/Fox parser failure | **Critical** — investigation required (08-25~ checked=0) |
+| 중앙일보 수집 | **미구현** (`joongang` key 예약만) — 후속 |
 | AP·Fox 정치/경제 전용 feed | **후속** |
 | 관점 보존형 SAME EVENT 정책 | **후속** |
-| Operational Validation | **IN PROGRESS** |
 
 **Current Priority**
 
-1. 다음 승인 기사 일괄 공개 실제 운영 확인
-2. Shorts PR #5에 최신 main 통합
-3. 균형 브리핑 패키지 연결
+1. PBS/Fox parser failure Critical 조사·hotfix
+2. 다음 승인 기사 일괄 공개 실제 운영 확인
+3. Shorts PR #5에 최신 main 통합
+4. 균형 브리핑 패키지 연결
 
 ## 1. 프로젝트 기본 정보
 
