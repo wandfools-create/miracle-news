@@ -41,7 +41,7 @@ function readIds(formData: FormData): string[] {
 
 function revalidateShortlistQueues(extraPaths: string[] = []) {
   revalidateAdminNavCountsCache();
-  revalidateShortlistQueues();
+  revalidatePath("/admin/collection-shortlist");
   for (const p of extraPaths) revalidatePath(p);
 }
 
@@ -126,39 +126,4 @@ export async function enrichFromShortlistAction(
     `/admin/review/${result.articleId}`,
   ]);
   redirect(shortlistPath({ made: result.articleId }));
-}
-
-/** Bulk enrich from shortlist — OpenAI. */
-export async function bulkEnrichFromShortlistAction(formData: FormData) {
-  const user = await requireAdmin();
-  if (!user) redirect(shortlistPath({ error: "auth" }));
-
-  const ids = readIds(formData);
-  if (ids.length === 0) redirect(shortlistPath({ error: "missing" }));
-
-  const { promoteCollectionCandidate } = await import(
-    "@/lib/collection-candidates/promoteCollectionCandidate"
-  );
-
-  let made = 0;
-  let lastId: string | null = null;
-  for (const candidateId of ids) {
-    const result = await promoteCollectionCandidate({
-      candidateId,
-      selectedBy: user.email ?? null,
-    });
-    if (result.ok) {
-      made += 1;
-      lastId = result.articleId;
-    }
-  }
-
-  revalidateShortlistQueues([
-    "/admin/review",
-    ...(lastId ? [`/admin/review/${lastId}`] : []),
-  ]);
-
-  const extra: Record<string, string> = { bulkMade: String(made) };
-  if (lastId) extra.made = lastId;
-  redirect(shortlistPath(extra));
 }

@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
-import { bulkEnrichCandidatesAction } from "@/app/admin/(app)/collection-candidates/bulkCandidateActions";
 import {
   deskDismissCandidatesAction,
   deskExpireCandidatesAction,
   deskShortlistCandidatesAction,
 } from "@/app/admin/(app)/collection-candidates/deskMutationActions";
+import BulkCandidateEnrichResult from "@/components/admin/BulkCandidateEnrichResult";
+import { useBulkCandidateEnrich } from "@/components/admin/useBulkCandidateEnrich";
 import EnrichCandidateForm from "@/components/admin/EnrichCandidateForm";
 import CandidateFilterHiddenFields from "@/components/admin/CandidateFilterHiddenFields";
 import {
@@ -132,6 +133,40 @@ export default function CollectionCandidatesWorkbench({
     });
   }, []);
 
+  const markEnrichFailedLocally = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    const failed = new Set(ids);
+    setRows((prev) =>
+      prev.map((c) =>
+        failed.has(c.id)
+          ? { ...c, status: "enrich_failed" as CollectionCandidateStatus }
+          : c
+      )
+    );
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const titlesById = useMemo(
+    () => new Map(rows.map((c) => [c.id, c.rssTitle])),
+    [rows]
+  );
+
+  const {
+    running: enrichRunning,
+    progress: enrichProgress,
+    summary: enrichSummary,
+    runBulkEnrich,
+    dismissSummary: dismissEnrichSummary,
+  } = useBulkCandidateEnrich({
+    titlesById,
+    onEnrichedIds: removeIdsFromView,
+    onFailedIds: markEnrichFailedLocally,
+  });
+
   const runDeskMutation = useCallback(
     (
       ids: string[],
@@ -195,7 +230,7 @@ export default function CollectionCandidatesWorkbench({
   }, []);
 
   function runEnrichBulk() {
-    if (selectedCount === 0) return;
+    if (selectedCount === 0 || enrichRunning) return;
     if (
       !window.confirm(
         `선택한 ${selectedCount}건을 기사로 만드시겠습니까? OpenAI 비용이 발생합니다.`
@@ -203,23 +238,19 @@ export default function CollectionCandidatesWorkbench({
     ) {
       return;
     }
-    startBulk(() => {
-      const form = document.getElementById(
-        "cc-bulk-form"
-      ) as HTMLFormElement | null;
-      if (!form) return;
-      form.querySelectorAll('input[data-bulk-id="1"]').forEach((el) => el.remove());
-      for (const id of selected) {
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = "candidateIds";
-        input.value = id;
-        input.dataset.bulkId = "1";
-        form.appendChild(input);
-      }
-      const fd = new FormData(form);
-      void bulkEnrichCandidatesAction(fd);
-    });
+    void runBulkEnrich([...selected]);
+  }
+
+  function retryFailedEnrichSelection() {
+    if (!enrichSummary) return;
+    const failedIds = enrichSummary.results
+      .filter(
+        (r) =>
+          r.outcome === "enrich_failed" || r.outcome === "unexpected_error"
+      )
+      .map((r) => r.candidateId);
+    setSelected(new Set(failedIds));
+    dismissEnrichSummary();
   }
 
   const renderFilterFields = () => (
@@ -271,6 +302,25 @@ export default function CollectionCandidatesWorkbench({
         <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
           {actionNotice}
         </div>
+      ) : null}
+
+      {enrichProgress ? (
+        <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+          전체 {enrichProgress.total}건 중 {enrichProgress.current}건 처리 중
+          {enrichProgress.candidateTitle ? (
+            <span className="mt-1 block text-xs text-blue-800">
+              {enrichProgress.candidateTitle}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {enrichSummary ? (
+        <BulkCandidateEnrichResult
+          summary={enrichSummary}
+          onRetryFailed={retryFailedEnrichSelection}
+          onDismiss={dismissEnrichSummary}
+        />
       ) : null}
 
       <form id="cc-bulk-form" className="hidden" aria-hidden>
@@ -336,7 +386,7 @@ export default function CollectionCandidatesWorkbench({
             c.aiRecommendGrade === "best" || c.aiRecommendGrade === "priority";
           const failureText = shortenCandidateFailure(c.enrichError, 100);
           const checked = selected.has(c.id);
-          const busy = pendingIds.has(c.id) || bulkPending;
+          const busy = pendingIds.has(c.id) || bulkPending || enrichRunning;
 
           return (
             <article
@@ -580,17 +630,17 @@ export default function CollectionCandidatesWorkbench({
             </button>
             <button
               type="button"
-              disabled={bulkPending}
+              disabled={bulkPending || enrichRunning}
               onClick={runEnrichBulk}
               className="rounded-lg bg-black px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
             >
-              선택 기사 만들기
+              {enrichRunning ? "기사 만들기 진행 중…" : "선택 기사 만들기"}
             </button>
             {showLocalizeTools ? (
               <button
                 type="submit"
                 form="localize-candidates-form"
-                disabled={localizePending || bulkPending}
+                disabled={localizePending || bulkPending || enrichRunning}
                 className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
               >
                 {localizePending ? "한글화 중…" : "선택 한글화"}
