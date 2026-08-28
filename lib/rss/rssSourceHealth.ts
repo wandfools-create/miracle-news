@@ -10,7 +10,7 @@ import {
 } from "@/lib/rss/feedSources";
 
 export type RssSourceHealthLabel =
-  | "정상"
+  | "설정됨"
   | "후보만 있음"
   | "무수집"
   | "오류"
@@ -46,7 +46,7 @@ export function buildRssSourceHealthRows(
       label: feed.label,
       feedUrl: feed.feedUrl,
       enabled: true,
-      status: "정상",
+      status: "설정됨",
       note: null,
     };
   });
@@ -54,5 +54,5 @@ export function buildRssSourceHealthRows(
 
 export function getRssSourceHealthLabel(sourceKey: string): RssSourceHealthLabel {
   if (!isRssFeedSourceEnabled(sourceKey)) return "비활성";
-  return "정상";
+  return "설정됨";
 }

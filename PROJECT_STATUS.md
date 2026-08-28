@@ -19,6 +19,18 @@
 | 실제 Production 일괄 공개 운영 검증 | **아직 미실행** |
 | Operational Validation | **IN PROGRESS** |
 
+## 0A. 로컬 개발 중 (RSS coverage/fairness)
+
+| 항목 | 상태 |
+|---|---|
+| Branch | `fix/rss-source-coverage-and-fairness-v1` (Draft PR 단계) |
+| 목표 | publisher 최소 1차 기회 · category feed 순환 · PBS politics feed |
+| Production 적용 | **전** |
+| 실제 RSS 운영 검증 | **미실행** |
+| 중앙일보 수집 | **미구현** (`joongang` key 예약만) |
+| AP·Fox 정치/경제 전용 feed | **후속** |
+| 관점 보존형 SAME EVENT 정책 | **후속** |
+
 **Current Priority**
 
 1. 다음 승인 기사 일괄 공개 실제 운영 확인

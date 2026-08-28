@@ -59,6 +59,14 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     collectRegion: COLLECT_REGION_US_INTL,
   },
   {
+    sourceKey: "pbs-newshour",
+    label: "PBS NewsHour · 정치",
+    feedUrl: "https://www.pbs.org/newshour/feeds/rss/politics",
+    sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
+    category: "politics",
+  },
+  {
     sourceKey: "ap",
     label: "AP",
     /** Legacy RSS host (DNS dead). Collected via AP GraphQL instead. */

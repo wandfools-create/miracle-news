@@ -590,6 +590,124 @@ function publisherSavedCount(
   return total;
 }
 
+function uniqueMainPublisherKeys(mainPrepared: PreparedFeed[]): string[] {
+  const seen = new Set<string>();
+  const keys: string[] = [];
+  for (const p of mainPrepared) {
+    if (seen.has(p.feed.sourceKey)) continue;
+    seen.add(p.feed.sourceKey);
+    keys.push(p.feed.sourceKey);
+  }
+  return keys;
+}
+
+function publisherFeeds(
+  prepared: PreparedFeed[],
+  sourceKey: string
+): PreparedFeed[] {
+  return prepared.filter((p) => p.feed.sourceKey === sourceKey);
+}
+
+/** Category feeds with queue left — least saved first (stable tie = registration order). */
+function rotateCategoryFeeds(feeds: PreparedFeed[]): PreparedFeed[] {
+  return feeds
+    .filter((p) => p.queue.length > 0)
+    .sort((a, b) => feedSavedCount(a.stats) - feedSavedCount(b.stats));
+}
+
+/**
+ * Drain up to maxNewInserts for one publisher, rotating category feeds by
+ * least saved count so politics does not monopolize 조선/TV조선/인사이트.
+ */
+async function drainPublisherWithCategoryRotation(
+  prepared: PreparedFeed[],
+  sourceKey: string,
+  seenUrls: Set<string>,
+  ctx: CollectRunContext,
+  maxNewInserts: number
+): Promise<number> {
+  if (maxNewInserts <= 0) return 0;
+
+  const feeds = publisherFeeds(prepared, sourceKey);
+  let saved = 0;
+  let stagnantRounds = 0;
+
+  while (saved < maxNewInserts) {
+    if (ctx.options.save && ctx.remainingCandidateBudget.value <= 0) break;
+
+    const candidates = rotateCategoryFeeds(feeds);
+    if (candidates.length === 0) break;
+
+    let roundProgress = false;
+    for (const p of candidates) {
+      if (saved >= maxNewInserts) break;
+      if (ctx.options.save && ctx.remainingCandidateBudget.value <= 0) break;
+
+      const before = feedSavedCount(p.stats);
+      await drainFeedInsertQuota(p, seenUrls, ctx, 1);
+      const after = feedSavedCount(p.stats);
+      if (after > before) {
+        saved += after - before;
+        roundProgress = true;
+        stagnantRounds = 0;
+      }
+    }
+
+    if (!roundProgress) {
+      stagnantRounds += 1;
+      if (stagnantRounds >= 2) break;
+    }
+  }
+
+  return saved;
+}
+
+async function drainMainPublishersFair(
+  prepared: PreparedFeed[],
+  mainPrepared: PreparedFeed[],
+  seenUrls: Set<string>,
+  ctx: CollectRunContext,
+  pass: 0 | 1 | 2
+): Promise<void> {
+  const publisherKeys = uniqueMainPublisherKeys(mainPrepared);
+
+  if (pass === 0) {
+    for (const sourceKey of publisherKeys) {
+      if (ctx.options.save && ctx.remainingCandidateBudget.value <= 0) break;
+      if (publisherSavedCount(prepared, sourceKey) > 0) continue;
+      await drainPublisherWithCategoryRotation(
+        prepared,
+        sourceKey,
+        seenUrls,
+        ctx,
+        1
+      );
+    }
+    return;
+  }
+
+  for (const sourceKey of publisherKeys) {
+    if (ctx.options.save && ctx.remainingCandidateBudget.value <= 0) break;
+    const quota = rssFeedInsertQuota({
+      pass,
+      alreadyInserted: publisherSavedCount(prepared, sourceKey),
+      runBudgetRemaining: ctx.options.save
+        ? ctx.remainingCandidateBudget.value
+        : Number.MAX_SAFE_INTEGER,
+      maxInserts: publisherMaxInserts(
+        publisherFeeds(prepared, sourceKey)[0]!.feed
+      ),
+    });
+    await drainPublisherWithCategoryRotation(
+      prepared,
+      sourceKey,
+      seenUrls,
+      ctx,
+      quota
+    );
+  }
+}
+
 export async function collectRssToReviewQueue(
   optionsInput?: CollectRssOptions
 ): Promise<CollectRssResult> {
@@ -632,7 +750,7 @@ export async function collectRssToReviewQueue(
     (f) => f.sourceKey === YONHAP_KR_RADAR_SOURCE_KEY
   );
 
-  console.info("[collectRss] run start (v5 candidates, fair pass, no OpenAI)", {
+  console.info("[collectRss] run start (v6 candidates, publisher seed + category rotation, no OpenAI)", {
     mode: options.mode,
     save: options.save,
     region: options.region,
@@ -659,35 +777,17 @@ export async function collectRssToReviewQueue(
     (p) => p.feed.sourceKey === YONHAP_KR_RADAR_SOURCE_KEY
   );
 
-  // 2) Fair pass 1 — each main publisher gets up to FIRST_PASS inserts
-  //    shared across category feeds (조선일보/TV조선 ≤ 3 then ≤ 4).
-  for (const p of mainPrepared) {
-    const quota = rssFeedInsertQuota({
-      pass: 1,
-      alreadyInserted: publisherSavedCount(prepared, p.feed.sourceKey),
-      runBudgetRemaining: ctx.options.save
-        ? ctx.remainingCandidateBudget.value
-        : Number.MAX_SAFE_INTEGER,
-      maxInserts: publisherMaxInserts(p.feed),
-    });
-    await drainFeedInsertQuota(p, seenUrls, ctx, quota);
-  }
+  // 2) Publisher seed — each main publisher gets 1 insert opportunity before
+  //    any publisher accumulates a second (eligible queue only; no forced save).
+  await drainMainPublishersFair(prepared, mainPrepared, seenUrls, ctx, 0);
 
-  // 3) Fair pass 2 — leftover run budget for main publishers.
-  for (const p of mainPrepared) {
-    if (ctx.options.save && ctx.remainingCandidateBudget.value <= 0) break;
-    const quota = rssFeedInsertQuota({
-      pass: 2,
-      alreadyInserted: publisherSavedCount(prepared, p.feed.sourceKey),
-      runBudgetRemaining: ctx.options.save
-        ? ctx.remainingCandidateBudget.value
-        : Number.MAX_SAFE_INTEGER,
-      maxInserts: publisherMaxInserts(p.feed),
-    });
-    await drainFeedInsertQuota(p, seenUrls, ctx, quota);
-  }
+  // 3) Fair pass 1 — up to FIRST_PASS inserts per publisher with category rotation.
+  await drainMainPublishersFair(prepared, mainPrepared, seenUrls, ctx, 1);
 
-  // 4) Yonhap KR radar — small auxiliary cap (≤3), only after main quotas.
+  // 4) Fair pass 2 — leftover run budget for main publishers (cap 4 combined).
+  await drainMainPublishersFair(prepared, mainPrepared, seenUrls, ctx, 2);
+
+  // 5) Yonhap KR radar — small auxiliary cap (≤3), only after main quotas.
   for (const p of radarPrepared) {
     if (ctx.options.save && ctx.remainingCandidateBudget.value <= 0) break;
     const quota = rssFeedInsertQuota({

@@ -52,7 +52,7 @@ describe("regional desk orchestrator cron (fixture only)", () => {
   it("filters active feeds by region with separate caps", () => {
     const us = getActiveRssFeedSources(COLLECT_REGION_US_INTL);
     const kr = getActiveRssFeedSources(COLLECT_REGION_KOREA);
-    assert.equal(us.length, 7);
+    assert.equal(us.length, 8);
     assert.equal(kr.length, 13);
     assert.deepEqual(
       getActiveRssPublisherKeys(COLLECT_REGION_US_INTL).sort(),

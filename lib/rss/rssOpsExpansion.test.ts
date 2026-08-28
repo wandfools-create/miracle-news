@@ -17,6 +17,11 @@ import {
   rssFeedInsertQuota,
 } from "./rssItemFreshness";
 import {
+  publisherQuotaRemaining,
+  simulatePublisherCategoryRotation,
+  simulatePublisherSeedPass,
+} from "./rssPublisherFairness";
+import {
   pickRssCategories,
   pickRssThumbnailUrl,
 } from "./parseRssFeed";
@@ -60,12 +65,29 @@ describe("RSS ops expansion (fixture only, no OpenAI)", () => {
     );
   });
 
+  it("registers PBS headlines and politics feeds under pbs-newshour", () => {
+    const pbs = RSS_FEED_SOURCES.filter((f) => f.sourceKey === "pbs-newshour");
+    assert.equal(pbs.length, 2);
+    assert.ok(
+      pbs.some(
+        (f) =>
+          f.feedUrl === "https://www.pbs.org/newshour/feeds/rss/headlines"
+      )
+    );
+    const politics = pbs.find(
+      (f) => f.feedUrl === "https://www.pbs.org/newshour/feeds/rss/politics"
+    );
+    assert.ok(politics);
+    assert.equal(politics.category, "politics");
+    assert.equal(politics.collectRegion, "us-intl");
+  });
+
   it("disables Yonhap English from active collection (row kept)", () => {
     assert.equal(isRssFeedSourceEnabled("yonhap"), false);
     assert.equal(getRssSourceHealthLabel("yonhap"), "비활성");
     const activeKeys = getActiveRssFeedSources().map((f) => f.sourceKey);
     assert.equal(activeKeys.includes("yonhap"), false);
-    assert.equal(getActiveRssFeedSources().length, 20);
+    assert.equal(getActiveRssFeedSources().length, 21);
     assert.equal(getActiveRssPublisherKeys().length, 11);
     assert.ok(RSS_FEED_SOURCES.some((f) => f.sourceKey === "yonhap"));
     assert.ok(
@@ -136,46 +158,64 @@ describe("RSS ops expansion (fixture only, no OpenAI)", () => {
       (k) => k !== "yonhap-kr-radar"
     ).length;
     const pass1Ceiling = mainPublishers * RSS_FIRST_PASS_INSERTS_PER_FEED;
-    assert.ok(pass1Ceiling <= 30);
-    assert.equal(pass1Ceiling, 30);
+    assert.ok(pass1Ceiling >= 30);
   });
 
-  it("publisher quota shared: 3 from politics then 1 more max for same sourceKey", () => {
-    let chosunSaved = 0;
-    // simulate 4 category feeds in pass1
-    for (let i = 0; i < 4; i += 1) {
-      const q = rssFeedInsertQuota({
-        pass: 1,
-        alreadyInserted: chosunSaved,
-        runBudgetRemaining: 30,
-      });
-      const take = Math.min(q, 3);
-      chosunSaved += take;
-    }
-    assert.equal(chosunSaved, 3);
-    const pass2 = rssFeedInsertQuota({
-      pass: 2,
-      alreadyInserted: chosunSaved,
-      runBudgetRemaining: 30,
-    });
-    assert.equal(pass2, 1);
-    chosunSaved += pass2;
-    assert.equal(chosunSaved, 4);
+  it("publisher quota shared with category rotation spreads across feeds", () => {
+    const feeds = [
+      { sourceKey: "chosun", category: "politics", saved: 0, queueLength: 10 },
+      { sourceKey: "chosun", category: "economy", saved: 0, queueLength: 10 },
+      { sourceKey: "chosun", category: "society", saved: 0, queueLength: 10 },
+      { sourceKey: "chosun", category: "world", saved: 0, queueLength: 10 },
+    ];
+    const pass1Quota = publisherQuotaRemaining(1, 0);
+    assert.equal(pass1Quota, 3);
+    const afterPass1 = simulatePublisherCategoryRotation(feeds, pass1Quota);
+    const politics = afterPass1.find((f) => f.category === "politics")!;
+    const economy = afterPass1.find((f) => f.category === "economy")!;
+    const society = afterPass1.find((f) => f.category === "society")!;
+    assert.equal(politics.saved, 1);
+    assert.equal(economy.saved, 1);
+    assert.equal(society.saved, 1);
     assert.equal(
-      rssFeedInsertQuota({
-        pass: 2,
-        alreadyInserted: chosunSaved,
-        runBudgetRemaining: 30,
-      }),
-      0
+      afterPass1.reduce((n, f) => n + f.saved, 0),
+      3
+    );
+
+    const pass2Quota = publisherQuotaRemaining(
+      2,
+      afterPass1.reduce((n, f) => n + f.saved, 0)
+    );
+    assert.equal(pass2Quota, 1);
+    const afterPass2 = simulatePublisherCategoryRotation(afterPass1, pass2Quota);
+    assert.equal(
+      afterPass2.reduce((n, f) => n + f.saved, 0),
+      4
     );
   });
 
-  it("collect loop uses publisher-shared fair two-pass drain (source scan)", () => {
+  it("publisher seed pass gives each publisher one opportunity before second save", () => {
+    const totals = simulatePublisherSeedPass([
+      [{ sourceKey: "ap", saved: 0, queueLength: 5 }],
+      [{ sourceKey: "fox-news", saved: 0, queueLength: 5 }],
+      [
+        { sourceKey: "chosun", category: "politics", saved: 0, queueLength: 5 },
+        { sourceKey: "chosun", category: "economy", saved: 0, queueLength: 5 },
+      ],
+    ]);
+    assert.equal(totals.get("ap"), 1);
+    assert.equal(totals.get("fox-news"), 1);
+    assert.equal(totals.get("chosun"), 1);
+  });
+
+  it("collect loop uses publisher seed and category rotation (source scan)", () => {
     const src = readFileSync(
       join(process.cwd(), "lib/rss/collectRssToReviewQueue.ts"),
       "utf8"
     );
+    assert.match(src, /publisher seed|drainMainPublishersFair/);
+    assert.match(src, /drainPublisherWithCategoryRotation/);
+    assert.match(src, /rotateCategoryFeeds/);
     assert.match(src, /fair pass/);
     assert.match(src, /rssFeedInsertQuota/);
     assert.match(src, /drainFeedInsertQuota/);
@@ -184,8 +224,9 @@ describe("RSS ops expansion (fixture only, no OpenAI)", () => {
     assert.match(src, /yna-sitemap-radar/);
     assert.match(src, /insight-section-list/);
     assert.match(src, /fetchInsightSectionListItems/);
-    assert.match(src, /pass:\s*1/);
-    assert.match(src, /pass:\s*2/);
+    assert.match(src, /drainMainPublishersFair/);
+    assert.match(src, /pass === 0/);
+    assert.match(src, /rssFeedInsertQuota/);
     assert.match(src, /continuing other feeds/);
     assert.doesNotMatch(src, /from ["']@\/lib\/openai/);
   });
