@@ -13,6 +13,10 @@ import {
   type SameEventPublishedRow,
 } from "@/lib/same-event/sameEventLookback";
 import {
+  approvedPublishExclusionReason,
+  isApprovedReadyForHumanPublish,
+} from "@/lib/articles/approvedPublishPolicy";
+import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/serviceRole";
@@ -66,7 +70,22 @@ export type SameEventPublishMatch = {
   source: string;
   title: string;
   publishedAt: string | null;
+  /** Classifier relation when available (publish result metadata only). */
+  relation?: string;
 };
+
+export type PublishArticleToLivePublicOptions = {
+  /** When set, only transition from this review_status (race-safe). */
+  requireReviewStatus?: string;
+  /** Admin override for clear same-event block (quick_review etc.). */
+  allowSameEventOverride?: boolean;
+};
+
+/** @internal — use publishApprovedArticleToLive() for approved-queue human publish. */
+export type PublishArticleToLiveInternalOptions =
+  PublishArticleToLivePublicOptions & {
+    approvedHumanPublish?: boolean;
+  };
 
 export type PublishArticleToLiveResult =
   | {
@@ -74,6 +93,12 @@ export type PublishArticleToLiveResult =
       publishedAt: string;
       firstPublish: boolean;
       softSameEventWarning?: SameEventPublishMatch;
+      /** In-response metadata only — not persisted to DB audit tables. */
+      sameEventPublishResultMetadata?: {
+        wouldHaveBlocked: boolean;
+        match?: SameEventPublishMatch;
+        reason?: string;
+      };
     }
   | {
       ok: false;
@@ -168,15 +193,20 @@ function toSameEventMatch(row: SameEventPublishedRow): SameEventPublishMatch {
  * Shared publish core (approved queue + quick review).
  * Order: same-event guard → localizations → published flags.
  * Never calls OpenAI. Never deletes existing published articles.
+ *
+ * For 승인 완료 human publish use {@link publishApprovedArticleToLive} instead.
  */
 export async function publishArticleToLive(
   articleId: string,
-  options?: {
-    /** When set, only transition from this review_status (race-safe). */
-    requireReviewStatus?: string;
-    /** Admin override for clear same-event block. */
-    allowSameEventOverride?: boolean;
-  }
+  options?: PublishArticleToLivePublicOptions
+): Promise<PublishArticleToLiveResult> {
+  return publishArticleToLiveInternal(articleId, options);
+}
+
+/** @internal Approved-queue path sets approvedHumanPublish via publishApprovedArticleToLive(). */
+export async function publishArticleToLiveInternal(
+  articleId: string,
+  options?: PublishArticleToLiveInternalOptions
 ): Promise<PublishArticleToLiveResult> {
   const envCheck = await checkSupabaseServiceEnvWithDns();
   if (!envCheck.ok) {
@@ -220,10 +250,39 @@ export async function publishArticleToLive(
     };
   }
 
+  if (options?.approvedHumanPublish) {
+    const exclusion = approvedPublishExclusionReason(article);
+    if (exclusion) {
+      return {
+        ok: false,
+        error: exclusion,
+        step: "excluded",
+      };
+    }
+    if (!isApprovedReadyForHumanPublish(article)) {
+      return {
+        ok: false,
+        error: "승인 완료 상태가 아닙니다.",
+        step: "status_guard",
+      };
+    }
+  }
+
   const copy = resolvePublishCopy(article);
   let softSameEventWarning: SameEventPublishMatch | undefined;
+  let sameEventPublishResultMetadata:
+    | {
+        wouldHaveBlocked: boolean;
+        match?: SameEventPublishMatch;
+        reason?: string;
+      }
+    | undefined;
 
-  if (!options?.allowSameEventOverride) {
+  const skipSameEventHardBlock =
+    options?.allowSameEventOverride === true ||
+    options?.approvedHumanPublish === true;
+
+  if (!skipSameEventHardBlock) {
     const published = await loadRecentPublishedForSameEvent();
     const guard = evaluatePublishedSameEventGuard(
       {
@@ -248,6 +307,33 @@ export async function publishArticleToLive(
       };
     }
     if (guard.softWarning) {
+      softSameEventWarning = toSameEventMatch(guard.softWarning);
+    }
+  } else {
+    const published = await loadRecentPublishedForSameEvent();
+    const guard = evaluatePublishedSameEventGuard(
+      {
+        title: copy.koTitle || copy.enTitle,
+        summary: copy.koSummary || copy.enSummary,
+        titleAlt: copy.enTitle || copy.koTitle,
+        summaryAlt: copy.enSummary || copy.koSummary,
+        source: article.source ?? null,
+        publishedAt: article.published_at,
+        hasThumbnail: Boolean(article.thumbnail_url?.trim()),
+      },
+      published,
+      { excludeArticleId: articleId }
+    );
+    if (guard.blocked) {
+      sameEventPublishResultMetadata = {
+        wouldHaveBlocked: true,
+        match: {
+          ...toSameEventMatch(guard.match),
+          relation: "same_event",
+        },
+        reason: guard.reason,
+      };
+    } else if (guard.softWarning) {
       softSameEventWarning = toSameEventMatch(guard.softWarning);
     }
   }
@@ -300,6 +386,9 @@ export async function publishArticleToLive(
     publishedAt: sitePublishedAt,
     firstPublish,
     ...(softSameEventWarning ? { softSameEventWarning } : {}),
+    ...(sameEventPublishResultMetadata
+      ? { sameEventPublishResultMetadata }
+      : {}),
   };
 }
 

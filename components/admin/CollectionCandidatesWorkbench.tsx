@@ -28,7 +28,9 @@ import {
   CANDIDATE_STATUS_LABELS,
   type CollectionCandidateStatus,
 } from "@/lib/collection-candidates/types";
+import CandidateRelatedStoriesPanel from "@/components/admin/CandidateRelatedStoriesPanel";
 import { formatDateTimeKo } from "@/lib/articleWorkflow";
+import type { RelatedStoryRef } from "@/lib/same-event/relatedStories";
 import { shortenCandidateFailure } from "@/lib/collection-candidates/candidateListQuery";
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -68,6 +70,8 @@ export type WorkbenchCandidate = {
 
 type Props = {
   candidates: WorkbenchCandidate[];
+  relatedStoriesMap?: Record<string, RelatedStoryRef[]>;
+  relatedStoryPoolCapped?: boolean;
   viewFilter: string;
   statusFilter: string;
   sourceFilter: string;
@@ -86,6 +90,8 @@ function candidateListKey(list: WorkbenchCandidate[]): string {
 
 export default function CollectionCandidatesWorkbench({
   candidates,
+  relatedStoriesMap = {},
+  relatedStoryPoolCapped = false,
   viewFilter,
   statusFilter,
   sourceFilter,
@@ -432,6 +438,11 @@ export default function CollectionCandidatesWorkbench({
                       {c.rssSummary}
                     </p>
                   ) : null}
+
+                  <CandidateRelatedStoriesPanel
+                    related={relatedStoriesMap[c.id] ?? []}
+                    poolCapped={relatedStoryPoolCapped}
+                  />
 
                   {c.status === "enrich_failed" && failureText ? (
                     <p className="mt-1.5 text-xs text-red-700">

@@ -2,10 +2,13 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import AdminListPager from "@/components/admin/AdminListPager";
+import ApprovedBulkPublishResult from "@/components/admin/ApprovedBulkPublishResult";
+import ApprovedPublishSubmitButton from "@/components/admin/ApprovedPublishSubmitButton";
 import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
 import EditorialPriorityBadge from "@/components/admin/EditorialPriorityBadge";
 import EditorialPriorityForm from "@/components/admin/EditorialPriorityForm";
 import { normalizeEditorialPriority } from "@/lib/admin/editorialPriority";
+import { decodeApprovedBulkPublishPayload } from "@/lib/admin/approvedBulkPublish";
 import {
   ADMIN_LIST_PAGE_SIZE,
   adminListRange,
@@ -27,14 +30,11 @@ import {
 type PageProps = {
   searchParams: Promise<{
     page?: string;
-    sameEvent?: string;
     articleId?: string;
-    matchId?: string;
-    matchTitle?: string;
-    matchSource?: string;
-    matchPublishedAt?: string;
     error?: string;
-    bulkError?: string;
+    step?: string;
+    batchPublish?: string;
+    batchPayload?: string;
   }>;
 };
 
@@ -43,18 +43,11 @@ export default async function AdminApprovedPage({ searchParams }: PageProps) {
   const page = parseAdminListPage(params.page);
   const { from, to } = adminListRange(page);
 
-  const sameEventBlock =
-    params.sameEvent === "1" && params.articleId && params.matchId
-      ? {
-          articleId: params.articleId,
-          matchId: params.matchId,
-          title: params.matchTitle?.trim() || "제목 없음",
-          source: params.matchSource ?? null,
-          publishedAt: params.matchPublishedAt?.trim() || null,
-        }
-      : null;
-
   const errorParam = params.error?.trim() || null;
+  const batchSummary =
+    params.batchPublish === "1" && params.batchPayload
+      ? decodeApprovedBulkPublishPayload(params.batchPayload)
+      : null;
 
   const { data: articles, error, count } = await supabase
     .from("articles")
@@ -102,55 +95,35 @@ export default async function AdminApprovedPage({ searchParams }: PageProps) {
         </h1>
 
         <p className="mt-4 text-gray-600">
-          검토가 끝났고, 아직 공개 전인 기사 목록입니다. 기본{" "}
+          검토가 끝났고, 아직 공개 전인 기사 목록입니다. 승인 완료 기사의
+          「공개」·「선택 기사 일괄 공개」는 관리자의 최종 사람 결정이며, SAME
+          EVENT가 있어도 추가 「그래도 공개」 단계 없이 진행됩니다. 기본{" "}
           {ADMIN_LIST_PAGE_SIZE}건씩 불러옵니다.
         </p>
 
         {errorParam ? (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             공개 실패
-            {params.bulkError === "1" ? " (일괄 공개 중단)" : ""}:{" "}
+            {params.step ? ` (${params.step})` : ""}:{" "}
             {errorParam === "missing"
               ? "기사 ID가 없습니다."
               : errorParam}
+            {params.articleId ? (
+              <>
+                {" "}
+                <Link
+                  href={`/admin/review/${params.articleId}`}
+                  className="underline"
+                >
+                  기사 보기
+                </Link>
+              </>
+            ) : null}
           </div>
         ) : null}
 
-        {sameEventBlock ? (
-          <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
-            <p className="font-semibold">
-              유사한 공개 기사가 있어 공개를 차단했습니다
-              {params.bulkError === "1" ? " (일괄 공개 중단)" : ""}
-            </p>
-            <p className="mt-2">{sameEventBlock.title}</p>
-            <p className="mt-1 text-amber-900/80">
-              {getArticleSourceLabel({
-                source: sameEventBlock.source ?? "",
-              })}
-              {sameEventBlock.publishedAt
-                ? ` · ${formatDateTimeKo(sameEventBlock.publishedAt)}`
-                : ""}
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-4">
-              <Link
-                href={`/admin/review/${sameEventBlock.matchId}`}
-                className="text-sm font-medium underline"
-              >
-                기존 기사 확인
-              </Link>
-              <Link
-                href={`/admin/review/${sameEventBlock.articleId}`}
-                className="text-sm font-medium underline"
-              >
-                공개 시도 기사 보기
-              </Link>
-            </div>
-            <p className="mt-3 text-xs text-amber-900/70">
-              UPDATE·DIFFERENT ANGLE로 판단되면 해당 카드의「그래도 공개」를
-              눌러 명시적으로 override할 수 있습니다. SAME EVENT 판정 로직은
-              그대로입니다.
-            </p>
-          </div>
+        {batchSummary ? (
+          <ApprovedBulkPublishResult summary={batchSummary} />
         ) : null}
 
         {error ? (
@@ -167,167 +140,128 @@ export default async function AdminApprovedPage({ searchParams }: PageProps) {
 
         {!error && rows.length > 0 ? (
           <>
-            <form id="bulk-publish-form" className="mt-8 mb-6">
+            <form id="bulk-publish-form" action={bulkPublishArticles} className="mt-8 mb-6">
               <div className="flex flex-wrap items-center gap-3 rounded-2xl border bg-gray-50 p-4">
                 <SelectAllReviewCheckbox targetName="articleIds" label="전체 선택" />
 
-                <button
-                  type="submit"
-                  formAction={bulkPublishArticles}
-                  className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-                >
-                  선택 기사 일괄 공개
-                </button>
+                <ApprovedPublishSubmitButton
+                  label="선택 기사 일괄 공개"
+                  pendingLabel="일괄 공개 처리 중…"
+                  className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                />
               </div>
             </form>
 
             <div className="grid gap-4">
-              {rows.map((article) => {
-                const blockedHere =
-                  sameEventBlock?.articleId === article.id;
+              {rows.map((article) => (
+                <article
+                  key={article.id}
+                  id={`approved-${article.id}`}
+                  className="rounded-2xl border p-6 shadow-sm"
+                >
+                  <div className="flex flex-col gap-4 md:flex-row">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        name="articleIds"
+                        value={article.id}
+                        form="bulk-publish-form"
+                        className="mt-1 h-4 w-4 rounded border-gray-300"
+                      />
 
-                return (
-                  <article
-                    key={article.id}
-                    id={`approved-${article.id}`}
-                    className={`rounded-2xl border p-6 shadow-sm${
-                      blockedHere ? " border-amber-400 ring-1 ring-amber-200" : ""
-                    }`}
-                  >
-                    <div className="flex flex-col gap-4 md:flex-row">
-                      <div className="flex items-start gap-3">
-                        <input
-                          type="checkbox"
-                          name="articleIds"
-                          value={article.id}
-                          form="bulk-publish-form"
-                          className="mt-1 h-4 w-4 rounded border-gray-300"
-                        />
-
-                        <div className="h-28 w-full rounded-xl bg-gray-100 md:w-44">
-                          {article.thumbnail_url ? (
-                            <img
-                              src={article.thumbnail_url}
-                              alt={
-                                article.title_ko ||
-                                article.title_translated ||
-                                article.title_original
-                              }
-                              className="h-full w-full rounded-xl object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-sm text-gray-400">
-                              이미지 없음
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex-1">
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                          <span>
-                            {getArticleSourceLabel({
-                              source: article.source,
-                              original_url: article.original_url,
-                            })}
-                          </span>
-                          <span>·</span>
-                          <span>{getCategoryLabel(article.category)}</span>
-                          <span>·</span>
-                          <span>승인자: {article.approved_by || "미상"}</span>
-                          <EditorialPriorityBadge
-                            value={article.editorial_priority}
+                      <div className="h-28 w-full rounded-xl bg-gray-100 md:w-44">
+                        {article.thumbnail_url ? (
+                          <img
+                            src={article.thumbnail_url}
+                            alt={
+                              article.title_ko ||
+                              article.title_translated ||
+                              article.title_original
+                            }
+                            className="h-full w-full rounded-xl object-cover"
                           />
-                        </div>
-
-                        <h2 className="mt-3 break-words text-lg font-semibold leading-7 sm:text-xl">
-                          {article.title_ko ||
-                            article.title_translated ||
-                            article.title_original}
-                        </h2>
-
-                        <p className="mt-2 break-words text-sm leading-6 text-gray-600">
-                          {article.summary_ko ||
-                            article.summary_translated ||
-                            article.summary_original ||
-                            "요약이 없습니다."}
-                        </p>
-
-                        <p className="mt-2 text-sm text-gray-500">
-                          원문 제목: {article.title_original}
-                        </p>
-
-                        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
-                          <span>
-                            승인 시각: {formatDateTimeKo(article.approved_at)}
-                          </span>
-                          <span>·</span>
-                          <span>status: {article.status || "없음"}</span>
-                          <span>·</span>
-                          <span>review: {article.review_status || "없음"}</span>
-                          <span>·</span>
-                          <span>
-                            published: {String(article.is_published)}
-                          </span>
-                        </div>
-
-                        <div className="mt-5 flex flex-wrap items-center gap-4">
-                          <Link
-                            href={`/admin/review/${article.id}`}
-                            className="text-sm font-medium text-blue-600 underline"
-                          >
-                            기사 상세 다시 보기
-                          </Link>
-
-                          <EditorialPriorityForm
-                            articleId={article.id}
-                            current={normalizeEditorialPriority(
-                              article.editorial_priority
-                            )}
-                            action={setEditorialPriorityFromForm}
-                            compact
-                          />
-
-                          {!blockedHere ? (
-                            <form action={publishArticleFromForm}>
-                              <input
-                                type="hidden"
-                                name="articleId"
-                                value={article.id}
-                              />
-                              <button
-                                type="submit"
-                                className="rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-                              >
-                                공개
-                              </button>
-                            </form>
-                          ) : (
-                            <form action={publishArticleFromForm}>
-                              <input
-                                type="hidden"
-                                name="articleId"
-                                value={article.id}
-                              />
-                              <input
-                                type="hidden"
-                                name="allowSameEventOverride"
-                                value="1"
-                              />
-                              <button
-                                type="submit"
-                                className="rounded-xl border border-amber-600 bg-amber-600 px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-                              >
-                                그래도 공개 (관리자 override)
-                              </button>
-                            </form>
-                          )}
-                        </div>
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-sm text-gray-400">
+                            이미지 없음
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </article>
-                );
-              })}
+
+                    <div className="flex-1">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                        <span>
+                          {getArticleSourceLabel({
+                            source: article.source,
+                            original_url: article.original_url,
+                          })}
+                        </span>
+                        <span>·</span>
+                        <span>{getCategoryLabel(article.category)}</span>
+                        <span>·</span>
+                        <span>승인자: {article.approved_by || "미상"}</span>
+                        <EditorialPriorityBadge
+                          value={article.editorial_priority}
+                        />
+                      </div>
+
+                      <h2 className="mt-3 break-words text-lg font-semibold leading-7 sm:text-xl">
+                        {article.title_ko ||
+                          article.title_translated ||
+                          article.title_original}
+                      </h2>
+
+                      <p className="mt-2 break-words text-sm leading-6 text-gray-600">
+                        {article.summary_ko ||
+                          article.summary_translated ||
+                          article.summary_original ||
+                          "요약이 없습니다."}
+                      </p>
+
+                      <p className="mt-2 text-sm text-gray-500">
+                        원문 제목: {article.title_original}
+                      </p>
+
+                      <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
+                        <span>
+                          승인 시각: {formatDateTimeKo(article.approved_at)}
+                        </span>
+                        <span>·</span>
+                        <span>status: {article.status || "없음"}</span>
+                        <span>·</span>
+                        <span>review: {article.review_status || "없음"}</span>
+                      </div>
+
+                      <div className="mt-5 flex flex-wrap items-center gap-4">
+                        <Link
+                          href={`/admin/review/${article.id}`}
+                          className="text-sm font-medium text-blue-600 underline"
+                        >
+                          기사 상세 다시 보기
+                        </Link>
+
+                        <EditorialPriorityForm
+                          articleId={article.id}
+                          current={normalizeEditorialPriority(
+                            article.editorial_priority
+                          )}
+                          action={setEditorialPriorityFromForm}
+                          compact
+                        />
+
+                        <form action={publishArticleFromForm}>
+                          <input
+                            type="hidden"
+                            name="articleId"
+                            value={article.id}
+                          />
+                          <ApprovedPublishSubmitButton pendingLabel="공개 중…" />
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))}
             </div>
 
             <AdminListPager
