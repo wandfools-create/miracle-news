@@ -39,7 +39,7 @@
 
 **Current Priority**
 
-1. Today Edition KO 시간 polish (`fix/today-edition-ko-time-and-status`)
+1. Today Edition 및 RSS/Bulk 운영 검증
 2. 다음 승인 기사 일괄 공개 실제 운영 확인
 3. Shorts PR #5에 최신 main 통합
 4. 균형 브리핑 패키지 연결
@@ -48,8 +48,10 @@
 
 | 항목 | 상태 |
 |---|---|
-| PR #18 | **MERGED** — Today Edition v1 |
-| Production application SHA | `c8e29d48be2c9051616ad1626e158d9d43c82380` |
+| PR #18 | **MERGED** — Today Edition v1 application baseline |
+| Today Edition application baseline | `c8e29d48be2c9051616ad1626e158d9d43c82380` |
+| PR #19 | **MERGED** — KO 시간 중복 polish + §0B 문서 |
+| Production SHA | `f797037a8d6c52cb90c33a22efd1f22bbe2c2d44` |
 | 오늘 판정 | `published_at` · America/New_York 달력일 (`source_published_at` 미사용) |
 | 오늘 0건 | 준비 중 UI — 어제 featured 승격 없음 |
 | 오늘 1건 | 대표 1건 |
@@ -59,8 +61,9 @@
 | 지난 주요뉴스 | NY **1–7일** 전 · 최대 5건 · 상단 surface 중복 제외 |
 | 오늘의 주요 기사 더보기 | featured/related 제외 **오늘** 기사만 KR/US 2열 |
 | Production 기본 화면 확인 | todayCount **28** · status **ready** (2026-08-28) |
-| KO 시간 중복 polish | **진행 중** — `fix/today-edition-ko-time-and-status` (`오전 오전` → Intl dayPeriod 단일 책임) |
+| KO 시간 중복 polish | **Production 완료** (PR #19) — KO `마지막 업데이트 오전 11:29` · EN `Last updated 11:29 AM` · `오전 오전`/`오후 오후` 해소 |
 | Operational Validation | **IN PROGRESS** |
+| 다음 확인 | 날짜 전환 시 todayCount 초기화 · 오늘 0건 preparing · 신규 공개 직후 자동 갱신 · 다음 US Desk PBS/Fox 복구 · PR #17 다중 기사화 실제 운영 검증 |
 
 ## 1. 프로젝트 기본 정보
 
@@ -440,19 +443,22 @@ Git history와 현재 코드에서 확인:
 
 - **Digest 272674686:** 정상 SAME EVENT 차단을 throw로 처리하던 UX 문제 — PR #4로 해소, 데이터 손상 없음
 - **Last Updated:** 2026-08-28 UTC
+- **Latest Commit:** `f797037a8d6c52cb90c33a22efd1f22bbe2c2d44`
+- **Production Status:** Ready
 - **Production Application Baseline:** `1c9831b4c85446711b0ecbe6d5bfbe22243d19e6` — Merge PR #12 approved publishing
-- **Production main commit:** `1c9831b4c85446711b0ecbe6d5bfbe22243d19e6`
-- **Vercel Production:** 배포 성공 (`https://www.hannoon.co`) — PR #12 approved publishing 반영
+- **Today Edition application baseline:** `c8e29d48be2c9051616ad1626e158d9d43c82380` — Merge PR #18
+- **Production main commit:** `f797037a8d6c52cb90c33a22efd1f22bbe2c2d44` — Merge PR #19 (KO time polish)
+- **Vercel Production:** Ready (`https://www.hannoon.co`) — PR #18 Today Edition · PR #19 KO time polish 반영
 - **Discord workflow:** 기사 만들기 → quick_review → 사람 확인 → 공개
 - **SAME EVENT:** 수집·검토 경고 유지; 승인 완료 명시적 공개는 hard block 없음 (PR #12)
 - **Approved publishing (PR #12):** Production 적용 완료 — 개별·일괄 공개; 실제 일괄 공개 운영 검증 미실행
 - **Revision restore (PR #6):** Production 배포 완료; 수정 대기 50건 복구 완료
-- **Operational Validation:** IN PROGRESS — PR #12 Production 배포 완료; 실제 일괄 공개 운영 검증·신규 기사 순위·UPDATE·관점 다양성 monitoring
+- **Operational Validation:** IN PROGRESS — Today Edition·RSS/Bulk·일괄 공개 운영 검증 계속
 - **Shorts Studio Phase 1:** Production 반영 완료 (`/admin/shorts`, PR #1)
 - **Shorts PR #5:** OPEN — Phase 2 package 보존 (미병합)
 - **articles AI snapshot migration:** 미적용
 - **`ARTICLES_AI_RECOMMEND_SNAPSHOT`:** 미설정
 - **Home PR #7 / #8 / #9:** Production 반영 완료
 - **Editorial policy (politics/economy):** PR #9 Production 적용 완료 — UPDATE leadership · 한눈 균형 브리핑 정책 · public contract
-- **Current Priority:** (1) 다음 승인 기사 일괄 공개 실제 운영 확인 → (2) Shorts PR #5 main merge → (3) 균형 브리핑 패키지 연결
-- **Next Review:** 승인 일괄 공개 운영 확인 · Shorts PR #5 merge · Preview OpenAI smoke test
+- **Current Priority:** Today Edition 및 RSS/Bulk 운영 검증
+- **Next Review:** 다음 US Desk와 날짜 전환 후
