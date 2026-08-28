@@ -4,18 +4,26 @@
 >
 > 모든 AI/개발 작업은 먼저 최신 `main`과 이 문서를 읽고 시작한다. 이 문서는 비밀값을 저장하지 않는다.
 
-## 0. 로컬 개발 중 (승인 완료 공개 · SAME EVENT 조기 검토)
+## 0. Production 반영 (승인 완료 공개 · SAME EVENT 조기 검토)
 
 | 항목 | 상태 |
 |---|---|
-| Branch | `fix/approved-human-publish-and-early-same-event-review` (origin/main `a9598ed…` — PR #10 병합 후) |
-| 승인 완료 명시적 사람 공개 | 최종 결정 — `publishApprovedArticleToLive()` 전용 entry |
-| SAME EVENT | 수집 후보 관련 기사 패널 (classifier 재사용, 14일·400건 pool) |
+| **Production Application Baseline** | `1c9831b4c85446711b0ecbe6d5bfbe22243d19e6` — Merge PR #12 |
+| PR #12 | **MERGED** — 승인 완료 명시적 사람 공개·일괄 공개·수집 후보 관련 기사 |
+| 승인 완료 명시적 사람 공개 | SAME EVENT hard block 없이 진행 (`publishApprovedArticleToLive()`) |
+| 개별·일괄 공개 | **Production 적용 완료** |
+| 일괄 공개 | 기사별 결과 처리; 첫 실패에서 중단되지 않음 |
+| 수집 후보 관련 기사 | **Production 적용** (classifier 재사용, 14일·400건 pool) |
+| Discord quick_review | 유지 — 자동 공개 없음 |
 | AI 자동 공개 | 금지 유지 |
-| quick_review / Discord | 변경 없음 |
-| Production 적용 | **전** — Draft PR만 |
-| 실제 기사 일괄 공개 | **미실행** |
-| Production DB write | **금지** |
+| 실제 Production 일괄 공개 운영 검증 | **아직 미실행** |
+| Operational Validation | **IN PROGRESS** |
+
+**Current Priority**
+
+1. 다음 승인 기사 일괄 공개 실제 운영 확인
+2. Shorts PR #5에 최신 main 통합
+3. 균형 브리핑 패키지 연결
 
 ## 1. 프로젝트 기본 정보
 
@@ -30,9 +38,9 @@
 | Vercel project name | 확인 필요 |
 | Supabase project name / ref | 저장소에 비밀값 없는 식별자가 없어 확인 필요 |
 | Stack | Next.js 16.1.7, React 19.2.3, TypeScript 5, Tailwind CSS 4, Supabase JS/SSR, Vercel, OpenAI, Discord, RSS Parser, Playwright |
-| **Production Application Baseline** | `e0b41ddaa8b06657c824f9df147e48314262fdf7` — Merge PR #9 (editorial policy + UPDATE leadership) |
-| Production main commit | `e0b41ddaa8b06657c824f9df147e48314262fdf7` |
-| Vercel Production | 배포 성공 (`https://www.hannoon.co`) — PR #9 반영 |
+| **Production Application Baseline** | `1c9831b4c85446711b0ecbe6d5bfbe22243d19e6` — Merge PR #12 (approved publishing + related-story review) |
+| Production main commit | `1c9831b4c85446711b0ecbe6d5bfbe22243d19e6` |
+| Vercel Production | 배포 성공 (`https://www.hannoon.co`) — PR #12 반영 |
 
 비밀번호, API key, bot token, service-role key, webhook secret 등은 이 문서에 기록하지 않는다.
 
@@ -59,10 +67,10 @@ Vercel Production ── https://www.hannoon.co
 - **Supabase:** 기사, 수집 후보, 상태, 검토 및 운영 로그의 데이터 계층이다.
 - **Vercel:** Next.js Production과 두 지역 Desk cron을 실행한다.
 - **GitHub:** `main`이 배포 및 기술 상태의 공식 코드 기준이다.
-- **Production Application Baseline:** `e0b41ddaa8b06657c824f9df147e48314262fdf7` — Vercel Production 배포 성공 (PR #7 UI + PR #8 ranking + PR #9 editorial policy).
+- **Production Application Baseline:** `1c9831b4c85446711b0ecbe6d5bfbe22243d19e6` — Vercel Production 배포 성공 (PR #7 UI + PR #8 ranking + PR #9 editorial policy + PR #12 approved publishing).
 - **Revision restore:** 수정 대기 50건 → 이전 공개 상태 복구 완료 (AI 재작성 없음; `published_at`/localization/slug 보존).
 - **Discord workflow:** `기사 만들기 → quick_review → 사람 확인 → 공개` (PR #3 복구 완료)
-- **SAME EVENT:** 판정 및 공개 차단 유지. `/admin/approved` 차단 시 Application error 대신 안내·override UX (PR #4 배포 완료)
+- **SAME EVENT:** 수집·검토 단계 경고 유지. 승인 완료 큐의 명시적 사람 공개는 SAME EVENT hard block 없음 (PR #12). quick_review 등 비승인 경로는 기존 차단·override 유지.
 - **직접 공개 workflow:** 비활성/제거 완료 (PR #3)
 
 ## 3. 현재 자동화 구조
@@ -151,7 +159,7 @@ Vercel Production ── https://www.hannoon.co
 - secret/token/key/password의 값 또는 원문을 로그에 출력하지 않는다.
 - 수집·추천·Discord 실패는 단계별로 격리하고 이전 단계 성공을 rollback하지 않는다.
 - Discord **기사 만들기**는 OpenAI를 한 번 호출할 수 있으나 `quick_review`에만 두고 자동 공개하지 않는다.
-- `/admin/approved` SAME EVENT 차단은 redirect 안내로 표시하며, 「그래도 공개」 명시적 override만 허용한다.
+- `/admin/approved` 승인 완료 명시적 공개는 SAME EVENT hard block 없이 진행한다 (PR #12). quick_review 등은 기존 SAME EVENT 차단·override 유지.
 - 공개 목록에서 수정 대기로 보낼 때 개별/일괄 confirm을 요구한다.
 - 수정 대기에서 **수정 없이 다시 공개**는 이전 `published_at`·localization·slug·본문을 보존하는 상태 복구만 허용한다.
 
@@ -252,6 +260,12 @@ Git history와 현재 코드에서 확인:
   - 홈 ranking은 `collection_candidates.article_id` 조인 fallback 유지
   - stale top-story `54ca435f…`는 코드에서 홈 핵심 미노출; DB `is_top_story`는 별도 승인 후 정리
 - 알려진 인계 결과: PR #9 merge 시점 `npm test` 277 pass · `npm run build` SUCCESS
+- 승인 완료 공개·SAME EVENT 조기 검토: **Production 적용 완료** (PR #12 merged → `1c9831b4c85446711b0ecbe6d5bfbe22243d19e6`)
+  - 승인 완료 명시적 사람 공개: SAME EVENT hard block 없음 (`publishApprovedArticleToLive()`)
+  - 개별·일괄 공개 모두 적용; 일괄은 기사별 결과 처리 후 한 번만 결과 이동 (첫 실패에서 중단 없음)
+  - 수집 후보 관련 기사 패널 (SAME EVENT / UPDATE / DIFFERENT ANGLE 라벨, 14일·400건 pool)
+  - Discord `quick_review`·AI 자동 공개 금지 유지
+  - **미완료:** 실제 Production 승인 기사 일괄 공개 운영 검증은 아직 미실행
 
 ## 9. 현재 미해결 문제
 
@@ -263,7 +277,7 @@ Git history와 현재 코드에서 확인:
 ### Needs monitoring
 
 - 홈 stale `is_top_story`: `54ca435f-100e-4393-bc44-53100738eb0a` (카카오 파업 예고, published_at=2026-05-28, is_top_story=true). PR #8 코드는 홈 핵심 영역에서 만료 처리하나 **DB 플래그는 미정리** — 별도 승인 후 `is_top_story=false` 정리 검토
-- 승인→공개, SAME EVENT 차단 안내, 명시적 override가 필요한 실제 운영 사례
+- 승인→공개 (PR #12): 승인 완료 명시적 공개·일괄 결과 UI — **코드 Production 반영 완료**; 실제 일괄 공개 운영 검증은 미실행
 - Discord `기사 만들기 → quick_review → 사람 확인 → 공개` 실제 운영 경로
 - 2~3일 지역별 Desk 실제 실행 안정성
 - Korea source별 실제 유입량과 HTML/Radar parser 안정성
@@ -293,7 +307,9 @@ Git history와 현재 코드에서 확인:
 
 현재 Miracle News는 2~3일 실제 운영하면서 안정성을 확인하는 단계다. 수정 대기 50건 복구 긴급 대응은 완료됐으며, Shorts Phase 2 재개 전 Production 안정성 확인이 남아 있다.
 
-**PR #9 Production 배포 및 기본 회귀 검증:** 완료 (2026-08-28) — Production Application Baseline `e0b41dd…` · Vercel Production SUCCESS · `/ko`·`/en` 200 · 네팔 UPDATE 대표·background/DIFFERENT ANGLE·정치·경제 우선·soft 억제·event family cap·source 다양성·7일 freshness·신문형 UI/tablist 기본 회귀 확인. **전체 Operational Validation을 완료로 간주하지 않음** — 실제 운영 중 신규 기사 순위·UPDATE·관점 다양성은 계속 monitoring.
+**PR #12 Production 배포:** 완료 (2026-08-28) — Production Application Baseline `1c9831b…` · Vercel Production SUCCESS · `/ko`·`/en`·관리자 login redirect 기본 확인. **전체 Operational Validation을 완료로 간주하지 않음** — 실제 승인 기사 일괄 공개 운영 검증·신규 기사 순위·UPDATE·관점 다양성은 계속 monitoring.
+
+**PR #9 Production 배포 및 기본 회귀 검증:** 완료 (2026-08-28) — Production Application Baseline `e0b41dd…` (PR #12 이전) · 네팔 UPDATE 대표·background/DIFFERENT ANGLE·정치·경제 우선·soft 억제·event family cap·source 다양성·7일 freshness·신문형 UI/tablist 기본 회귀 확인.
 
 검증 항목:
 
@@ -312,6 +328,7 @@ Git history와 현재 코드에서 확인:
 
 | 날짜 | Desk/항목 | 결과 | 발견 문제 | 조치/다음 확인 | 확인자 |
 |---|---|---|---|---|---|
+| 2026-08-28 | PR #12 approved publishing Production | **배포 성공** | 승인 완료 명시적 공개·일괄 결과 UI·수집 후보 관련 기사 Production 반영. 실제 일괄 공개 운영 검증 미실행. | 다음 승인 기사 일괄 공개 실제 운영 확인 | 관리자 |
 | 2026-08-28 | PR #9 editorial policy Production | **배포·기본 회귀 성공** | 네팔 UPDATE 대표·background/DIFFERENT ANGLE·PE 우선·soft 억제·family cap·7d·UI/tablist 확인. 수집 55%·Shorts 균형 브리핑·OpenAI 실호출은 미완. | 신규 기사 순위·UPDATE·관점 다양성 monitoring | 관리자 |
 | 2026-08-27 | 수정 대기 50건 복구 | **성공 50건** | 수정 대기 잔여 0건. `status=published`, `review_status=approved`, `revision_status=none`, `is_published=true`, `published_at` 보존, ko/en slug 존재. 표본 `/ko`·`/en` article 200. OpenAI 호출·본문 변경 흔적 없음. | Shorts Phase 2 재개 전 2~3일 운영 안정성 확인 | 관리자 |
 | YYYY-MM-DD | US/International | 미기록 |  |  |  |
@@ -323,12 +340,13 @@ Git history와 현재 코드에서 확인:
 | 항목 | 값 |
 |---|---|
 | Branch | `main` |
-| **Production Application Baseline** | `e0b41ddaa8b06657c824f9df147e48314262fdf7` |
-| Production main commit | `e0b41ddaa8b06657c824f9df147e48314262fdf7` |
+| **Production Application Baseline** | `1c9831b4c85446711b0ecbe6d5bfbe22243d19e6` |
+| Production main commit | `1c9831b4c85446711b0ecbe6d5bfbe22243d19e6` |
 | Vercel Production | 배포 성공 (SHA = Application Baseline 일치) |
 | Production URL | https://www.hannoon.co |
 | Discord workflow | 기사 만들기 → `quick_review` → 사람 확인 → 공개 |
-| SAME EVENT | 판정·공개 차단 유지; `/admin/approved` 차단 안내·명시적 override |
+| SAME EVENT | 수집·검토 경고 유지; 승인 완료 명시적 공개는 hard block 없음 (PR #12); quick_review 등은 기존 차단·override |
+| Approved publishing | **PR #12 merged — Production 적용 완료** (`1c9831b…`) |
 | Revision restore | PR #6 merged — 50건 복구 완료 |
 | 직접 공개 workflow | 비활성/제거 완료 |
 | Restore PRs | #3 Discord quick_review · #4 approved SAME EVENT UX · #6 revision restore — merged |
@@ -339,14 +357,15 @@ Git history와 현재 코드에서 확인:
 | articles AI snapshot migration | **미적용** (`20260827_articles_ai_recommend_snapshot.sql`) |
 | `ARTICLES_AI_RECOMMEND_SNAPSHOT` | **미설정** (기본 OFF) |
 | Shorts package migration | 기존 적용 상태 보존 |
-| Production = main | 예 — `e0b41dd` (PR #7 UI + PR #8 ranking + PR #9 policy) |
+| Production = main | 예 — `1c9831b` (PR #12 approved publishing 포함) |
 
 ## 12. 다음 최우선 작업
 
-1. Shorts PR #5에 최신 main 일반 merge.
-2. 균형 브리핑을 실제 Shorts 패키지 생성기에 연결.
-3. Preview에서 OpenAI 1회 smoke test.
-4. 이후 정치·경제 수집 feed 확대.
+1. 다음 승인 기사 일괄 공개 실제 운영 확인.
+2. Shorts PR #5에 최신 main 일반 merge.
+3. 균형 브리핑 패키지 연결.
+4. Preview에서 OpenAI 1회 smoke test.
+5. 이후 정치·경제 수집 feed 확대.
 
 ## 12A. Miracle News Shorts Studio Phase 1
 
@@ -384,18 +403,19 @@ Git history와 현재 코드에서 확인:
 
 - **Digest 272674686:** 정상 SAME EVENT 차단을 throw로 처리하던 UX 문제 — PR #4로 해소, 데이터 손상 없음
 - **Last Updated:** 2026-08-28 UTC
-- **Production Application Baseline:** `e0b41ddaa8b06657c824f9df147e48314262fdf7` — Merge PR #9 editorial policy
-- **Production main commit:** `e0b41ddaa8b06657c824f9df147e48314262fdf7`
-- **Vercel Production:** 배포 성공 (`https://www.hannoon.co`) — PR #7 UI + PR #8 ranking + PR #9 policy
+- **Production Application Baseline:** `1c9831b4c85446711b0ecbe6d5bfbe22243d19e6` — Merge PR #12 approved publishing
+- **Production main commit:** `1c9831b4c85446711b0ecbe6d5bfbe22243d19e6`
+- **Vercel Production:** 배포 성공 (`https://www.hannoon.co`) — PR #12 approved publishing 반영
 - **Discord workflow:** 기사 만들기 → quick_review → 사람 확인 → 공개
-- **SAME EVENT:** 판정·공개 차단 유지; `/admin/approved` 차단 안내·명시적 override 배포 완료
+- **SAME EVENT:** 수집·검토 경고 유지; 승인 완료 명시적 공개는 hard block 없음 (PR #12)
+- **Approved publishing (PR #12):** Production 적용 완료 — 개별·일괄 공개; 실제 일괄 공개 운영 검증 미실행
 - **Revision restore (PR #6):** Production 배포 완료; 수정 대기 50건 복구 완료
-- **Operational Validation:** IN PROGRESS — PR #9 Production 배포·기본 회귀 검증 완료; 신규 기사 순위·UPDATE·관점 다양성 monitoring
+- **Operational Validation:** IN PROGRESS — PR #12 Production 배포 완료; 실제 일괄 공개 운영 검증·신규 기사 순위·UPDATE·관점 다양성 monitoring
 - **Shorts Studio Phase 1:** Production 반영 완료 (`/admin/shorts`, PR #1)
 - **Shorts PR #5:** OPEN — Phase 2 package 보존 (미병합)
 - **articles AI snapshot migration:** 미적용
 - **`ARTICLES_AI_RECOMMEND_SNAPSHOT`:** 미설정
 - **Home PR #7 / #8 / #9:** Production 반영 완료
 - **Editorial policy (politics/economy):** PR #9 Production 적용 완료 — UPDATE leadership · 한눈 균형 브리핑 정책 · public contract
-- **Current Priority:** Shorts PR #5 main merge → 균형 브리핑 연결 → OpenAI smoke test → 수집 feed 확대
-- **Next Review:** Shorts PR #5 merge · Preview OpenAI smoke test · 운영 monitoring
+- **Current Priority:** (1) 다음 승인 기사 일괄 공개 실제 운영 확인 → (2) Shorts PR #5 main merge → (3) 균형 브리핑 패키지 연결
+- **Next Review:** 승인 일괄 공개 운영 확인 · Shorts PR #5 merge · Preview OpenAI smoke test
