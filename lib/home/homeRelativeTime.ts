@@ -28,33 +28,38 @@ export function offsetNyDateKey(dateKey: string, dayOffset: number): string {
   return formatAmericaNewYorkDateKey(new Date(utc));
 }
 
+/**
+ * NY wall-clock hour/minute via Intl (DST-safe). DayPeriod labels are applied
+ * once here — never prepended again by callers.
+ * KO → `오전 11:29` / `오후 3:20` · EN → `11:29 AM`
+ */
 function formatTimeOfDay(
   date: Date,
   locale: ArticleLocale
 ): string {
-  return new Intl.DateTimeFormat(locale === "ko" ? "ko-KR" : "en-US", {
+  const bag: Record<string, string> = {};
+  for (const part of new Intl.DateTimeFormat("en-US", {
     timeZone: TZ,
     hour: "numeric",
     minute: "2-digit",
-    hour12: true,
-  }).format(date);
-}
-
-function formatDayPeriod(
-  date: Date,
-  locale: ArticleLocale
-): string {
-  const hour = Number(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: TZ,
-      hour: "numeric",
-      hourCycle: "h23",
-    }).format(date)
-  );
-  if (locale === "ko") {
-    return hour < 12 ? "오전" : "오후";
+    hourCycle: "h23",
+  }).formatToParts(date)) {
+    if (part.type !== "literal") bag[part.type] = part.value;
   }
-  return "";
+
+  const hour24 = Number(bag.hour);
+  const minute = bag.minute ?? "00";
+  if (!Number.isFinite(hour24)) return "";
+
+  const hour12 = hour24 % 12 || 12;
+
+  if (locale === "ko") {
+    const period = hour24 < 12 ? "오전" : "오후";
+    return `${period} ${hour12}:${minute}`;
+  }
+
+  const period = hour24 < 12 ? "AM" : "PM";
+  return `${hour12}:${minute} ${period}`;
 }
 
 /**
@@ -77,31 +82,12 @@ export function formatHomeRelativeTime(
   const nowKey = formatAmericaNewYorkDateKey(new Date(nowMs));
   const articleKey = formatAmericaNewYorkDateKey(date);
   const dayDiff = nyDateKeyDiff(articleKey, nowKey);
-
   const time = formatTimeOfDay(date, locale);
 
   if (locale === "ko") {
-    if (dayDiff === 0) {
-      const formatted = new Intl.DateTimeFormat("ko-KR", {
-        timeZone: TZ,
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      }).format(date);
-      return `오늘 ${formatted}`;
-    }
-    if (dayDiff === 1) {
-      const formatted = new Intl.DateTimeFormat("ko-KR", {
-        timeZone: TZ,
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      }).format(date);
-      return `어제 ${formatted}`;
-    }
-    if (dayDiff >= 2 && dayDiff <= 6) {
-      return `${dayDiff}일 전`;
-    }
+    if (dayDiff === 0) return `오늘 ${time}`;
+    if (dayDiff === 1) return `어제 ${time}`;
+    if (dayDiff >= 2 && dayDiff <= 6) return `${dayDiff}일 전`;
     return new Intl.DateTimeFormat("ko-KR", {
       timeZone: TZ,
       month: "short",
@@ -126,12 +112,5 @@ export function formatEditionLastUpdated(
 ): string {
   const ts = parseTimestamp(publishedAt);
   if (ts <= 0) return "";
-  const date = new Date(ts);
-
-  if (locale === "ko") {
-    const period = formatDayPeriod(date, locale);
-    const time = formatTimeOfDay(date, locale).replace(/\s*(AM|PM)/i, "").trim();
-    return `${period} ${time}`.trim();
-  }
-  return formatTimeOfDay(date, locale);
+  return formatTimeOfDay(new Date(ts), locale);
 }

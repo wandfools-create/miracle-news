@@ -39,25 +39,27 @@
 
 **Current Priority**
 
-1. Today Edition v1 Draft PR 검토 (`feature/home-today-edition-v1`)
+1. Today Edition KO 시간 polish (`fix/today-edition-ko-time-and-status`)
 2. 다음 승인 기사 일괄 공개 실제 운영 확인
 3. Shorts PR #5에 최신 main 통합
 4. 균형 브리핑 패키지 연결
 
-## 0B. Today Edition v1 (Draft PR — Production 미적용)
+## 0B. Today Edition v1 (Production 적용 · Operational Validation)
 
 | 항목 | 상태 |
 |---|---|
-| Branch | `feature/home-today-edition-v1` |
-| Baseline | `origin/main` @ `0a218f9` (PR #16 · PR #17 포함) |
-| Today Edition v1 | **Draft PR 단계** — Production **미적용** |
-| 실제 운영 검증 | **미실행** |
-| 오늘 판정 | `published_at` · America/New_York 달력일 (source_published_at 미사용) |
+| PR #18 | **MERGED** — Today Edition v1 |
+| Production application SHA | `c8e29d48be2c9051616ad1626e158d9d43c82380` |
+| 오늘 판정 | `published_at` · America/New_York 달력일 (`source_published_at` 미사용) |
 | 오늘 0건 | 준비 중 UI — 어제 featured 승격 없음 |
-| 지금 주목 | 오늘 우선 · 24h site publish 한도 |
-| 지금 뜨는 이슈 | 오늘 우선 · 48h · 진행 중 topic만 「계속되는 이슈」 |
-| 지난 주요뉴스 | NY **1–7일**(어제 포함) · 최대 5건 · 상단 surface 중복 제외 |
-| 오늘 더보기 | featured/related 제외 **오늘** 기사만 KR/US 2열 |
+| 오늘 1건 | 대표 1건 |
+| 오늘 2건 이상 | 대표 + 보조 |
+| 지금 주목 | 오늘 우선 · **24h** site publish 한도 |
+| 진행 중 이슈 | 오늘 우선 · **48h** · 「계속되는 이슈」 표시 |
+| 지난 주요뉴스 | NY **1–7일** 전 · 최대 5건 · 상단 surface 중복 제외 |
+| 오늘의 주요 기사 더보기 | featured/related 제외 **오늘** 기사만 KR/US 2열 |
+| Production 기본 화면 확인 | todayCount **28** · status **ready** (2026-08-28) |
+| KO 시간 중복 polish | **진행 중** — `fix/today-edition-ko-time-and-status` (`오전 오전` → Intl dayPeriod 단일 책임) |
 | Operational Validation | **IN PROGRESS** |
 
 ## 1. 프로젝트 기본 정보
