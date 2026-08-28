@@ -353,19 +353,19 @@ Git history와 현재 코드에서 확인:
 ---
 
 - **Digest 272674686:** 정상 SAME EVENT 차단을 throw로 처리하던 UX 문제 — PR #4로 해소, 데이터 손상 없음
-- **Last Updated:** 2026-08-27 UTC
+- **Last Updated:** 2026-08-28 UTC
 - **Latest Commit (Production main):** `39d9b8886ed594cdb856a9644d34d951b0b2bd29` — Merge PR #8 home editorial ranking
 - **Production main commit:** `39d9b8886ed594cdb856a9644d34d951b0b2bd29`
 - **Vercel Production:** 배포 성공 (`https://www.hannoon.co`) — PR #7 UI + PR #8 ranking 반영
 - **Discord workflow:** 기사 만들기 → quick_review → 사람 확인 → 공개
 - **SAME EVENT:** 판정·공개 차단 유지; `/admin/approved` 차단 안내·명시적 override 배포 완료
 - **Revision restore (PR #6):** Production 배포 완료; 수정 대기 50건 복구 완료
-- **Operational Validation:** IN PROGRESS
+- **Operational Validation:** IN PROGRESS (PR #9 READ-ONLY — main 미병합)
 - **Shorts Studio Phase 1:** Production 반영 완료 (`/admin/shorts`, PR #1)
 - **Shorts PR #5:** OPEN — Phase 2 package 보존 (이 작업에서 변경·병합 없음)
 - **articles AI snapshot migration:** 미적용
 - **Shorts package migration:** 기존 적용 상태 보존
 - **Home PR #7 / #8:** Production 반영 완료
-- **Editorial policy (politics/economy):** Draft branch 개발 중 — Preview 전 · Production 미배포
-- **Current Priority:** 정치·경제 편집 정책 검증 → Shorts 균형 브리핑 연결
-- **Next Review:** editorial-policy Draft PR Preview · 이후 PR #5에 main 일반 merge
+- **Editorial policy (politics/economy):** Draft PR #9 — meaningful UPDATE leadership 추가 · Production 미배포
+- **Current Priority:** PR #9 Preview 검증 → (승인 후) merge · Shorts 균형 브리핑 연결
+- **Next Review:** PR #9 checks/Preview · 이후 PR #5에 main 일반 merge
