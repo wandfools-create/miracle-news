@@ -220,8 +220,9 @@ Git history와 현재 코드에서 확인:
   - snapshot 컬럼 write는 `ARTICLES_AI_RECOMMEND_SNAPSHOT=1`일 때만 (기본 OFF) — **migration 미적용**
   - 홈 ranking은 `collection_candidates.article_id` 조인 fallback 유지
   - stale top-story `54ca435f…`는 코드에서 홈 핵심 미노출; DB `is_top_story`는 별도 승인 후 정리
-- 정치·경제 편집 정책: **개발/Draft PR** (`feature/editorial-policy-politics-economy-v1`) — Preview 전 · Production 미배포
+- 정치·경제 편집 정책: **Draft PR #9** (`feature/editorial-policy-politics-economy-v1`) — Production 미배포 · main 미병합
   - **완료:** 공식 정책 문서, AI prompt/post-process 가중, 홈 policy points, Discord beat·관점 표시, 카테고리 표시 repair, Shorts 선택·균형 브리핑 타입/가이드
+  - **추가:** 동일 event family 내 meaningful UPDATE 대표 선정 (`lib/home/eventFamilyUpdate.ts`) — 과거 AI `best`만으로 최신 상태 변화 UPDATE를 누르지 않음; sibling grade 상속; 배경/DIFFERENT ANGLE 역할 분리
   - **미완료:** 정치·경제 전용 수집 feed 확대, Production 수집 비중 55%, Shorts PR #5 패키지 연결, OpenAI 균형 대본 실검증, 관리자 균형 검토 UI, 영상 제작·업로드
   - 7일 READ-ONLY 추정(~20% PE / bias 시뮬 ~23%)은 **목표 달성·수집 개선 완료가 아님**
 - 알려진 인계 결과: `npm test` / `npm run build`는 해당 브랜치에서 재검증
@@ -303,7 +304,7 @@ Git history와 현재 코드에서 확인:
 | Restore PRs | #3 Discord quick_review · #4 approved SAME EVENT UX · #6 revision restore — merged |
 | Home UI | PR #7 merged — Production 반영 완료 |
 | Home editorial ranking | PR #8 merged — **Production 적용 완료** (`39d9b88…`) |
-| Editorial policy (politics/economy) | Draft branch `feature/editorial-policy-politics-economy-v1` — Preview 전 |
+| Editorial policy (politics/economy) | Draft PR #9 — event-family meaningful UPDATE leadership 포함 · Production 미배포 |
 | Shorts Studio | PR #1 merged (Phase 1) · PR #5 OPEN (Phase 2 package, 보존) |
 | articles AI snapshot migration | **미적용** (`20260827_articles_ai_recommend_snapshot.sql`) |
 | Shorts package migration | 기존 적용 상태 보존 (이 작업에서 변경 없음) |

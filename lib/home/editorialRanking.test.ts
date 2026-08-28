@@ -955,7 +955,11 @@ describe("phase-1 ranking coverage restored", () => {
       { leftTitle: "KR", rightTitle: "US" },
       { nowMs: NOW }
     );
-    assert.equal(sections.featured?.id, "feat-nepal");
+    // Meaningful UPDATE (이송 / 사망 갱신) leads the family over a thinner best headline.
+    assert.ok(
+      sections.featured?.id === "n-evac" || sections.featured?.id === "n-death",
+      `expected Nepal UPDATE featured, got ${sections.featured?.id}`
+    );
     const nepalInSidebar = sections.sidebar.filter(
       (a) =>
         normalizeEventFamilyKey({

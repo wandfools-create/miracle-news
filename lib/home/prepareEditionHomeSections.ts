@@ -14,6 +14,10 @@ import {
   pickDiversifiedByEditorialScore,
   sortArticlesByEditorialScore,
 } from "./editorialRanking";
+import {
+  filterEventFamilyLeaders,
+  withInheritedEventFamilyGrades,
+} from "./eventFamilyUpdate";
 import { pickTrendingIssues } from "./pickTrendingIssues";
 import { pickSidebarLatestArticles } from "./pickSidebarLatest";
 import { repairHomeCategory } from "@/lib/editorialPolicy/homeCategoryRepair";
@@ -49,7 +53,9 @@ export function prepareEditionHomeSections(
   const featuredPool = withRepairedCategories(options?.featuredPool ?? articles);
   const allArticles = withRepairedCategories(articles);
   const corePool = filterHomeCoreEligible(featuredPool, nowMs);
-  const sortedCore = sortHomeArticlesForDisplay(corePool, nowMs);
+  const rankingPool = filterEventFamilyLeaders(
+    withInheritedEventFamilyGrades(corePool)
+  );
 
   const featured = pickFeaturedArticle(corePool, nowMs);
   const featuredHub = pickFeaturedHubArticles(corePool, featured, { nowMs });
@@ -61,7 +67,7 @@ export function prepareEditionHomeSections(
     coreExclude.add(a.article_id ?? a.id);
   }
 
-  const pool = sortedCore.filter(
+  const pool = rankingPool.filter(
     (a) => (a.article_id ?? a.id) !== featuredKey && a.id !== featured?.id
   );
 
