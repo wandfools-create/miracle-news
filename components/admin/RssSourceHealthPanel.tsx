@@ -10,12 +10,13 @@ export default function RssSourceHealthPanel() {
         RSS 수집망 · 설정 상태
       </p>
       <p className="mt-1 text-[11px] text-gray-500">
-        코드 기준 활성/비활성입니다. 72시간 DB 지표는 추후 연결 예정 · 자동 삭제 없음.
+        코드 등록 상태입니다. 「설정됨」은 오늘 실제 수집 성공을 뜻하지 않습니다.
+        72시간 DB 지표는 추후 연결 예정 · 자동 삭제 없음.
       </p>
       <ul className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
         {rows.map((row) => (
           <li
-            key={row.sourceKey}
+            key={`${row.sourceKey}::${row.feedUrl}`}
             className="rounded-lg border border-gray-200 bg-white px-2.5 py-2"
           >
             <div className="flex items-center justify-between gap-2">
@@ -26,7 +27,7 @@ export default function RssSourceHealthPanel() {
                 className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
                   row.status === "비활성"
                     ? "bg-neutral-200 text-neutral-700"
-                    : "bg-emerald-50 text-emerald-800"
+                    : "bg-sky-50 text-sky-800"
                 }`}
               >
                 {row.status}
