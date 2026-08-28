@@ -12,8 +12,8 @@ export const koHomeLabels: HomeNewsLabels = {
   featuredTitle: "오늘의 주요 기사",
   readArticle: "기사 보기",
   latestEyebrow: "Latest",
-  latestTitle: "주요 기사",
-  latestDesc: "한국·미국 기사를 나란히 모았습니다. 발행일 최신순입니다.",
+  latestTitle: "오늘의 주요 기사 더보기",
+  latestDesc: "오늘 공개된 한국·미국 기사입니다.",
   columnEmpty: "이 영역에 해당하는 기사가 없습니다.",
   trendingTitle: "지금 뜨는 이슈",
   trendingRegionUs: "미국",
@@ -35,4 +35,9 @@ export const koHomeLabels: HomeNewsLabels = {
   empty: "현재 공개된 한국어 기사가 없습니다.",
   errorPrefix: "데이터를 불러오는 중 오류가 발생했습니다:",
   noImage: "이미지 없음",
+  previousHighlightsTitle: "지난 주요뉴스",
+  previousHighlightsDesc:
+    "어제와 최근 7일 사이 놓치면 안 될 기사입니다.",
+  editionHeaderTodayLabel: "오늘의 한눈",
+  continuingIssueLabel: "계속되는 이슈",
 };

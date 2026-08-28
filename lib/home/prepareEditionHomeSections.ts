@@ -3,27 +3,20 @@ import { sortArticlesForCategorySection } from "@/lib/article/sourcePolicy";
 import { featuredSourceConfigs, normalizeSource } from "@/lib/koreanArticleDisplay";
 import { sortSourceLeadCards } from "@/lib/sourceLeadOrder";
 import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
-import { getArticleRegion } from "./articleRegion";
 import {
-  pickFeaturedArticle,
   pickFeaturedHubArticles,
   sortHomeArticlesForDisplay,
 } from "./featuredSelection";
 import {
   filterHomeCoreEligible,
-  pickDiversifiedByEditorialScore,
   sortArticlesByEditorialScore,
 } from "./editorialRanking";
 import {
-  filterEventFamilyLeaders,
-  withInheritedEventFamilyGrades,
-} from "./eventFamilyUpdate";
-import { pickTrendingIssues } from "./pickTrendingIssues";
-import { pickSidebarLatestArticles } from "./pickSidebarLatest";
+  buildTodayEdition,
+  pickTodayTopStoriesColumns,
+} from "./todayEdition";
 import { repairHomeCategory } from "@/lib/editorialPolicy/homeCategoryRepair";
 import type { HomeArticleCard, HomePageSections } from "./types";
-
-const TOP_STORIES_PER_COLUMN = 6;
 
 export type EditionColumnLabels = {
   leftTitle: string;
@@ -43,6 +36,10 @@ function withRepairedCategories(articles: HomeArticleCard[]): HomeArticleCard[] 
   });
 }
 
+function articleKey(article: HomeArticleCard): string {
+  return article.article_id ?? article.id;
+}
+
 export function prepareEditionHomeSections(
   articles: HomeArticleCard[],
   pageLocale: ArticleLocale,
@@ -50,50 +47,40 @@ export function prepareEditionHomeSections(
   options?: { featuredPool?: HomeArticleCard[]; nowMs?: number }
 ): HomePageSections {
   const nowMs = options?.nowMs ?? Date.now();
-  const featuredPool = withRepairedCategories(options?.featuredPool ?? articles);
   const allArticles = withRepairedCategories(articles);
-  const corePool = filterHomeCoreEligible(featuredPool, nowMs);
-  const rankingPool = filterEventFamilyLeaders(
-    withInheritedEventFamilyGrades(corePool)
-  );
 
-  const featured = pickFeaturedArticle(corePool, nowMs);
-  const featuredHub = pickFeaturedHubArticles(corePool, featured, { nowMs });
-  const featuredKey = featured?.article_id ?? featured?.id;
+  const todayEdition = buildTodayEdition(allArticles, { nowMs, locale: pageLocale });
 
-  const coreExclude = new Set<string>();
-  if (featuredKey) coreExclude.add(featuredKey);
-  for (const a of featuredHub.leads) {
-    coreExclude.add(a.article_id ?? a.id);
+  const featured = todayEdition.featured;
+
+  let featuredLeads: HomeArticleCard[] = [];
+  let featuredRelated: HomeArticleCard[] = [];
+
+  if (todayEdition.todayCount === 0) {
+    featuredLeads = [];
+    featuredRelated = [];
+  } else if (todayEdition.todayCount === 1 && featured) {
+    featuredLeads = [featured];
+    featuredRelated = [];
+  } else if (featured) {
+    const todayCore = filterHomeCoreEligible(todayEdition.todayArticles, nowMs);
+    const hub = pickFeaturedHubArticles(todayCore, featured, { nowMs });
+    featuredLeads = hub.leads;
+    featuredRelated = hub.related;
   }
 
-  const pool = rankingPool.filter(
-    (a) => (a.article_id ?? a.id) !== featuredKey && a.id !== featured?.id
+  const featuredExclude = new Set<string>();
+  for (const a of featuredLeads) featuredExclude.add(articleKey(a));
+  for (const a of featuredRelated) featuredExclude.add(articleKey(a));
+
+  const topStories = pickTodayTopStoriesColumns(
+    todayEdition.todayArticles,
+    pageLocale,
+    columnLabels,
+    nowMs,
+    { excludeKeys: featuredExclude }
   );
 
-  const krPool = pool.filter((a) => getArticleRegion(a) === "kr");
-  const usPool = pool.filter((a) => getArticleRegion(a) === "us");
-
-  const pickColumn = (regionPool: HomeArticleCard[]) =>
-    pickDiversifiedByEditorialScore(regionPool, {
-      limit: TOP_STORIES_PER_COLUMN,
-      nowMs,
-      sourceCap: 2,
-      balanceRegions: false,
-      suppressTopicClusters: true,
-      excludeKeys: coreExclude,
-    });
-
-  const left =
-    pageLocale === "ko" ? pickColumn(krPool) : pickColumn(usPool);
-  const right =
-    pageLocale === "ko" ? pickColumn(usPool) : pickColumn(krPool);
-
-  for (const a of [...left, ...right]) {
-    coreExclude.add(a.article_id ?? a.id);
-  }
-
-  // Source leads may use full published pool (outlet archive character).
   const sourceLeadMap: Record<string, HomeArticleCard> = {};
   for (const article of sortArticlesByEditorialScore(allArticles, nowMs)) {
     const sourceKey = normalizeSource(article.source);
@@ -118,14 +105,6 @@ export function prepareEditionHomeSections(
     pageLocale
   );
 
-  // Featured + 보조 share event-family budget with 「지금 주목」 (max 2).
-  const reservedCore = featuredHub.leads;
-  const sidebar = pickSidebarLatestArticles(corePool, 5, nowMs, {
-    excludeKeys: coreExclude,
-    reservedCoreArticles: reservedCore,
-  });
-
-  // Category archive: full pool (past articles remain reachable via tabs).
   const groupedByCategory: Record<string, HomeArticleCard[]> = {};
   for (const article of sortHomeArticlesForDisplay(allArticles, nowMs)) {
     const key = article.category ?? "other";
@@ -148,28 +127,51 @@ export function prepareEditionHomeSections(
     .filter((config) => Boolean(sourceLeadMap[config.key]))
     .map((config) => config.label);
 
-  const trendingIssues = pickTrendingIssues(
-    featuredPool,
-    pageLocale,
-    3,
-    nowMs
-  );
-  const hasTrending =
-    trendingIssues.us.length > 0 || trendingIssues.kr.length > 0;
+  const {
+    spotlight: sidebar,
+    trending: trendingIssues,
+    previousHighlights,
+    editionDateKey,
+    todayCount,
+    lastUpdatedAt,
+    status,
+    headerDateKo,
+    headerDateEn,
+    editionTitleKo,
+    editionTitleEn,
+    statusLineKo,
+    statusLineEn,
+    preparingMessageKo,
+    preparingMessageEn,
+    preparingPhaseKo,
+    preparingPhaseEn,
+  } = todayEdition;
 
   return {
     featured,
-    featuredLeads: featuredHub.leads,
-    featuredRelated: featuredHub.related,
+    featuredLeads,
+    featuredRelated,
     latest: [],
-    topStories: {
-      leftTitle: columnLabels.leftTitle,
-      rightTitle: columnLabels.rightTitle,
-      left,
-      right,
-    },
-    trendingIssues: hasTrending ? trendingIssues : null,
+    topStories,
+    trendingIssues,
     sidebar,
+    previousHighlights,
+    todayEdition: {
+      editionDateKey,
+      todayCount,
+      lastUpdatedAt,
+      status,
+      headerDateKo,
+      headerDateEn,
+      editionTitleKo,
+      editionTitleEn,
+      statusLineKo,
+      statusLineEn,
+      preparingMessageKo,
+      preparingMessageEn,
+      preparingPhaseKo,
+      preparingPhaseEn,
+    },
     groupedByCategory,
     visibleCategories,
     sourceLeadCards,

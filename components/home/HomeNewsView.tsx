@@ -28,7 +28,7 @@ import {
   type NewsPageRole,
 } from "@/lib/home/newsPageLayout";
 import { resolveArticleHref } from "@/lib/home/resolveArticleHref";
-import type { HomeArticleCard, HomePageSections } from "@/lib/home/types";
+import type { HomeArticleCard, HomePageSections, TodayEditionMeta } from "@/lib/home/types";
 import { getBrandName } from "@/lib/brand";
 import TrendingIssuesPanel from "./TrendingIssuesPanel";
 
@@ -65,6 +65,10 @@ export type HomeNewsLabels = {
   trendingRelatedLabel: string;
   trendingOriginalLabel: string;
   categoriesEmpty: string;
+  previousHighlightsTitle: string;
+  previousHighlightsDesc: string;
+  editionHeaderTodayLabel: string;
+  continuingIssueLabel: string;
 };
 
 function formatCategoryCount(locale: ArticleLocale, n: number): string {
@@ -105,6 +109,107 @@ function publishedFullText(
   return locale === "ko"
     ? article.publishedFullKo ?? null
     : article.publishedFullEn ?? null;
+}
+
+function TodayEditionHeader({
+  meta,
+  locale,
+}: {
+  meta: TodayEditionMeta;
+  locale: ArticleLocale;
+}) {
+  const dateText = locale === "ko" ? meta.headerDateKo : meta.headerDateEn;
+  const title = locale === "ko" ? meta.editionTitleKo : meta.editionTitleEn;
+  const statusLine = locale === "ko" ? meta.statusLineKo : meta.statusLineEn;
+  const preparingPhase =
+    locale === "ko" ? meta.preparingPhaseKo : meta.preparingPhaseEn;
+
+  return (
+    <header className="order-0 mb-6 min-w-0 border-b border-neutral-300 pb-4 xl:col-span-full xl:mb-8">
+      <p className="text-[13px] font-medium text-neutral-600 sm:text-sm">
+        {dateText}
+      </p>
+      <h2 className="mt-1 text-lg font-bold tracking-tight text-news-navy sm:text-xl">
+        {title}
+      </h2>
+      <p className="mt-1 text-[13px] text-neutral-600 sm:text-sm">{statusLine}</p>
+      {meta.status === "preparing" ? (
+        <p className="mt-1 text-[12px] font-medium text-neutral-500">
+          {preparingPhase}
+        </p>
+      ) : null}
+    </header>
+  );
+}
+
+function TodayEditionPreparing({
+  meta,
+  locale,
+}: {
+  meta: TodayEditionMeta;
+  locale: ArticleLocale;
+}) {
+  const message =
+    locale === "ko" ? meta.preparingMessageKo : meta.preparingMessageEn;
+  const lines = message.split("\n");
+
+  return (
+    <div
+      className="border border-neutral-200 bg-white px-4 py-8 text-center sm:px-6 sm:py-10"
+      role="status"
+    >
+      <p className="text-[15px] font-semibold text-news-navy sm:text-base">
+        {lines[0]}
+      </p>
+      {lines[1] ? (
+        <p className="mt-2 text-[14px] leading-relaxed text-neutral-600">
+          {lines[1]}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function PreviousHighlightsSection({
+  articles,
+  locale,
+  labels,
+  articleHrefPrefix,
+  articleHrefFor,
+}: {
+  articles: HomeArticleCard[];
+  locale: ArticleLocale;
+  labels: HomeNewsLabels;
+  articleHrefPrefix: string;
+  articleHrefFor?: (article: HomeArticleCard) => string;
+}) {
+  if (articles.length === 0) return null;
+
+  return (
+    <section
+      id="previous-highlights"
+      className="order-4 min-w-0 scroll-mt-6 border-t border-neutral-300 pt-8 xl:order-none xl:col-span-full xl:row-start-3"
+    >
+      <SectionHeading
+        title={labels.previousHighlightsTitle}
+        description={labels.previousHighlightsDesc}
+        eyebrow=""
+      />
+      <div>
+        {articles.map((article) => (
+          <StoryListRow
+            key={article.id}
+            article={article}
+            locale={locale}
+            labels={labels}
+            articleHrefPrefix={articleHrefPrefix}
+            articleHrefFor={articleHrefFor}
+            summaryLen={100}
+          />
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function NavPill({
@@ -779,8 +884,17 @@ export default function HomeNewsView({
     [searchArticles, normalizedSearch, locale]
   );
   const showFeatured = Boolean(displaySections.featured);
+  const todayEditionMeta = displaySections.todayEdition;
+  const isPreparing = todayEditionMeta?.status === "preparing";
+  const showFeaturedSection = showFeatured || isPreparing;
+  const showPreviousHighlights =
+    (displaySections.previousHighlights?.length ?? 0) > 0;
   const topStories = displaySections.topStories;
-  const showTopStories = Boolean(topStories);
+  const topStoriesHasLeft = (topStories?.left.length ?? 0) > 0;
+  const topStoriesHasRight = (topStories?.right.length ?? 0) > 0;
+  const showTopStories = Boolean(
+    topStories && (topStoriesHasLeft || topStoriesHasRight)
+  );
   const featuredHub = useMemo(() => {
     if (
       displaySections.featuredLeads &&
@@ -920,6 +1034,7 @@ export default function HomeNewsView({
         regionKr: labels.trendingRegionKr,
         relatedArticlesLabel: labels.trendingRelatedLabel,
         originalSourceLabel: labels.trendingOriginalLabel,
+        continuingIssueLabel: labels.continuingIssueLabel,
       }}
     />
   ) : null;
@@ -929,10 +1044,11 @@ export default function HomeNewsView({
   const pageTitle = getBrandName(pageRole);
 
   const hasArticles =
-    showFeatured ||
+    showFeaturedSection ||
     showTopStories ||
     displaySections.latest.length > 0 ||
     displaySections.sidebar.length > 0 ||
+    showPreviousHighlights ||
     filteredVisibleCategories.length > 0;
 
   const headerDate = headerDateText ?? labels.edition;
@@ -971,7 +1087,7 @@ export default function HomeNewsView({
               >
                 {hasArticles ? (
                   <>
-                    {showFeatured ? (
+                    {showFeaturedSection ? (
                       <NavPill href="#featured">{labels.featuredTitle}</NavPill>
                     ) : null}
                     <NavPill href="#latest">{labels.navLatest}</NavPill>
@@ -1028,9 +1144,13 @@ export default function HomeNewsView({
 
         {!errorMessage && hasArticles ? (
           <div className={homeGridClass}>
-            {/* Left rail */}
+            {todayEditionMeta ? (
+              <TodayEditionHeader meta={todayEditionMeta} locale={locale} />
+            ) : null}
+
+            {/* Left rail — mobile after trending */}
             {showLeftRail ? (
-              <aside className="order-3 min-w-0 xl:order-none xl:col-start-1 xl:row-start-1">
+              <aside className="order-3 min-w-0 xl:order-none xl:col-start-1 xl:row-start-2">
                 <SpotlightRail
                   articles={displaySections.sidebar}
                   locale={locale}
@@ -1041,11 +1161,11 @@ export default function HomeNewsView({
               </aside>
             ) : null}
 
-            {/* Center: featured only in top band */}
-            {showFeatured && displaySections.featured ? (
+            {/* Center: featured or preparing */}
+            {showFeaturedSection ? (
               <section
                 id="featured"
-                className={`order-1 min-w-0 scroll-mt-6 xl:order-none xl:row-start-1 ${
+                className={`order-1 min-w-0 scroll-mt-6 xl:order-none xl:row-start-2 ${
                   showLeftRail ? "xl:col-start-2" : "xl:col-start-1"
                 }`}
                 aria-labelledby="home-featured"
@@ -1054,16 +1174,18 @@ export default function HomeNewsView({
                   eyebrow={labels.featuredEyebrow}
                   title={labels.featuredTitle}
                 />
-                {useFeaturedComboLayout ? (
+                {isPreparing && !showFeatured ? (
+                  <TodayEditionPreparing meta={todayEditionMeta!} locale={locale} />
+                ) : useFeaturedComboLayout ? (
                   <FeaturedWithRelated
                     leads={featuredHub.leads}
-                    related={[]}
+                    related={featuredHub.related}
                     locale={locale}
                     labels={labels}
                     articleHrefPrefix={articleHrefPrefix}
                     articleHrefFor={articleHrefFor}
                   />
-                ) : (
+                ) : displaySections.featured ? (
                   <FeaturedHero
                     article={displaySections.featured}
                     locale={locale}
@@ -1071,17 +1193,17 @@ export default function HomeNewsView({
                     articleHrefPrefix={articleHrefPrefix}
                     articleHrefFor={articleHrefFor}
                   />
-                )}
+                ) : null}
               </section>
             ) : null}
 
-            {/* Right rail — spans beside featured + mid stories when present */}
+            {/* Right rail */}
             {showRightRail && trendingPanel ? (
               <aside
                 className={
                   showLeftRail
-                    ? "order-2 min-w-0 xl:order-none xl:col-start-3 xl:row-start-1 xl:row-span-2"
-                    : "order-2 min-w-0 xl:order-none xl:col-start-2 xl:row-start-1 xl:row-span-2"
+                    ? "order-2 min-w-0 xl:order-none xl:col-start-3 xl:row-start-2 xl:row-span-2"
+                    : "order-2 min-w-0 xl:order-none xl:col-start-2 xl:row-start-2 xl:row-span-2"
                 }
               >
                 {trendingPanel}
@@ -1107,31 +1229,41 @@ export default function HomeNewsView({
                   title={labels.latestTitle}
                   description={labels.latestDesc}
                 />
-                <div className="grid gap-8 sm:grid-cols-2 sm:gap-10">
-                  <TopStoriesColumn
-                    title={topStories.leftTitle}
-                    articles={topStories.left}
-                    emptyLabel={labels.columnEmpty}
-                    locale={locale}
-                    labels={labels}
-                    articleHrefPrefix={articleHrefPrefix}
-                    articleHrefFor={articleHrefFor}
-                    accentClass={
-                      pageRole === "ko" ? "border-news-red" : "border-news-navy"
-                    }
-                  />
-                  <TopStoriesColumn
-                    title={topStories.rightTitle}
-                    articles={topStories.right}
-                    emptyLabel={labels.columnEmpty}
-                    locale={locale}
-                    labels={labels}
-                    articleHrefPrefix={articleHrefPrefix}
-                    articleHrefFor={articleHrefFor}
-                    accentClass={
-                      pageRole === "ko" ? "border-news-navy" : "border-news-red"
-                    }
-                  />
+                <div
+                  className={
+                    topStoriesHasLeft && topStoriesHasRight
+                      ? "grid min-w-0 gap-8 sm:grid-cols-2 sm:gap-10"
+                      : "min-w-0"
+                  }
+                >
+                  {topStoriesHasLeft ? (
+                    <TopStoriesColumn
+                      title={topStories.leftTitle}
+                      articles={topStories.left}
+                      emptyLabel={labels.columnEmpty}
+                      locale={locale}
+                      labels={labels}
+                      articleHrefPrefix={articleHrefPrefix}
+                      articleHrefFor={articleHrefFor}
+                      accentClass={
+                        pageRole === "ko" ? "border-news-red" : "border-news-navy"
+                      }
+                    />
+                  ) : null}
+                  {topStoriesHasRight ? (
+                    <TopStoriesColumn
+                      title={topStories.rightTitle}
+                      articles={topStories.right}
+                      emptyLabel={labels.columnEmpty}
+                      locale={locale}
+                      labels={labels}
+                      articleHrefPrefix={articleHrefPrefix}
+                      articleHrefFor={articleHrefFor}
+                      accentClass={
+                        pageRole === "ko" ? "border-news-navy" : "border-news-red"
+                      }
+                    />
+                  ) : null}
                 </div>
               </section>
             ) : null}
@@ -1175,11 +1307,23 @@ export default function HomeNewsView({
               </section>
             ) : null}
 
+            {showPreviousHighlights && displaySections.previousHighlights ? (
+              <PreviousHighlightsSection
+                articles={displaySections.previousHighlights}
+                locale={locale}
+                labels={labels}
+                articleHrefPrefix={articleHrefPrefix}
+                articleHrefFor={articleHrefFor}
+              />
+            ) : null}
+
             {/* Full-bleed lower sections */}
             {showSources ? (
               <section
                 id="sources"
-                className={`order-4 min-w-0 scroll-mt-6 border-t border-neutral-300 pt-8 xl:order-none xl:col-span-full xl:row-start-3`}
+                className={`order-5 min-w-0 scroll-mt-6 border-t border-neutral-300 pt-8 xl:order-none xl:col-span-full ${
+                  showPreviousHighlights ? "xl:row-start-4" : "xl:row-start-3"
+                }`}
               >
                 <SectionHeading
                   eyebrow={labels.sourcesEyebrow}
@@ -1243,7 +1387,9 @@ export default function HomeNewsView({
             {showCategories ? (
               <section
                 id="categories"
-                className="order-5 min-w-0 scroll-mt-6 border-t border-neutral-300 pt-8 xl:order-none xl:col-span-full xl:row-start-4"
+                className={`order-6 min-w-0 scroll-mt-6 border-t border-neutral-300 pt-8 xl:order-none xl:col-span-full ${
+                  showPreviousHighlights ? "xl:row-start-5" : "xl:row-start-4"
+                }`}
               >
                 <SectionHeading
                   eyebrow={labels.categoriesEyebrow}

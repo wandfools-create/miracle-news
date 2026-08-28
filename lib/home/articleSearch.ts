@@ -153,6 +153,9 @@ export function filterHomePageSections(
     latest: filterList(sections.latest, normalized, locale),
     topStories,
     sidebar: filterList(sections.sidebar, normalized, locale),
+    previousHighlights: sections.previousHighlights
+      ? filterList(sections.previousHighlights, normalized, locale)
+      : undefined,
     groupedByCategory,
     visibleCategories,
     sourceLeadCards,

@@ -1,16 +1,17 @@
 import HomeNewsView from "@/components/home/HomeNewsView";
+import { enrichHomeArticlesWithRelativeDates } from "@/lib/home/enrichHomeRelativeDates";
 import { fetchEditionHomeArticles } from "@/lib/home/fetchEditionHomeArticles";
 import { enHomeLabels } from "@/lib/home/enHomeLabels";
 import { prepareEditionHomeSections } from "@/lib/home/prepareEditionHomeSections";
 import { enHomeSearchLabels } from "@/lib/home/enSearchLabels";
-import { formatServerHeaderDate } from "@/lib/home/serverDateLabels";
 import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
 export default async function EnglishHomePage() {
-  const { articles, error } = await fetchEditionHomeArticles("en");
-  const headerDateText = formatServerHeaderDate("en");
+  const nowMs = Date.now();
+  const { articles: rawArticles, error } = await fetchEditionHomeArticles("en");
+  const articles = enrichHomeArticlesWithRelativeDates(rawArticles, nowMs);
 
   const sections = prepareEditionHomeSections(
     articles,
@@ -19,7 +20,7 @@ export default async function EnglishHomePage() {
       leftTitle: "US & international",
       rightTitle: "Korea",
     },
-    { featuredPool: articles }
+    { nowMs }
   );
 
   /** Only outlets that currently have published articles (e.g. hide Yonhap at 0). */
@@ -44,8 +45,6 @@ export default async function EnglishHomePage() {
         sourceFilterOptions={sourceOptions}
         sourceFilterAllLabel="All outlets"
         errorMessage={error?.message ?? null}
-        showDateInHeader
-        headerDateText={headerDateText}
         searchArticles={articles}
         searchPath="/en/search"
         searchLabels={enHomeSearchLabels}

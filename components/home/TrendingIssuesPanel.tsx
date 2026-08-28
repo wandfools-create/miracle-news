@@ -12,6 +12,7 @@ export type TrendingIssuesLabels = {
   regionKr: string;
   relatedArticlesLabel: string;
   originalSourceLabel: string;
+  continuingIssueLabel: string;
 };
 
 type TrendingIssuesPanelProps = {
@@ -52,9 +53,16 @@ function IssueRow({
           href={primaryHref}
           className="group block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy"
         >
-          <p className="text-[13px] font-semibold leading-snug text-neutral-950 group-hover:underline decoration-neutral-300 underline-offset-2">
-            {issue.title}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <p className="text-[13px] font-semibold leading-snug text-neutral-950 group-hover:underline decoration-neutral-300 underline-offset-2">
+              {issue.title}
+            </p>
+            {issue.continuingIssue ? (
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
+                {labels.continuingIssueLabel}
+              </span>
+            ) : null}
+          </div>
           {issue.description ? (
             <p className="mt-1.5 text-[12px] leading-relaxed text-neutral-600 group-hover:text-neutral-700">
               {issue.description}

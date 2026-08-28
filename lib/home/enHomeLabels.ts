@@ -12,8 +12,8 @@ export const enHomeLabels: HomeNewsLabels = {
   featuredTitle: "Top story",
   readArticle: "Read article",
   latestEyebrow: "Latest",
-  latestTitle: "Top stories",
-  latestDesc: "US and Korea stories side by side, sorted by publish date.",
+  latestTitle: "More of Today's Top Stories",
+  latestDesc: "More stories published today from Korea and the US.",
   columnEmpty: "No stories in this column.",
   trendingTitle: "Trending Issues",
   trendingRegionUs: "United States",
@@ -35,4 +35,9 @@ export const enHomeLabels: HomeNewsLabels = {
   empty: "There are no published English articles yet.",
   errorPrefix: "Error loading data:",
   noImage: "No image",
+  previousHighlightsTitle: "Previous Top Stories",
+  previousHighlightsDesc:
+    "Important stories from yesterday and the past 7 days.",
+  editionHeaderTodayLabel: "Today's Hannoon",
+  continuingIssueLabel: "Ongoing issue",
 };
