@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
 import {
-  bulkEnrichFromShortlistAction,
   dismissFromShortlistAction,
   enrichFromShortlistAction,
   unshortlistFromShortlistAction,
 } from "@/app/admin/(app)/collection-shortlist/actions";
+import BulkCandidateEnrichResult from "@/components/admin/BulkCandidateEnrichResult";
+import { useBulkCandidateEnrich } from "@/components/admin/useBulkCandidateEnrich";
 import EnrichCandidateForm from "@/components/admin/EnrichCandidateForm";
 import type { EnrichCandidateActionState } from "@/app/admin/(app)/collection-candidates/enrichCandidateAction";
 import {
@@ -77,8 +78,43 @@ export default function CollectionShortlistWorkbench({
 }: {
   candidates: ShortlistCard[];
 }) {
+  const [rows, setRows] = useState(candidates);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkPending, startBulk] = useTransition();
+
+  const listKey = candidates.map((c) => c.id).join(",");
+
+  useEffect(() => {
+    setRows(candidates);
+    setSelected(new Set());
+  }, [listKey, candidates]);
+
+  const removeIdsFromView = useCallback((ids: string[]) => {
+    const remove = new Set(ids);
+    setRows((prev) => prev.filter((c) => !remove.has(c.id)));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of remove) next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const titlesById = useMemo(
+    () => new Map(rows.map((c) => [c.id, c.rssTitle])),
+    [rows]
+  );
+
+  const {
+    running: enrichRunning,
+    progress: enrichProgress,
+    summary: enrichSummary,
+    runBulkEnrich,
+    dismissSummary: dismissEnrichSummary,
+  } = useBulkCandidateEnrich({
+    titlesById,
+    onEnrichedIds: removeIdsFromView,
+    onFailedIds: () => {},
+  });
 
   useEffect(() => {
     restoreScroll();
@@ -95,8 +131,33 @@ export default function CollectionShortlistWorkbench({
     return () => document.removeEventListener("submit", onSubmitCapture, true);
   }, []);
 
-  const visibleIds = useMemo(() => candidates.map((c) => c.id), [candidates]);
+  const visibleIds = useMemo(() => rows.map((c) => c.id), [rows]);
   const selectedCount = selected.size;
+
+  function runEnrichBulk() {
+    if (selectedCount === 0 || enrichRunning) return;
+    if (
+      !window.confirm(
+        `선택한 ${selectedCount}건을 기사로 만드시겠습니까? OpenAI 비용이 발생합니다.`
+      )
+    ) {
+      return;
+    }
+    saveScroll();
+    void runBulkEnrich([...selected]);
+  }
+
+  function retryFailedEnrichSelection() {
+    if (!enrichSummary) return;
+    const failedIds = enrichSummary.results
+      .filter(
+        (r) =>
+          r.outcome === "enrich_failed" || r.outcome === "unexpected_error"
+      )
+      .map((r) => r.candidateId);
+    setSelected(new Set(failedIds));
+    dismissEnrichSummary();
+  }
 
   const toggleOne = useCallback((id: string, checked: boolean) => {
     setSelected((prev) => {
@@ -155,12 +216,31 @@ export default function CollectionShortlistWorkbench({
           선택 해제
         </button>
         <span className="text-xs text-gray-500">
-          {candidates.length}건 · 선택 {selectedCount}
+          {rows.length}건 · 선택 {selectedCount}
         </span>
       </div>
 
+      {enrichProgress ? (
+        <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+          전체 {enrichProgress.total}건 중 {enrichProgress.current}건 처리 중
+          {enrichProgress.candidateTitle ? (
+            <span className="mt-1 block text-xs text-blue-800">
+              {enrichProgress.candidateTitle}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {enrichSummary ? (
+        <BulkCandidateEnrichResult
+          summary={enrichSummary}
+          onRetryFailed={retryFailedEnrichSelection}
+          onDismiss={dismissEnrichSummary}
+        />
+      ) : null}
+
       <div className="space-y-2.5">
-        {candidates.map((c) => {
+        {rows.map((c) => {
           const sourceLabel = c.feedLabel || SOURCE_LABELS[c.source] || c.source;
           return (
             <article
@@ -172,6 +252,7 @@ export default function CollectionShortlistWorkbench({
                   type="checkbox"
                   className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300"
                   checked={selected.has(c.id)}
+                  disabled={enrichRunning}
                   onChange={(e) => toggleOne(c.id, e.target.checked)}
                   aria-label="보관함 후보 선택"
                 />
@@ -277,16 +358,11 @@ export default function CollectionShortlistWorkbench({
             <span className="mr-2 text-sm font-semibold">{selectedCount}건 선택</span>
             <button
               type="button"
-              disabled={bulkPending}
-              onClick={() =>
-                runBulk(
-                  bulkEnrichFromShortlistAction,
-                  `선택한 ${selectedCount}건을 기사로 만드시겠습니까? OpenAI 비용이 발생합니다.`
-                )
-              }
+              disabled={bulkPending || enrichRunning}
+              onClick={runEnrichBulk}
               className="rounded-lg bg-black px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
             >
-              선택 기사 만들기
+              {enrichRunning ? "기사 만들기 진행 중…" : "선택 기사 만들기"}
             </button>
             <button
               type="button"

@@ -36,7 +36,10 @@ describe("desk mutations (redirect-free, fixture / source scan)", () => {
     assert.doesNotMatch(src, /bulkDismissCandidatesAction/);
     assert.doesNotMatch(src, /bulkShortlistCandidatesAction/);
     assert.doesNotMatch(src, /bulkExpireCandidatesAction/);
-    assert.doesNotMatch(src, /preserveCandidateListScrollNow/);
+    assert.match(src, /useBulkCandidateEnrich/);
+    assert.match(src, /runBulkEnrich/);
+    assert.doesNotMatch(src, /bulkEnrichCandidatesAction/);
+    assert.doesNotMatch(src, /Promise\.all/);
   });
 
   it("dismiss op verifies updated row and logs failure on 0 rows", () => {
