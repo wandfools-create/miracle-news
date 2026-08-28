@@ -226,7 +226,7 @@ describe("quick publish flow (fixture only, no OpenAI/Discord/publish)", () => {
       join(process.cwd(), "app/admin/(app)/approved/actions.ts"),
       "utf8"
     );
-    assert.match(actionsSrc, /publishArticleToLive/);
+    assert.match(actionsSrc, /publishApprovedArticleToLive/);
 
     const insertSrc = readFileSync(
       join(process.cwd(), "lib/articles/insertReviewQueueArticle.ts"),

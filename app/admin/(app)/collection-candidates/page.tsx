@@ -22,6 +22,11 @@ import {
   CANDIDATE_VIEW_FILTERS,
   candidateListSearchParams,
 } from "@/lib/collection-candidates/candidateListQuery";
+import {
+  batchRelatedStoriesForCandidates,
+  loadRelatedStoryPool,
+  type RelatedStoryRef,
+} from "@/lib/same-event/relatedStories";
 import type { CollectionCandidateStatus } from "@/lib/collection-candidates/types";
 
 export const revalidate = 0;
@@ -155,6 +160,28 @@ export default async function CollectionCandidatesPage({
     query.view === "ai"
       ? [...byCategory].sort(compareCandidatesByAiRecommend)
       : byCategory;
+
+  let relatedStoriesMap: Record<string, RelatedStoryRef[]> = {};
+  let relatedStoryPoolCapped = false;
+
+  try {
+    const { pool, poolCapped } = await loadRelatedStoryPool();
+    relatedStoryPoolCapped = poolCapped;
+    const relatedByCandidateId = batchRelatedStoriesForCandidates(
+      filtered.map((c) => ({
+        id: c.id,
+        source: c.source,
+        rssTitle: c.rssTitle,
+        rssSummary: c.rssSummary,
+        rssPublishedAt: c.rssPublishedAt,
+        articleId: c.articleId,
+      })),
+      pool
+    );
+    relatedStoriesMap = Object.fromEntries(relatedByCandidateId.entries());
+  } catch (err) {
+    console.warn("[collection-candidates] related stories failed", err);
+  }
 
   const unevaluatedCount = classifiedWithPostProcess.filter(
     (c) => !c.aiRecommendGrade
@@ -457,6 +484,8 @@ export default async function CollectionCandidatesPage({
           <div className="mt-5">
             <CollectionCandidatesWorkbench
               candidates={filtered}
+              relatedStoriesMap={relatedStoriesMap}
+              relatedStoryPoolCapped={relatedStoryPoolCapped}
               viewFilter={query.view}
               statusFilter={query.status}
               sourceFilter={query.source}
