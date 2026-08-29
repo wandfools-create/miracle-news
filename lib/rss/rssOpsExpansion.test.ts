@@ -87,8 +87,8 @@ describe("RSS ops expansion (fixture only, no OpenAI)", () => {
     assert.equal(getRssSourceHealthLabel("yonhap"), "비활성");
     const activeKeys = getActiveRssFeedSources().map((f) => f.sourceKey);
     assert.equal(activeKeys.includes("yonhap"), false);
-    assert.equal(getActiveRssFeedSources().length, 21);
-    assert.equal(getActiveRssPublisherKeys().length, 11);
+    assert.equal(getActiveRssFeedSources().length, 22);
+    assert.equal(getActiveRssPublisherKeys().length, 12);
     assert.ok(RSS_FEED_SOURCES.some((f) => f.sourceKey === "yonhap"));
     assert.ok(
       getActiveRssFeedSources().some((f) => f.sourceKey === "yonhap-kr-radar")

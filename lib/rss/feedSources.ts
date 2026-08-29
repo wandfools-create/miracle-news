@@ -31,8 +31,13 @@ export type RssFeedSource = {
    * us-intl = 08:00 ET; korea = 20:00 ET.
    */
   collectRegion: CollectRegion;
-  /** Default: standard RSS via `feedUrl`. AP GraphQL; Yonhap KR sitemaps; Insight HTML lists. */
-  fetchKind?: "rss" | "ap-graphql" | "yna-sitemap-radar" | "insight-section-list";
+  /** Default: standard RSS via `feedUrl`. Some publishers use current official alternatives. */
+  fetchKind?:
+    | "rss"
+    | "ap-graphql"
+    | "yna-sitemap-radar"
+    | "joongang-news-sitemap"
+    | "insight-section-list";
   apCategoryPath?: string;
   /**
    * Per-publisher insert cap for this sourceKey (default RSS_MAX_INSERTS_PER_FEED).
@@ -204,6 +209,18 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     sourceCountry: "KR",
     collectRegion: COLLECT_REGION_KOREA,
     maxInsertsPerRun: 3,
+  },
+  {
+    sourceKey: "joongang",
+    label: "중앙일보",
+    /**
+     * The legacy rss.joins.com service is closed. This Google News Sitemap is
+     * published and explicitly allowed by joongang.co.kr/robots.txt.
+     */
+    feedUrl: "https://www.joongang.co.kr/sitemap/latest-articles",
+    fetchKind: "joongang-news-sitemap",
+    sourceCountry: "KR",
+    collectRegion: COLLECT_REGION_KOREA,
   },
   /**
    * Insight Korea — no public RSS (403/404). Section HTML NewsArticle cards only.

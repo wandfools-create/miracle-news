@@ -7,6 +7,7 @@ import {
 import { findExistingArticleByOriginalUrl } from "@/lib/articles/findExistingArticleByOriginalUrl";
 import { resolveSubmittedUrl } from "@/lib/from-link/resolveSubmittedUrl";
 import { fetchApNewsFeedItems } from "@/lib/rss/fetchApNewsFeed";
+import { fetchJoongangLatestItems } from "@/lib/rss/fetchJoongangLatest";
 import {
   fetchInsightSectionListItems,
   insightSectionFromFeedUrl,
@@ -396,6 +397,16 @@ async function fetchFeedItems(
       return { ok: false, error: radar.error };
     }
     return { ok: true, items: radar.items };
+  }
+
+  if (feed.fetchKind === "joongang-news-sitemap") {
+    const joongang = await fetchJoongangLatestItems({
+      sitemapUrl: feed.feedUrl,
+    });
+    if (!joongang.ok) {
+      return { ok: false, error: joongang.error };
+    }
+    return { ok: true, items: joongang.items };
   }
 
   if (feed.fetchKind === "insight-section-list") {

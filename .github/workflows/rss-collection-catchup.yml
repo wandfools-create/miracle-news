@@ -1,0 +1,49 @@
+name: RSS collection catch-up
+
+on:
+  schedule:
+    - cron: "0 0,6,12,18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rss-collection-catchup
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      SITE_URL: https://www.hannoon.co
+    steps:
+      - name: Collect regions missing their full desk run
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "Required GitHub Actions secret CRON_SECRET is missing."
+            exit 1
+          fi
+
+          utc_hour=$(date -u +%H)
+
+          call_collect_only() {
+            local desk_path="$1"
+            curl --fail --silent --show-error --retry 2 \
+              --header "Authorization: Bearer ${CRON_SECRET}" \
+              "${SITE_URL}${desk_path}?collectOnly=1"
+          }
+
+          # KR's full Vercel desk runs at 00 UTC, so only US needs catch-up.
+          if [ "${utc_hour}" != "00" ]; then
+            call_collect_only "/api/cron/desk-kr"
+          fi
+
+          # US's full Vercel desk runs at 12 UTC, so only KR needs catch-up.
+          if [ "${utc_hour}" != "12" ]; then
+            call_collect_only "/api/cron/desk-us"
+          fi

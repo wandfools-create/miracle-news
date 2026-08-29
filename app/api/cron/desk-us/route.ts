@@ -8,7 +8,8 @@ export const maxDuration = 300;
 
 /**
  * US·international desk orchestrator (Hobby cron #1).
- * collect → AI recommend → Discord brief. Fixed UTC; ±1h ET across DST OK.
+ * Collects every six hours. AI recommend + Discord only run at 12:00 UTC,
+ * unless a manual POST/forceBrief request explicitly asks for a full run.
  */
 export async function GET(request: NextRequest) {
   return runRegionalDeskOrchestrator(request, COLLECT_REGION_US_INTL);

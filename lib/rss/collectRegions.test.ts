@@ -53,7 +53,7 @@ describe("regional desk orchestrator cron (fixture only)", () => {
     const us = getActiveRssFeedSources(COLLECT_REGION_US_INTL);
     const kr = getActiveRssFeedSources(COLLECT_REGION_KOREA);
     assert.equal(us.length, 8);
-    assert.equal(kr.length, 13);
+    assert.equal(kr.length, 14);
     assert.deepEqual(
       getActiveRssPublisherKeys(COLLECT_REGION_US_INTL).sort(),
       [...US_INTL_SOURCE_KEYS].sort()
@@ -61,6 +61,7 @@ describe("regional desk orchestrator cron (fixture only)", () => {
     assert.deepEqual(getActiveRssPublisherKeys(COLLECT_REGION_KOREA).sort(), [
       "chosun",
       "insight",
+      "joongang",
       "tvchosun",
       "yonhap-kr-radar",
     ]);
@@ -129,7 +130,7 @@ describe("regional desk orchestrator cron (fixture only)", () => {
     ); // EST (−1h)
   });
 
-  it("desk orchestrator runs collect → recommend → discord independently", () => {
+  it("desk orchestrator always collects and gates recommend/Discord by cadence", () => {
     const orch = readFileSync(
       join(process.cwd(), "lib/cron/runRegionalDeskOrchestrator.ts"),
       "utf8"
@@ -138,7 +139,10 @@ describe("regional desk orchestrator cron (fixture only)", () => {
     assert.match(orch, /runMorningBriefRecommend/);
     assert.match(orch, /runMorningBriefDiscord/);
     assert.match(orch, /maybeSendDeskSystemAlert/);
-    assert.match(orch, /order:\s*\["collect",\s*"recommend",\s*"discord"\]/);
+    assert.match(orch, /resolveRegionalDeskRunPlan/);
+    assert.match(orch, /plan\.runBrief/);
+    assert.match(orch, /\["collect",\s*"recommend",\s*"discord"\]/);
+    assert.match(orch, /\["collect"\]/);
     assert.equal((orch.match(/try \{/g) ?? []).length >= 3, true);
     assert.doesNotMatch(orch, /from ["']@\/lib\/openai/);
 

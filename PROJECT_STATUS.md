@@ -65,6 +65,22 @@
 | Operational Validation | **IN PROGRESS** |
 | 다음 확인 | 날짜 전환 시 todayCount 초기화 · 오늘 0건 preparing · 신규 공개 직후 자동 갱신 · 다음 US Desk PBS/Fox 복구 · PR #17 다중 기사화 실제 운영 검증 |
 
+## 0C. 로컬 개발 (한국·미국 통합 수집 주기 v1 · Production 미적용)
+
+| 항목 | 상태 |
+|---|---|
+| Branch | `feature/unified-rss-collection-cadence-v1` |
+| 기준 main | `6a7b95dbaa6642ed772070311d64acb0967b067a` |
+| 한국·미국 RSS 수집 | 각 지역 **6시간 간격 · 하루 4회** (`00/06/12/18 UTC`) |
+| Vercel cron 수 | 기존 once-daily **2개 유지** (`desk-us`, `desk-kr`) |
+| 중간 수집 scheduler | GitHub Actions `rss-collection-catchup.yml` · `collectOnly=1` |
+| 활성화 조건 | GitHub Actions repository secret `CRON_SECRET` 필요 |
+| AI 추천·Discord | 기존 하루 2회 유지 — US `12 UTC`, KR `00 UTC` 회차만 실행 |
+| 중간 회차 | 수집만 실행; OpenAI 추천·Discord brief 미실행 |
+| 수집 저장 정책 | 기존 URL 중복·SAME EVENT·publisher/category fairness·run cap 유지 |
+| 중앙일보 | 공식 `sitemap/latest-articles` 연결 · legacy RSS 종료 HTML 거부 · **로컬 복구 완료** |
+| Production 영향 | main merge·배포·RSS 실행·DB write 없음 |
+
 ## 1. 프로젝트 기본 정보
 
 | 항목 | 현재 값 |
