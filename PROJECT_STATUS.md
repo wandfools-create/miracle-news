@@ -73,10 +73,10 @@
 | 기준 main | `6a7b95dbaa6642ed772070311d64acb0967b067a` |
 | 한국·미국 RSS 수집 | 각 지역 **6시간 간격 · 하루 4회** (`00/06/12/18 UTC`) |
 | Vercel cron 수 | 기존 once-daily **2개 유지** (`desk-us`, `desk-kr`) |
-| 중간 수집 scheduler | GitHub Actions `rss-collection-catchup.yml` · `collectOnly=1` |
+| 중간 수집 scheduler | GitHub Actions `rss-collection-catchup.yml` · 수집 4회 + 06/18 UTC 보충 브리핑 |
 | 활성화 조건 | GitHub Actions repository secret `CRON_SECRET` 필요 |
-| AI 추천·Discord | 기존 하루 2회 유지 — US `12 UTC`, KR `00 UTC` 회차만 실행 |
-| 중간 회차 | 수집만 실행; OpenAI 추천·Discord brief 미실행 |
+| AI 추천·Discord | 하루 **4회** — KR `00/18 UTC`, US `06/12 UTC` |
+| 중간 회차 | 06 UTC 미국, 18 UTC 한국 AI 추천·Discord brief 실행 |
 | 수집 저장 정책 | 기존 URL 중복·SAME EVENT·publisher/category fairness·run cap 유지 |
 | 중앙일보 | 공식 `sitemap/latest-articles` 연결 · legacy RSS 종료 HTML 거부 · **로컬 복구 완료** |
 | Production 영향 | main merge·배포·RSS 실행·DB write 없음 |
