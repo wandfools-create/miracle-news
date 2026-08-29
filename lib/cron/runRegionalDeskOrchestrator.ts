@@ -9,6 +9,7 @@ import {
   collectJsonFromResult,
   runRegionalCollect,
 } from "@/lib/cron/runRegionalCollect";
+import { resolveRegionalDeskRunPlan } from "@/lib/cron/deskRunCadence";
 import { buildDeskRunAlertInput } from "@/lib/desk/buildDeskRunAlertInput";
 import { maybeSendDeskSystemAlert } from "@/lib/desk/sendDeskSystemAlert";
 import {
@@ -28,6 +29,7 @@ export type DeskStepRecommend =
       openaiCalls: number;
       queued?: number;
       model?: string;
+      notRun?: boolean;
     }
   | {
       ok: false;
@@ -44,6 +46,7 @@ export type DeskStepDiscord =
       dryRun: boolean;
       errors: string[];
       briefEligibleCount: number;
+      notRun?: boolean;
     }
   | {
       ok: false;
@@ -72,6 +75,11 @@ export async function runRegionalDeskOrchestrator(
   }
 
   const dryRun = request.nextUrl.searchParams.get("dryRun") === "1";
+  const plan = resolveRegionalDeskRunPlan({
+    region,
+    method: request.method,
+    searchParams: request.nextUrl.searchParams,
+  });
 
   let collect: DeskStepCollect;
   try {
@@ -86,52 +94,74 @@ export async function runRegionalDeskOrchestrator(
   }
 
   let recommend: DeskStepRecommend;
-  try {
-    const result = await runMorningBriefRecommend({ region });
-    if (result.ok) {
-      recommend = {
-        ok: true,
-        updated: result.updated,
-        openaiCalls: result.openaiCalls,
-        queued: result.queued,
-        model: result.model,
-      };
-    } else {
-      recommend = {
-        ok: false,
-        error: result.error,
-        step: result.step,
-        openaiCalls: result.openaiCalls,
-      };
+  if (!plan.runBrief) {
+    recommend = {
+      ok: true,
+      updated: 0,
+      openaiCalls: 0,
+      queued: 0,
+      notRun: true,
+    };
+  } else {
+    try {
+      const result = await runMorningBriefRecommend({ region });
+      if (result.ok) {
+        recommend = {
+          ok: true,
+          updated: result.updated,
+          openaiCalls: result.openaiCalls,
+          queued: result.queued,
+          model: result.model,
+        };
+      } else {
+        recommend = {
+          ok: false,
+          error: result.error,
+          step: result.step,
+          openaiCalls: result.openaiCalls,
+        };
+      }
+    } catch (err) {
+      console.error("[desk] recommend step failed", { region, err });
+      recommend = { ok: false, error: String(err), openaiCalls: 0 };
     }
-  } catch (err) {
-    console.error("[desk] recommend step failed", { region, err });
-    recommend = { ok: false, error: String(err), openaiCalls: 0 };
   }
 
   let discord: DeskStepDiscord;
-  try {
-    const result = await runMorningBriefDiscord({ dryRun, region });
+  if (!plan.runBrief) {
     discord = {
-      ok: result.ok,
-      sent: result.sent,
-      skipped: result.skipped,
-      dryRun: result.dryRun ?? dryRun,
-      errors: result.errors,
-      briefEligibleCount: result.briefEligibleCount,
-      ...(result.ok ? {} : { error: result.errors[0] ?? "discord_failed" }),
-    };
-  } catch (err) {
-    console.error("[desk] discord step failed", { region, err });
-    discord = {
-      ok: false,
+      ok: true,
       sent: 0,
       skipped: 0,
       dryRun,
-      errors: [String(err)],
+      errors: [],
       briefEligibleCount: 0,
-      error: String(err),
+      notRun: true,
     };
+  } else {
+    try {
+      const result = await runMorningBriefDiscord({ dryRun, region });
+      discord = {
+        ok: result.ok,
+        sent: result.sent,
+        skipped: result.skipped,
+        dryRun: result.dryRun ?? dryRun,
+        errors: result.errors,
+        briefEligibleCount: result.briefEligibleCount,
+        ...(result.ok ? {} : { error: result.errors[0] ?? "discord_failed" }),
+      };
+    } catch (err) {
+      console.error("[desk] discord step failed", { region, err });
+      discord = {
+        ok: false,
+        sent: 0,
+        skipped: 0,
+        dryRun,
+        errors: [String(err)],
+        briefEligibleCount: 0,
+        error: String(err),
+      };
+    }
   }
 
   let systemAlert: Awaited<ReturnType<typeof maybeSendDeskSystemAlert>> = {
@@ -153,10 +183,14 @@ export async function runRegionalDeskOrchestrator(
     systemAlert = { sent: false, reason: "send_failed", error: String(err) };
   }
 
-  const ok = collect.ok || recommend.ok || discord.ok;
+  const ok = plan.runBrief
+    ? collect.ok || recommend.ok || discord.ok
+    : collect.ok;
 
   console.info("[desk] orchestrator done", {
     region,
+    runReason: plan.reason,
+    briefDue: plan.runBrief,
     collectOk: collect.ok,
     recommendOk: recommend.ok,
     discordOk: discord.ok,
@@ -166,7 +200,10 @@ export async function runRegionalDeskOrchestrator(
   return NextResponse.json({
     ok,
     region,
-    order: ["collect", "recommend", "discord"] as const,
+    runPlan: plan,
+    order: plan.runBrief
+      ? (["collect", "recommend", "discord"] as const)
+      : (["collect"] as const),
     steps: {
       collect,
       recommend,

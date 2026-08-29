@@ -65,11 +65,16 @@ export function formatAmericaNewYorkDateKey(
 }
 
 /**
- * Hobby-safe: one UTC cron per desk (2 total). No dual EST/EDT slots.
- * ±1h ET drift across DST is accepted.
+ * Hobby-safe: keep exactly two once-daily Vercel cron definitions. Additional
+ * collect-only runs are scheduled by GitHub Actions because Vercel Hobby cron
+ * jobs cannot run more than once per day.
  *
- * US desk  `0 12 * * *` → 08:00 EDT / 07:00 EST
- * Korea    `0 0 * * *`  → 20:00 EDT / 19:00 EST
+ * Collection slots: 00:00 / 06:00 / 12:00 / 18:00 UTC.
+ * US brief: 12:00 UTC → 08:00 EDT / 07:00 EST.
+ * KR brief: 00:00 UTC → 20:00 EDT / 19:00 EST.
  */
 export const VERCEL_CRON_DESK_US_UTC = "0 12 * * *";
 export const VERCEL_CRON_DESK_KR_UTC = "0 0 * * *";
+
+export const DESK_US_BRIEF_HOUR_UTC = 12;
+export const DESK_KR_BRIEF_HOUR_UTC = 0;
