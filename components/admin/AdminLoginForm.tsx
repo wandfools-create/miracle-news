@@ -1,7 +1,12 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
+import {
+  authenticateAdminWithTimeout,
+  resolveAdminLoginDestination,
+  shouldNavigateAfterAdminLogin,
+} from "@/lib/admin/adminLoginAuth";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function AdminLoginForm() {
@@ -11,37 +16,48 @@ export default function AdminLoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const attemptRef = useRef(0);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending) return;
+
     setError(null);
     setPending(true);
+    const attemptId = ++attemptRef.current;
 
-    const supabase = createSupabaseBrowserClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    try {
+      const auth = await authenticateAdminWithTimeout({
+        signIn: async () => {
+          const supabase = createSupabaseBrowserClient();
+          return supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password,
+          });
+        },
+      });
 
-    if (signInError) {
+      if (
+        !shouldNavigateAfterAdminLogin({
+          ok: auth.ok,
+          timedOut: auth.timedOut,
+          attemptId,
+          currentAttemptId: attemptRef.current,
+        })
+      ) {
+        if (!auth.ok) setError(auth.error);
+        return;
+      }
+
+      router.push(resolveAdminLoginDestination(searchParams.get("next")));
+      router.refresh();
+    } catch {
       setError(
-        signInError.message === "Invalid login credentials"
-          ? "이메일 또는 비밀번호가 올바르지 않습니다."
-          : signInError.message
+        "로그인 중 네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
       );
+    } finally {
       setPending(false);
-      return;
     }
-
-    const next = searchParams.get("next");
-    const destination =
-      next && next.startsWith("/admin") && !next.startsWith("/admin/login")
-        ? next
-        : "/admin";
-
-    router.push(destination);
-    router.refresh();
-    setPending(false);
   }
 
   return (

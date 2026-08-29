@@ -50,6 +50,7 @@ export async function runMorningBriefRecommend(options?: {
 /**
  * Discord evaluated-candidate brief send only. Never creates/publishes articles.
  * Collect DB writes are never rolled back from Discord failures.
+ * Sends all eligible items (no DISCORD_MORNING_BRIEF_MAX_ITEMS throttle).
  */
 export async function runMorningBriefDiscord(options?: {
   fetchImpl?: DiscordFetch;
@@ -76,10 +77,7 @@ export async function runMorningBriefDiscord(options?: {
 
   let itemsResult: Awaited<ReturnType<typeof fetchMorningBriefItems>>;
   try {
-    itemsResult = await fetchMorningBriefItems(
-      discordEnv.morningBriefMaxItems,
-      { region }
-    );
+    itemsResult = await fetchMorningBriefItems({ region });
     if (!itemsResult.ok) {
       return {
         ok: false,

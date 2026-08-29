@@ -46,7 +46,8 @@ function briefSectionRank(beat: EditorialBeat): number {
 
 export function selectMorningBriefItemsFromRows(
   rows: CollectionCandidateRow[],
-  maxItems: number
+  /** Optional emergency throttle. Omit / null / Infinity = all eligible. */
+  maxItems?: number | null
 ): MorningBriefItem[] {
   const withGrades = rows
     .map((row) => {
@@ -157,5 +158,13 @@ export function selectMorningBriefItemsFromRows(
     );
   });
 
-  return filtered.slice(0, maxItems);
+  if (
+    typeof maxItems === "number" &&
+    Number.isFinite(maxItems) &&
+    maxItems > 0 &&
+    maxItems !== Number.POSITIVE_INFINITY
+  ) {
+    return filtered.slice(0, Math.floor(maxItems));
+  }
+  return filtered;
 }

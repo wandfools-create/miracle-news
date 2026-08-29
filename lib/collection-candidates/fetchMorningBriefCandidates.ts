@@ -4,6 +4,9 @@ import { candidateFreshnessCutoffIso, normalizeAiRecommendGrade } from "@/lib/co
 import {
   selectMorningBriefItemsFromRows,
 } from "@/lib/collection-candidates/morningBriefSelection";
+import {
+  collectMorningBriefRowsByPagination,
+} from "@/lib/collection-candidates/morningBriefPagination";
 import type { MorningBriefItem } from "@/lib/discord/morningBriefMessage";
 import {
   COLLECTION_CANDIDATE_LIST_SELECT,
@@ -19,6 +22,10 @@ import {
 } from "@/lib/supabase/serviceRole";
 
 export { isMorningBriefSendEligible, selectMorningBriefItemsFromRows } from "@/lib/collection-candidates/morningBriefSelection";
+export {
+  collectMorningBriefRowsByPagination,
+  MORNING_BRIEF_FETCH_PAGE_SIZE,
+} from "@/lib/collection-candidates/morningBriefPagination";
 
 const ACTIONABLE_STATUSES = ["pending", "enrich_failed", "enriching"] as const;
 
@@ -35,33 +42,36 @@ export async function fetchMorningBriefCandidateRows(options?: {
   const { client } = createServiceRoleSupabaseClient();
   const cutoffIso = candidateFreshnessCutoffIso();
 
-  let query = client
-    .from("collection_candidates")
-    .select(COLLECTION_CANDIDATE_LIST_SELECT)
-    .in("status", [...ACTIONABLE_STATUSES])
-    .not("ai_recommended_at", "is", null)
-    .is("discord_brief_sent_at", null)
-    .or(
-      `rss_published_at.gte.${cutoffIso},and(rss_published_at.is.null,created_at.gte.${cutoffIso})`
-    );
+  return collectMorningBriefRowsByPagination(async (from, to) => {
+    let query = client
+      .from("collection_candidates")
+      .select(COLLECTION_CANDIDATE_LIST_SELECT)
+      .in("status", [...ACTIONABLE_STATUSES])
+      .not("ai_recommended_at", "is", null)
+      .is("discord_brief_sent_at", null)
+      .or(
+        `rss_published_at.gte.${cutoffIso},and(rss_published_at.is.null,created_at.gte.${cutoffIso})`
+      );
 
-  if (options?.region) {
-    query = query.in("source", sourceKeysForCollectRegion(options.region));
-  }
+    if (options?.region) {
+      query = query.in("source", sourceKeysForCollectRegion(options.region));
+    }
 
-  const { data, error } = await query
-    .order("rss_published_at", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(100);
+    const { data, error } = await query
+      .order("rss_published_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to);
 
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, rows: (data ?? []) as CollectionCandidateRow[] };
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, rows: (data ?? []) as CollectionCandidateRow[] };
+  });
 }
 
-export async function fetchMorningBriefItems(
-  maxItems: number,
-  options?: { region?: CollectRegion | null }
-): Promise<
+/** All eligible evaluated items (no env throttle on the brief send path). */
+export async function fetchMorningBriefItems(options?: {
+  region?: CollectRegion | null;
+}): Promise<
   | { ok: true; items: MorningBriefItem[] }
   | { ok: false; error: string }
 > {
@@ -69,7 +79,7 @@ export async function fetchMorningBriefItems(
   if (!loaded.ok) return loaded;
   return {
     ok: true,
-    items: selectMorningBriefItemsFromRows(loaded.rows, maxItems),
+    items: selectMorningBriefItemsFromRows(loaded.rows),
   };
 }
 
