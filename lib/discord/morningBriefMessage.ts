@@ -3,6 +3,7 @@ import type { EditorialBeat } from "@/lib/editorialPolicy/signals";
 import {
   buildDismissCustomId,
   buildMakeArticleCustomId,
+  buildPublishReadyArticleCustomId,
   buildShortlistCustomId,
 } from "@/lib/discord/allowlist";
 import { absoluteUrl } from "@/lib/seo/site";
@@ -66,7 +67,13 @@ export function formatMorningBriefMessageContent(
   }
 ): string {
   const badge =
-    item.aiRecommendGrade === "best" ? "⭐ BEST" : "🔥 우선 검토";
+    item.aiRecommendGrade === "best"
+      ? "⭐ BEST"
+      : item.aiRecommendGrade === "priority"
+        ? "🔥 우선 검토"
+        : item.aiRecommendGrade === "normal"
+          ? "📰 일반"
+          : "▫️ 낮은 우선순위";
   const sourceLabel = item.feedLabel?.trim() || item.source;
   const published = formatPublishedAtKo(item.rssPublishedAt);
   const reason = item.aiRecommendReason?.trim() || "";
@@ -257,4 +264,53 @@ export function buildMorningBriefPayload(
       extra
     ),
   };
+}
+
+export function buildArticleReadyPayload(input: {
+  articleId: string;
+  title: string;
+  source: string;
+  state?: "ready" | "published" | "failed";
+  error?: string;
+}): { content: string; components: DiscordActionRow[] } {
+  const state = input.state ?? "ready";
+  const lines = [
+    state === "published"
+      ? "✅ 공개 완료"
+      : state === "failed"
+        ? "❌ 공개 실패"
+        : "📝 기사화 완료 · 공개 대기",
+    input.title.trim(),
+    input.source.trim(),
+  ];
+  if (state === "ready") {
+    lines.push("", "관리자가 내용을 확인했다면 아래 버튼으로 바로 공개할 수 있습니다.");
+  }
+  if (state === "failed" && input.error) lines.push("", input.error.slice(0, 180));
+
+  const components: DiscordActionRow[] = [
+    {
+      type: 1,
+      components: [
+        ...(state === "ready"
+          ? [{
+              type: 2 as const,
+              style: 3 as const,
+              label: "✅ 바로 공개",
+              custom_id: buildPublishReadyArticleCustomId(input.articleId),
+            }]
+          : []),
+        {
+          type: 2,
+          style: 5,
+          label: state === "published" ? "공개 기사 확인" : "빠른 검토 열기",
+          url:
+            state === "published"
+              ? absoluteUrl(`/admin/published?highlight=${encodeURIComponent(input.articleId)}`)
+              : quickReviewAdminUrl(input.articleId),
+        },
+      ],
+    },
+  ];
+  return { content: lines.join("\n"), components };
 }
