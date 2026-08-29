@@ -8,7 +8,6 @@ export type DiscordEnv = {
   morningBriefChannelId: string;
   articleReadyChannelId: string | null;
   allowedUserIds: Set<string>;
-  morningBriefMaxItems: number;
 };
 
 function parseAllowedUserIds(raw: string | undefined): Set<string> {
@@ -20,11 +19,12 @@ function parseAllowedUserIds(raw: string | undefined): Set<string> {
   );
 }
 
-export function getMorningBriefMaxItems(): number {
-  const raw = process.env.DISCORD_MORNING_BRIEF_MAX_ITEMS?.trim();
-  const n = raw ? Number.parseInt(raw, 10) : 10;
-  if (!Number.isFinite(n) || n < 1) return 10;
-  return Math.min(n, 25);
+/**
+ * @deprecated Brief send path no longer applies this throttle (sends all eligible).
+ * Kept only so Production env presence is harmless if still registered.
+ */
+export function getMorningBriefMaxItems(): number | null {
+  return null;
 }
 
 export function getDiscordEnv(): DiscordEnv | null {
@@ -59,7 +59,6 @@ export function getDiscordEnv(): DiscordEnv | null {
     morningBriefChannelId,
     articleReadyChannelId,
     allowedUserIds,
-    morningBriefMaxItems: getMorningBriefMaxItems(),
   };
 }
 
