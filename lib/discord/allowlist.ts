@@ -3,6 +3,16 @@ const CANDIDATE_UUID_RE =
 
 export type CandidateButtonAction = "shortlist" | "dismiss" | "make_article";
 
+export function buildPublishReadyArticleCustomId(articleId: string): string {
+  return `ar:pb:${articleId}`;
+}
+
+export function parsePublishReadyArticleCustomId(customId: string): string | null {
+  const match = customId.trim().match(/^ar:pb:(.+)$/);
+  if (!match || !isValidCandidateUuid(match[1]!)) return null;
+  return match[1]!.trim();
+}
+
 export function isValidCandidateUuid(value: string): boolean {
   return CANDIDATE_UUID_RE.test(value.trim());
 }

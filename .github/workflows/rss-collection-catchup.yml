@@ -20,7 +20,7 @@ jobs:
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
       SITE_URL: https://www.hannoon.co
     steps:
-      - name: Collect regions missing their full desk run
+      - name: Collect both regions and run the due catch-up brief
         shell: bash
         run: |
           set -euo pipefail
@@ -31,19 +31,28 @@ jobs:
 
           utc_hour=$(date -u +%H)
 
-          call_collect_only() {
+          call_desk() {
             local desk_path="$1"
+            local query="$2"
             curl --fail --silent --show-error --retry 2 \
               --header "Authorization: Bearer ${CRON_SECRET}" \
-              "${SITE_URL}${desk_path}?collectOnly=1"
+              "${SITE_URL}${desk_path}?${query}"
           }
 
           # KR's full Vercel desk runs at 00 UTC, so only US needs catch-up.
           if [ "${utc_hour}" != "00" ]; then
-            call_collect_only "/api/cron/desk-kr"
+            if [ "${utc_hour}" = "18" ]; then
+              call_desk "/api/cron/desk-kr" "forceBrief=1"
+            else
+              call_desk "/api/cron/desk-kr" "collectOnly=1"
+            fi
           fi
 
           # US's full Vercel desk runs at 12 UTC, so only KR needs catch-up.
           if [ "${utc_hour}" != "12" ]; then
-            call_collect_only "/api/cron/desk-us"
+            if [ "${utc_hour}" = "06" ]; then
+              call_desk "/api/cron/desk-us" "forceBrief=1"
+            else
+              call_desk "/api/cron/desk-us" "collectOnly=1"
+            fi
           fi

@@ -99,7 +99,7 @@ describe("regional desk collection cadence", () => {
     );
   });
 
-  it("uses GitHub catch-up for four collection slots without extra briefs", () => {
+  it("uses GitHub catch-up for four collection slots and four total briefs", () => {
     const workflow = readFileSync(
       join(process.cwd(), ".github/workflows/rss-collection-catchup.yml"),
       "utf8"
@@ -107,6 +107,7 @@ describe("regional desk collection cadence", () => {
     assert.match(workflow, /0 0,6,12,18 \* \* \*/);
     assert.match(workflow, /collectOnly=1/);
     assert.match(workflow, /secrets\.CRON_SECRET/);
-    assert.doesNotMatch(workflow, /forceBrief=1/);
+    assert.match(workflow, /desk-us" "forceBrief=1"/);
+    assert.match(workflow, /desk-kr" "forceBrief=1"/);
   });
 });

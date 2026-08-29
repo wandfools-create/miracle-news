@@ -7,7 +7,9 @@ import type { CollectionCandidateRow } from "@/lib/collection-candidates/types";
 import {
   isAllowedDiscordGuild,
   isAllowedDiscordUser,
+  buildPublishReadyArticleCustomId,
   parseCandidateButtonCustomId,
+  parsePublishReadyArticleCustomId,
 } from "@/lib/discord/allowlist";
 import {
   buildMorningBriefPayload,
@@ -51,6 +53,8 @@ function row(partial: Partial<CollectionCandidateRow>): CollectionCandidateRow {
     rss_summary_ko: null,
     rss_published_at: partial.rss_published_at ?? "2026-08-24T12:00:00.000Z",
     rss_guid: null,
+    thumbnail_url: null,
+    category: partial.category ?? null,
     custom_unique_id: null,
     status: partial.status ?? "pending",
     selected_at: null,
@@ -265,7 +269,7 @@ describe("Discord desk (fixture only, no OpenAI/Discord/RSS)", () => {
     assert.equal(result.kind, "update_message");
   });
 
-  it("selectMorningBriefItems keeps best/priority only after post-process", () => {
+  it("selectMorningBriefItems sends every evaluated grade after post-process", () => {
     const items = selectMorningBriefItemsFromRows(
       [
         row({
@@ -297,10 +301,35 @@ describe("Discord desk (fixture only, no OpenAI/Discord/RSS)", () => {
       10
     );
 
-    assert.ok(items.length >= 2);
-    assert.ok(items.every((i) => i.aiRecommendGrade === "best" || i.aiRecommendGrade === "priority"));
+    assert.equal(items.length, 4);
+    assert.ok(items.some((i) => i.aiRecommendGrade === "normal"));
     const nfl = items.find((i) => i.title.includes("Chiefs"));
-    assert.equal(nfl, undefined);
+    assert.equal(nfl?.aiRecommendGrade, "low");
+  });
+
+  it("authorized article-ready publish button continues as an isolated action", async () => {
+    const articleId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    assert.equal(buildPublishReadyArticleCustomId(articleId), `ar:pb:${articleId}`);
+    assert.equal(parsePublishReadyArticleCustomId(`ar:pb:${articleId}`), articleId);
+    let published = false;
+    const result = await handleDiscordComponentInteraction(
+      {
+        type: 3,
+        guild_id: GUILD_ID,
+        member: { user: { id: USER_ID } },
+        data: { custom_id: `ar:pb:${articleId}` },
+      },
+      stubDeps({
+        publishReadyArticle: async () => {
+          published = true;
+          return { ok: true };
+        },
+        editOriginalMessage: async () => ({ ok: true }),
+      })
+    );
+    assert.equal(result.kind, "deferred_update");
+    if (result.kind === "deferred_update") await result.continueWork();
+    assert.equal(published, true);
   });
 
   it("same-event post-process leaves one best in brief selection", () => {

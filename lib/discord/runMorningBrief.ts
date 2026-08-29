@@ -22,7 +22,7 @@ export type MorningBriefDiscordResult = {
   errors: string[];
   dryRun?: boolean;
   region?: CollectRegion | null;
-  /** best/priority items selected for brief (before send). */
+  /** Evaluated actionable items selected for brief (before send). */
   briefEligibleCount: number;
 };
 
@@ -48,7 +48,7 @@ export async function runMorningBriefRecommend(options?: {
 }
 
 /**
- * Discord BEST/priority brief send only. Never creates/publishes articles.
+ * Discord evaluated-candidate brief send only. Never creates/publishes articles.
  * Collect DB writes are never rolled back from Discord failures.
  */
 export async function runMorningBriefDiscord(options?: {
