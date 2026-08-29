@@ -75,8 +75,10 @@
 | Vercel cron 수 | 기존 once-daily **2개 유지** (`desk-us`, `desk-kr`) |
 | 중간 수집 scheduler | GitHub Actions `rss-collection-catchup.yml` · 수집 4회 + 06/18 UTC 보충 브리핑 |
 | 활성화 조건 | GitHub Actions repository secret `CRON_SECRET` 필요 |
-| AI 추천·Discord | 하루 **4회** — KR `00/18 UTC`, US `06/12 UTC` |
+| AI 추천·Discord | 하루 **4회** — KR `00/18 UTC`, US `06/12 UTC`; 평가 완료 후보를 등급 필터 없이 전송 |
 | 중간 회차 | 06 UTC 미국, 18 UTC 한국 AI 추천·Discord brief 실행 |
+| Discord 기사화 완료 채널 | `DISCORD_ARTICLE_READY_CHANNEL_ID` 별도 채널 · 허용 사용자 `바로 공개` 버튼 |
+| Discord 바로 공개 안전장치 | 서명·guild/user allowlist·quick_review 상태·본문 품질 서버 재검증; 사람 클릭 없이는 공개 안 함 |
 | 수집 저장 정책 | 기존 URL 중복·SAME EVENT·publisher/category fairness·run cap 유지 |
 | 중앙일보 | 공식 `sitemap/latest-articles` 연결 · legacy RSS 종료 HTML 거부 · **로컬 복구 완료** |
 | Production 영향 | main merge·배포·RSS 실행·DB write 없음 |
@@ -235,6 +237,7 @@ Vercel Production ── https://www.hannoon.co
 - `DISCORD_BOT_TOKEN`
 - `DISCORD_GUILD_ID`
 - `DISCORD_MORNING_BRIEF_CHANNEL_ID`
+- `DISCORD_ARTICLE_READY_CHANNEL_ID`
 - `DISCORD_SYSTEM_ALERTS_CHANNEL_ID`
 - `DISCORD_ALLOWED_USER_IDS`
 - `DISCORD_MORNING_BRIEF_MAX_ITEMS`
