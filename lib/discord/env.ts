@@ -6,6 +6,7 @@ export type DiscordEnv = {
   botToken: string;
   guildId: string;
   morningBriefChannelId: string;
+  articleReadyChannelId: string | null;
   allowedUserIds: Set<string>;
   morningBriefMaxItems: number;
 };
@@ -33,6 +34,8 @@ export function getDiscordEnv(): DiscordEnv | null {
   const guildId = process.env.DISCORD_GUILD_ID?.trim();
   const morningBriefChannelId =
     process.env.DISCORD_MORNING_BRIEF_CHANNEL_ID?.trim();
+  const articleReadyChannelId =
+    process.env.DISCORD_ARTICLE_READY_CHANNEL_ID?.trim() || null;
   const allowedUserIds = parseAllowedUserIds(
     process.env.DISCORD_ALLOWED_USER_IDS
   );
@@ -54,6 +57,7 @@ export function getDiscordEnv(): DiscordEnv | null {
     botToken,
     guildId,
     morningBriefChannelId,
+    articleReadyChannelId,
     allowedUserIds,
     morningBriefMaxItems: getMorningBriefMaxItems(),
   };
