@@ -2,8 +2,10 @@ import {
   isAllowedDiscordGuild,
   isAllowedDiscordUser,
   parseCandidateButtonCustomId,
+  parsePublishReadyArticleCustomId,
 } from "@/lib/discord/allowlist";
 import {
+  buildArticleReadyPayload,
   buildMorningBriefPayload,
   type MorningBriefMessageState,
 } from "@/lib/discord/morningBriefMessage";
@@ -67,12 +69,24 @@ export type EditOriginalMessageFn = (input: {
   components: unknown[];
 }) => Promise<{ ok: true } | { ok: false; error: string }>;
 
+export type PublishReadyArticleFn = (input: { articleId: string }) => Promise<
+  { ok: true } | { ok: false; error: string; step?: string }
+>;
+
+export type NotifyArticleReadyFn = (input: {
+  articleId: string;
+  title: string;
+  source: string;
+}) => Promise<{ ok: true } | { ok: false; error: string }>;
+
 export type InteractionHandlerDeps = {
   allowedGuildId: string;
   allowedUserIds: Set<string>;
   dismiss: DismissFn;
   shortlist: ShortlistFn;
   makeArticle?: MakeArticleFn;
+  publishReadyArticle?: PublishReadyArticleFn;
+  notifyArticleReady?: NotifyArticleReadyFn;
   editOriginalMessage?: EditOriginalMessageFn;
   fetchCandidate: (candidateId: string) => Promise<MorningBriefItem | null>;
   fetchStatus: (candidateId: string) => Promise<string | null>;
@@ -118,6 +132,27 @@ export async function handleDiscordComponentInteraction(
   const customId = payload.data?.custom_id;
   if (!customId) {
     return { kind: "bad_request", message: "missing_custom_id" };
+  }
+
+  const readyArticleId = parsePublishReadyArticleCustomId(customId);
+  if (readyArticleId) {
+    if (!deps.publishReadyArticle || !deps.editOriginalMessage) {
+      return { kind: "ephemeral", message: "바로 공개 기능이 설정되지 않았습니다." };
+    }
+    return {
+      kind: "deferred_update",
+      continueWork: async () => {
+        const result = await deps.publishReadyArticle!({ articleId: readyArticleId });
+        const message = buildArticleReadyPayload({
+          articleId: readyArticleId,
+          title: "기사",
+          source: "한눈",
+          state: result.ok ? "published" : "failed",
+          ...(!result.ok ? { error: result.error } : {}),
+        });
+        await deps.editOriginalMessage!(message);
+      },
+    };
   }
 
   const parsed = parseCandidateButtonCustomId(customId);
@@ -186,6 +221,13 @@ export async function handleDiscordComponentInteraction(
             content: created.content,
             components: created.components,
           });
+          if (deps.notifyArticleReady) {
+            await deps.notifyArticleReady({
+              articleId: result.articleId,
+              title: item.title,
+              source: item.feedLabel?.trim() || item.source,
+            });
+          }
         } catch (err) {
           const failed = buildMorningBriefPayload(item, "article_failed", {
             error: String(err),
