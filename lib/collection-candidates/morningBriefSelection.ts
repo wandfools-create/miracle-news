@@ -102,8 +102,6 @@ export function selectMorningBriefItemsFromRows(
   for (const item of withGrades) {
     const adjusted = gradeById.get(item.id);
     if (!adjusted) continue;
-    if (adjusted.grade !== "best" && adjusted.grade !== "priority") continue;
-
     const signal = {
       title: item.title,
       summary: item.summary,
