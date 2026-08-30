@@ -419,7 +419,6 @@ describe("Discord desk (fixture only, no OpenAI/Discord/RSS)", () => {
     assert.equal(
       isMorningBriefSendEligible({
         status: "pending",
-        ai_recommended_at: "2026-08-24T10:00:00.000Z",
         discord_brief_sent_at: null,
       }),
       true
@@ -427,10 +426,16 @@ describe("Discord desk (fixture only, no OpenAI/Discord/RSS)", () => {
     assert.equal(
       isMorningBriefSendEligible({
         status: "pending",
-        ai_recommended_at: "2026-08-24T10:00:00.000Z",
         discord_brief_sent_at: "2026-08-24T11:00:00.000Z",
       }),
       false
+    );
+    assert.equal(
+      isMorningBriefSendEligible({
+        status: "pending",
+        discord_brief_sent_at: null,
+      }),
+      true
     );
   });
 });

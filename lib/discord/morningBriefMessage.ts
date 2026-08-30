@@ -15,9 +15,11 @@ export type MorningBriefItem = {
   title: string;
   originalUrl: string;
   rssPublishedAt: string | null;
-  aiRecommendGrade: AiRecommendGrade;
+  aiRecommendGrade: AiRecommendGrade | null;
   aiRecommendScore: number | null;
   aiRecommendReason: string | null;
+  /** Set when AI recommend ran; null = not yet evaluated. */
+  aiRecommendedAt?: string | null;
   /** Optional desk section from editorial policy. */
   editorialBeat?: EditorialBeat;
   /** One-line DIFFERENT ANGLE / viewpoint note. */
@@ -73,7 +75,11 @@ export function formatMorningBriefMessageContent(
         ? "🔥 우선 검토"
         : item.aiRecommendGrade === "normal"
           ? "📰 일반"
-          : "▫️ 낮은 우선순위";
+          : item.aiRecommendGrade === "low"
+            ? "▫️ 낮은 우선순위"
+            : item.aiRecommendedAt
+              ? "⚠️ AI 평가 실패"
+              : "⏳ AI 미평가";
   const sourceLabel = item.feedLabel?.trim() || item.source;
   const published = formatPublishedAtKo(item.rssPublishedAt);
   const reason = item.aiRecommendReason?.trim() || "";

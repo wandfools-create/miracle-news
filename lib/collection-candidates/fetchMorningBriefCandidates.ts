@@ -1,6 +1,6 @@
 import "server-only";
 
-import { candidateFreshnessCutoffIso, normalizeAiRecommendGrade } from "@/lib/collection-candidates/candidateRecommend";
+import { candidateFreshnessCutoffIso } from "@/lib/collection-candidates/candidateRecommend";
 import {
   selectMorningBriefItemsFromRows,
 } from "@/lib/collection-candidates/morningBriefSelection";
@@ -29,7 +29,7 @@ export {
 
 const ACTIONABLE_STATUSES = ["pending", "enrich_failed", "enriching"] as const;
 
-/** Rows not yet sent to Discord; AI evaluated; within 48h lookback. */
+/** Actionable rows not yet sent to Discord; within 48h lookback (AI eval optional). */
 export async function fetchMorningBriefCandidateRows(options?: {
   region?: CollectRegion | null;
 }): Promise<
@@ -47,7 +47,6 @@ export async function fetchMorningBriefCandidateRows(options?: {
       .from("collection_candidates")
       .select(COLLECTION_CANDIDATE_LIST_SELECT)
       .in("status", [...ACTIONABLE_STATUSES])
-      .not("ai_recommended_at", "is", null)
       .is("discord_brief_sent_at", null)
       .or(
         `rss_published_at.gte.${cutoffIso},and(rss_published_at.is.null,created_at.gte.${cutoffIso})`
@@ -68,7 +67,7 @@ export async function fetchMorningBriefCandidateRows(options?: {
   });
 }
 
-/** All eligible evaluated items (no env throttle on the brief send path). */
+/** All eligible actionable items (no env throttle; AI eval not required). */
 export async function fetchMorningBriefItems(options?: {
   region?: CollectRegion | null;
 }): Promise<
@@ -126,22 +125,8 @@ export async function fetchCandidateForMorningBriefMessage(
 
   if (error || !data) return null;
 
-  const row = data as CollectionCandidateRow;
-  const grade = normalizeAiRecommendGrade(row.ai_recommend_grade);
-  if (!grade) return null;
-
-  return {
-    id: row.id,
-    source: row.source,
-    feedLabel: row.feed_label,
-    title: row.rss_title,
-    originalUrl: row.original_url,
-    rssPublishedAt: row.rss_published_at,
-    aiRecommendGrade: grade,
-    aiRecommendScore:
-      typeof row.ai_recommend_score === "number" ? row.ai_recommend_score : null,
-    aiRecommendReason: row.ai_recommend_reason,
-  };
+  const items = selectMorningBriefItemsFromRows([data as CollectionCandidateRow]);
+  return items[0] ?? null;
 }
 
 export async function fetchCandidateStatus(

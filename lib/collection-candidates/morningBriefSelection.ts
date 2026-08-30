@@ -16,12 +16,9 @@ const ACTIONABLE_STATUSES = ["pending", "enrich_failed", "enriching"] as const;
 
 /** Pure eligibility check (DB query uses the same rules). */
 export function isMorningBriefSendEligible(
-  row: Pick<
-    CollectionCandidateRow,
-    "discord_brief_sent_at" | "ai_recommended_at" | "status"
-  >
+  row: Pick<CollectionCandidateRow, "discord_brief_sent_at" | "status">
 ): boolean {
-  if (!row.ai_recommended_at || row.discord_brief_sent_at) return false;
+  if (row.discord_brief_sent_at) return false;
   return (ACTIONABLE_STATUSES as readonly string[]).includes(row.status);
 }
 
@@ -44,34 +41,21 @@ function briefSectionRank(beat: EditorialBeat): number {
   }
 }
 
+function rowToBriefSignal(row: CollectionCandidateRow) {
+  return {
+    title: row.rss_title,
+    summary: row.rss_summary ?? "",
+    source: row.source,
+    category: row.category ?? null,
+  };
+}
+
 export function selectMorningBriefItemsFromRows(
   rows: CollectionCandidateRow[],
   /** Optional emergency throttle. Omit / null / Infinity = all eligible. */
   maxItems?: number | null
 ): MorningBriefItem[] {
-  const withGrades = rows
-    .map((row) => {
-      const grade = normalizeAiRecommendGrade(row.ai_recommend_grade);
-      if (!grade) return null;
-      return {
-        id: row.id,
-        source: row.source,
-        feedLabel: row.feed_label,
-        title: row.rss_title,
-        summary: row.rss_summary ?? "",
-        originalUrl: row.original_url,
-        rssPublishedAt: row.rss_published_at,
-        aiRecommendGrade: grade,
-        aiRecommendScore:
-          typeof row.ai_recommend_score === "number"
-            ? row.ai_recommend_score
-            : null,
-        aiRecommendReason: row.ai_recommend_reason,
-        createdAt: row.created_at,
-        category: row.category ?? null,
-      };
-    })
-    .filter(Boolean) as Array<
+  const evaluated: Array<
     MorningBriefItem & {
       summary: string;
       createdAt: string;
@@ -80,10 +64,58 @@ export function selectMorningBriefItemsFromRows(
         ReturnType<typeof normalizeAiRecommendGrade>
       >;
     }
-  >;
+  > = [];
+  const unevaluated: MorningBriefItem[] = [];
+
+  for (const row of rows) {
+    const grade = normalizeAiRecommendGrade(row.ai_recommend_grade);
+    const signal = rowToBriefSignal(row);
+    const beat = detectEditorialBeat(signal);
+    const angle = describeViewpointAngle(signal);
+
+    if (!grade) {
+      unevaluated.push({
+        id: row.id,
+        source: row.source,
+        feedLabel: row.feed_label,
+        title: row.rss_title,
+        originalUrl: row.original_url,
+        rssPublishedAt: row.rss_published_at,
+        aiRecommendGrade: null,
+        aiRecommendScore:
+          typeof row.ai_recommend_score === "number"
+            ? row.ai_recommend_score
+            : null,
+        aiRecommendReason: null,
+        aiRecommendedAt: row.ai_recommended_at,
+        editorialBeat: beat,
+        viewpointNote: angle,
+      });
+      continue;
+    }
+
+    evaluated.push({
+      id: row.id,
+      source: row.source,
+      feedLabel: row.feed_label,
+      title: row.rss_title,
+      summary: row.rss_summary ?? "",
+      originalUrl: row.original_url,
+      rssPublishedAt: row.rss_published_at,
+      aiRecommendGrade: grade,
+      aiRecommendScore:
+        typeof row.ai_recommend_score === "number"
+          ? row.ai_recommend_score
+          : null,
+      aiRecommendReason: row.ai_recommend_reason,
+      aiRecommendedAt: row.ai_recommended_at,
+      createdAt: row.created_at,
+      category: row.category ?? null,
+    });
+  }
 
   const postProcessed = applyAiRecommendPostProcess(
-    withGrades.map((item) => ({
+    evaluated.map((item) => ({
       id: item.id,
       grade: item.aiRecommendGrade,
       score: item.aiRecommendScore ?? 0,
@@ -100,7 +132,7 @@ export function selectMorningBriefItemsFromRows(
   const gradeById = new Map(postProcessed.map((p) => [p.id, p]));
 
   const filtered: MorningBriefItem[] = [];
-  for (const item of withGrades) {
+  for (const item of evaluated) {
     const adjusted = gradeById.get(item.id);
     if (!adjusted) continue;
     const signal = {
@@ -124,10 +156,13 @@ export function selectMorningBriefItemsFromRows(
       aiRecommendGrade: adjusted.grade,
       aiRecommendScore: adjusted.score,
       aiRecommendReason: reasonParts.join(" · ") || null,
+      aiRecommendedAt: item.aiRecommendedAt,
       editorialBeat: beat,
       viewpointNote: angle,
     });
   }
+
+  filtered.push(...unevaluated);
 
   filtered.sort((a, b) => {
     const beatDiff =
