@@ -16,6 +16,8 @@ import {
 } from "./morningBriefSelection";
 import type { CollectionCandidateRow } from "./types";
 import { sourceKeysForCollectRegion } from "@/lib/rss/collectRegions";
+import { formatMorningBriefMessageContent } from "@/lib/discord/morningBriefMessage";
+import { isCandidateWithinLookback, candidateFreshnessCutoffIso } from "@/lib/collection-candidates/candidateRecommend";
 
 function uuid(n: number): string {
   const hex = n.toString(16).padStart(12, "0");
@@ -52,10 +54,16 @@ function row(partial: Partial<CollectionCandidateRow> & { id: string }): Collect
     enrich_attempt_count: 0,
     article_id: null,
     collection_run_id: null,
-    ai_recommend_grade: partial.ai_recommend_grade ?? "best",
+    ai_recommend_grade:
+      partial.ai_recommend_grade !== undefined
+        ? partial.ai_recommend_grade
+        : "best",
     ai_recommend_score: partial.ai_recommend_score ?? 80,
     ai_recommend_reason: partial.ai_recommend_reason ?? "test",
-    ai_recommended_at: partial.ai_recommended_at ?? "2026-08-28T10:00:00.000Z",
+    ai_recommended_at:
+      partial.ai_recommended_at !== undefined
+        ? partial.ai_recommended_at
+        : "2026-08-28T10:00:00.000Z",
     discord_brief_sent_at: partial.discord_brief_sent_at ?? null,
     discord_brief_message_id: partial.discord_brief_message_id ?? null,
     created_at: partial.created_at ?? "2026-08-28T09:00:00.000Z",
@@ -76,42 +84,108 @@ function sortLikeMorningBriefFetch(rows: CollectionCandidateRow[]): CollectionCa
 }
 
 describe("morning brief selection without legacy caps", () => {
-  it("includes more than 10, 25, and 100 evaluated candidates including normal/low", () => {
+  it("includes all AI grades and unevaluated candidates", () => {
     const topics = [
       "Congress votes on war powers resolution after overseas strike",
       "Federal Reserve signals interest rate path for next quarter",
       "Supreme Court accepts emergency appeal on voting rules",
       "Pentagon announces Indo-Pacific defense cooperation talks",
     ];
-    const rows = Array.from({ length: 130 }, (_, i) =>
+    const rows = [
+      ...Array.from({ length: 126 }, (_, i) =>
+        row({
+          id: uuid(i + 1),
+          ai_recommend_grade:
+            i % 4 === 0
+              ? "best"
+              : i % 4 === 1
+                ? "priority"
+                : i % 4 === 2
+                  ? "normal"
+                  : "low",
+          rss_title: `${topics[i % topics.length]} — case ${i + 1}`,
+          rss_summary: `Distinct policy update number ${i + 1} with unique details.`,
+          original_url: `https://apnews.com/article/unique-${i + 1}`,
+        })
+      ),
       row({
-        id: uuid(i + 1),
-        ai_recommend_grade:
-          i % 4 === 0
-            ? "best"
-            : i % 4 === 1
-              ? "priority"
-              : i % 4 === 2
-                ? "normal"
-                : "low",
-        rss_title: `${topics[i % topics.length]} — case ${i + 1}`,
-        rss_summary: `Distinct policy update number ${i + 1} with unique details.`,
-        original_url: `https://apnews.com/article/unique-${i + 1}`,
-      })
-    );
+        id: uuid(127),
+        ai_recommend_grade: null,
+        ai_recommended_at: null,
+        rss_title: "Unevaluated headline pending AI triage",
+      }),
+      row({
+        id: uuid(128),
+        ai_recommend_grade: null,
+        ai_recommended_at: "2026-08-28T10:30:00.000Z",
+        rss_title: "Evaluated timestamp but missing grade",
+      }),
+      row({
+        id: uuid(129),
+        ai_recommend_grade: null,
+        ai_recommended_at: null,
+        ai_recommend_reason: null,
+        rss_title: "Still waiting after recommend batch failure",
+      }),
+    ];
 
     const all = selectMorningBriefItemsFromRows(rows);
     assert.ok(all.length > 100, `expected >100 got ${all.length}`);
     assert.equal(all.length, rows.length);
     assert.ok(all.some((x) => x.aiRecommendGrade === "normal"));
     assert.ok(all.some((x) => x.aiRecommendGrade === "low"));
+    assert.ok(all.some((x) => x.aiRecommendGrade === null));
   });
 
-  it("excludes already-sent candidates via eligibility helper", () => {
+  it("shows AI 미평가 and AI 평가 실패 badges without inventing grades", () => {
+    const unevaluated = selectMorningBriefItemsFromRows([
+      row({
+        id: uuid(200),
+        ai_recommend_grade: null,
+        ai_recommended_at: null,
+        rss_title: "Pending AI triage headline",
+      }),
+    ]);
+    assert.equal(unevaluated[0]!.aiRecommendGrade, null);
+    assert.match(
+      formatMorningBriefMessageContent(unevaluated[0]!),
+      /AI 미평가/
+    );
+
+    const failed = selectMorningBriefItemsFromRows([
+      row({
+        id: uuid(201),
+        ai_recommend_grade: null,
+        ai_recommended_at: "2026-08-28T11:00:00.000Z",
+        rss_title: "Missing grade after recommend attempt",
+      }),
+    ]);
+    assert.equal(failed[0]!.aiRecommendGrade, null);
+    assert.match(formatMorningBriefMessageContent(failed[0]!), /AI 평가 실패/);
+  });
+
+  it("keeps unevaluated candidates when recommend step would fail for them", () => {
+    const rows = [
+      row({
+        id: uuid(300),
+        ai_recommend_grade: "best",
+        ai_recommended_at: "2026-08-28T10:00:00.000Z",
+      }),
+      row({
+        id: uuid(301),
+        ai_recommend_grade: null,
+        ai_recommended_at: null,
+      }),
+    ];
+    const items = selectMorningBriefItemsFromRows(rows);
+    assert.equal(items.length, 2);
+    assert.ok(items.some((i) => i.id === uuid(301) && i.aiRecommendGrade === null));
+  });
+
+  it("excludes already-sent and non-actionable candidates via eligibility helper", () => {
     assert.equal(
       isMorningBriefSendEligible({
         status: "pending",
-        ai_recommended_at: "2026-08-28T10:00:00.000Z",
         discord_brief_sent_at: null,
       }),
       true
@@ -119,8 +193,21 @@ describe("morning brief selection without legacy caps", () => {
     assert.equal(
       isMorningBriefSendEligible({
         status: "pending",
-        ai_recommended_at: "2026-08-28T10:00:00.000Z",
+        discord_brief_sent_at: null,
+      }),
+      true
+    );
+    assert.equal(
+      isMorningBriefSendEligible({
+        status: "pending",
         discord_brief_sent_at: "2026-08-28T11:00:00.000Z",
+      }),
+      false
+    );
+    assert.equal(
+      isMorningBriefSendEligible({
+        status: "shortlisted",
+        discord_brief_sent_at: null,
       }),
       false
     );
@@ -192,7 +279,7 @@ describe("collectMorningBriefRowsByPagination", () => {
 });
 
 describe("fetchMorningBriefCandidateRows order wiring", () => {
-  it("orders by rss_published_at, created_at, then id and paginates", () => {
+  it("orders by rss_published_at, created_at, then id and paginates without AI filter", () => {
     const src = readFileSync(
       join(process.cwd(), "lib/collection-candidates/fetchMorningBriefCandidates.ts"),
       "utf8"
@@ -202,6 +289,39 @@ describe("fetchMorningBriefCandidateRows order wiring", () => {
     assert.match(src, /\.order\("id"/);
     assert.match(src, /collectMorningBriefRowsByPagination/);
     assert.doesNotMatch(src, /\.limit\(100\)/);
+    assert.doesNotMatch(src, /ai_recommended_at", "is", null\)/);
+  });
+
+  it("excludes candidates outside the 48h lookback", () => {
+    const cutoff = candidateFreshnessCutoffIso(
+      Date.parse("2026-08-28T12:00:00.000Z")
+    );
+    assert.equal(
+      isCandidateWithinLookback({
+        rssPublishedAt: "2026-08-27T12:00:00.000Z",
+        createdAt: "2026-08-27T12:00:00.000Z",
+        cutoffIso: cutoff,
+      }),
+      true
+    );
+    assert.equal(
+      isCandidateWithinLookback({
+        rssPublishedAt: "2026-08-20T12:00:00.000Z",
+        createdAt: "2026-08-20T12:00:00.000Z",
+        cutoffIso: cutoff,
+      }),
+      false
+    );
+  });
+
+  it("brief pipeline does not auto-create or auto-publish articles", () => {
+    const runSrc = readFileSync(
+      join(process.cwd(), "lib/discord/runMorningBrief.ts"),
+      "utf8"
+    );
+    assert.match(runSrc, /Never creates or publishes articles/);
+    assert.doesNotMatch(runSrc, /publishArticle/);
+    assert.doesNotMatch(runSrc, /promoteCollectionCandidate/);
   });
 
   it("brief path does not apply DISCORD_MORNING_BRIEF_MAX_ITEMS", () => {
