@@ -55,6 +55,7 @@ export function toTrendingRelatedArticle(
     title: article.title,
     source: article.source,
     original_url: article.original_url ?? null,
+    locale: article.locale,
   };
 }
 

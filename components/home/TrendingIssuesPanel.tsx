@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getSourceLabel } from "@/lib/koreanArticleDisplay";
+import { resolveArticleHref } from "@/lib/home/resolveArticleHref";
 import type {
+  HomeArticleCard,
   TrendingIssue,
   TrendingIssueRelatedArticle,
   TrendingIssuesBlock,
@@ -28,7 +30,10 @@ function articleHref(
 ): string | null {
   const slug = article.slug?.trim();
   if (!slug) return null;
-  return `${articleHrefPrefix.replace(/\/$/, "")}/${slug}`;
+  return resolveArticleHref(
+    { slug, locale: article.locale } as HomeArticleCard,
+    articleHrefPrefix
+  );
 }
 
 function IssueRow({
