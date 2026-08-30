@@ -348,10 +348,14 @@ Git history와 현재 코드에서 확인:
 
 **Stub smoke test (2026-08-27, Preview → Production Supabase)**
 
-- Preview에서 공개 기사 3개로 package 1건 생성 성공 (`generation_mode=stub`)
+- Preview에서 공개 기사 3개로 package 생성 성공 (`generation_mode=stub`)
 - 초안 저장 · 새로고침 후 내용 유지 · 검토 완료 · 편집 잠금 · 초안 되돌리기 성공
 - OpenAI 호출 없음
-- 선택 기사·localization 무영향 (articles 217 / localizations 345 / published 111 유지)
+- **DB:** `shorts_production_packages` row **2건** (이전 1건 `reviewed` 보존 + 최신 1건 `draft` / `reviewed_at=null` after revert)
+- **최신 smoke package:** `b85981cb…` · desk `morning` · `article_ids=3` · 최종 `status=draft` · package JSON 필수 키 전부 존재
+- **선택 기사 3개:** `published` / `approved` / `is_published=true` 유지 · `updated_at` smoke test 시각(2026-08-27 20:27 UTC) 이전
+- **사이트 baseline:** smoke test 직후 217 / 345 / published 111 — 이후 정상 운영으로 증가 (2026-08-29 확인: 328 / 567 / published 211). needs_revision **0** 유지
+- **UI:** 생성 방식 라벨 — stub `테스트 생성 · OpenAI 미사용` / OpenAI `AI 생성` (로컬 저장 오해 방지)
 
 **배포 전 남은 단계**
 
@@ -375,8 +379,9 @@ Git history와 현재 코드에서 확인:
 ---
 
 - **Digest 272674686:** 정상 SAME EVENT 차단을 throw로 처리하던 UX 문제 — PR #4로 해소, 데이터 손상 없음
-- **Last Updated:** 2026-08-27 UTC
-- **Latest Commit:** `4b2d9fcf92b64133aaac0c0d83975bf96dd26f89` — PROJECT_STATUS finalize
+- **Last Updated:** 2026-08-29 UTC
+- **Latest Commit (main):** `4b2d9fcf92b64133aaac0c0d83975bf96dd26f89` — PROJECT_STATUS finalize
+- **Shorts PR #5 branch head:** `5ced775fb1107934cff65d74857c23acdc7354d4` — stub smoke test + UI labels
 - **Production main commit:** `6c185cfebffc8e9745cac544e8e54d6c19e8a62f`
 - **Vercel Production:** 배포 성공 (`https://www.hannoon.co`)
 - **Discord workflow:** 기사 만들기 → quick_review → 사람 확인 → 공개
