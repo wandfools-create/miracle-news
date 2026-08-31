@@ -22,6 +22,7 @@ import {
 import { formatEditionLastUpdated } from "./homeRelativeTime";
 import { offsetNyDateKey, nyDateKeyDiff } from "./homeRelativeTime";
 import { pickTrendingIssues } from "./pickTrendingIssues";
+import { pickPreviousEditionFeatured } from "./pickPreviousEditionFeatured";
 import { normalizeTopicClusterKey } from "./topicClusterKey";
 import type {
   HomeArticleCard,
@@ -37,7 +38,7 @@ export const PREVIOUS_HIGHLIGHTS_MAX_DAYS = 7;
 export const PREVIOUS_HIGHLIGHTS_LIMIT = 5;
 export const TODAY_TOP_STORIES_PER_COLUMN = 6;
 
-export type TodayEditionStatus = "ready" | "preparing";
+export type TodayEditionStatus = "ready" | "preparing" | "carryover";
 
 export type TodayEdition = {
   editionDateKey: string;
@@ -48,6 +49,7 @@ export type TodayEdition = {
   status: TodayEditionStatus;
   featured: HomeArticleCard | null;
   secondaryFeatured: HomeArticleCard | null;
+  featuredRelated: HomeArticleCard[];
   spotlight: HomeArticleCard[];
   trending: TrendingIssuesBlock | null;
   previousHighlights: HomeArticleCard[];
@@ -458,7 +460,18 @@ export function buildTodayEdition(
   let status: TodayEditionStatus = "ready";
 
   if (todayCount === 0) {
-    status = "preparing";
+    const carryover = pickPreviousEditionFeatured(articles, {
+      nowMs,
+      locale: options.locale,
+    });
+    if (carryover?.featured) {
+      status = "carryover";
+      featured = carryover.featured;
+      secondaryFeatured = carryover.secondaryFeatured;
+      featuredRelated = carryover.featuredRelated;
+    } else {
+      status = "preparing";
+    }
   } else {
     featured = pickFeaturedArticle(todayCore, nowMs);
     if (todayCount >= 2 && featured) {
@@ -522,6 +535,8 @@ export function buildTodayEdition(
 
   const statusLines = buildStatusLines(todayCount, lastUpdatedAt, "ko");
 
+  const isCarryover = status === "carryover";
+
   return {
     editionDateKey,
     todayArticles,
@@ -531,13 +546,14 @@ export function buildTodayEdition(
     status,
     featured,
     secondaryFeatured,
+    featuredRelated,
     spotlight,
     trending,
     previousHighlights,
     headerDateKo: formatEditionHeaderDate(nowMs, "ko"),
     headerDateEn: formatEditionHeaderDate(nowMs, "en"),
-    editionTitleKo: "오늘의 한눈",
-    editionTitleEn: "Today's Hannoon",
+    editionTitleKo: isCarryover ? "최근 주요 기사" : "오늘의 한눈",
+    editionTitleEn: isCarryover ? "Recent top story" : "Today's Hannoon",
     statusLineKo: statusLines.ko,
     statusLineEn: statusLines.en,
     preparingMessageKo:

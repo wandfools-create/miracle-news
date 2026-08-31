@@ -109,7 +109,7 @@ describe("todayEdition", () => {
     assert.equal(isTodayArticleBySitePublish(todayDst, editionKey), true);
   });
 
-  it("0 today articles → preparing with no featured from yesterday", () => {
+  it("0 today articles → carryover featured from yesterday edition", () => {
     const articles = [
       card({
         id: "yesterday-top",
@@ -126,11 +126,19 @@ describe("todayEdition", () => {
     ];
 
     const edition = buildTodayEdition(articles, { nowMs: NOW_AUG28_NOON_ET });
+    assert.equal(edition.status, "carryover");
+    assert.equal(edition.todayCount, 0);
+    assert.ok(edition.featured);
+    assert.equal(edition.featured?.id, "yesterday-top");
+    assert.match(edition.statusLineKo, /0건 · 뉴스 준비 중/);
+  });
+
+  it("0 today articles and no prior edition → preparing with no featured", () => {
+    const edition = buildTodayEdition([], { nowMs: NOW_AUG28_NOON_ET });
     assert.equal(edition.status, "preparing");
     assert.equal(edition.todayCount, 0);
     assert.equal(edition.featured, null);
     assert.equal(edition.secondaryFeatured, null);
-    assert.match(edition.statusLineKo, /0건 · 뉴스 준비 중/);
   });
 
   it("1 today article → featured only", () => {

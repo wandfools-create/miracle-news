@@ -52,11 +52,15 @@ export function prepareEditionHomeSections(
   const todayEdition = buildTodayEdition(allArticles, { nowMs, locale: pageLocale });
 
   const featured = todayEdition.featured;
+  const secondaryFeatured = todayEdition.secondaryFeatured;
 
   let featuredLeads: HomeArticleCard[] = [];
   let featuredRelated: HomeArticleCard[] = [];
 
-  if (todayEdition.todayCount === 0) {
+  if (todayEdition.status === "carryover" && featured) {
+    featuredLeads = secondaryFeatured ? [featured, secondaryFeatured] : [featured];
+    featuredRelated = todayEdition.featuredRelated ?? [];
+  } else if (todayEdition.todayCount === 0) {
     featuredLeads = [];
     featuredRelated = [];
   } else if (todayEdition.todayCount === 1 && featured) {

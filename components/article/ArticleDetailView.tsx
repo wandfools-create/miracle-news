@@ -6,6 +6,10 @@ import {
 } from "@/lib/article/formatPublishedDate";
 import { getCategoryLabel } from "@/lib/article/categoryLabels";
 import { getSourceLabel } from "@/lib/koreanArticleDisplay";
+import {
+  buildHomeCategoryFilterHref,
+  buildHomeSourceFilterHref,
+} from "@/lib/home/buildHomeFilterHref";
 import RelatedStoryItem from "./RelatedStoryItem";
 import type { ArticleDetailData, RelatedArticleCard } from "./types";
 
@@ -80,9 +84,14 @@ export default function ArticleDetailView({
   sameTopicArticles,
   sameCategoryArticles,
 }: ArticleDetailViewProps) {
-  const sourceLabel = getSourceLabel(article.source, article.original_url);
+  const sourceLabel = getSourceLabel(article.source, article.original_url, locale);
   const published = formatPublishedDate(article.published_at, locale);
   const categoryLabel = getCategoryLabel(article.category, locale);
+  const sourceFilterHref = buildHomeSourceFilterHref(locale, article.source);
+  const categoryFilterHref = buildHomeCategoryFilterHref(
+    locale,
+    article.category ?? "other"
+  );
 
   return (
     <main className="min-h-screen bg-[#f6f5f2] text-neutral-950">
@@ -102,11 +111,21 @@ export default function ArticleDetailView({
             <span aria-hidden className="text-neutral-300">
               /
             </span>
-            <span className="truncate">{sourceLabel}</span>
+            <Link
+              href={sourceFilterHref}
+              className="truncate font-medium hover:text-neutral-900 hover:underline underline-offset-2"
+            >
+              {sourceLabel}
+            </Link>
             <span aria-hidden className="text-neutral-300">
               /
             </span>
-            <span>{categoryLabel}</span>
+            <Link
+              href={categoryFilterHref}
+              className="font-medium hover:text-neutral-900 hover:underline underline-offset-2"
+            >
+              {categoryLabel}
+            </Link>
           </nav>
 
           <div className="pb-8 pt-5 lg:pb-10 lg:pt-6">
@@ -269,7 +288,12 @@ export default function ArticleDetailView({
                     {labels.sidebarSource}
                   </dt>
                   <dd className="mt-1 font-medium text-neutral-800">
-                    {sourceLabel}
+                    <Link
+                      href={sourceFilterHref}
+                      className="hover:text-neutral-950 hover:underline underline-offset-2"
+                    >
+                      {sourceLabel}
+                    </Link>
                   </dd>
                 </div>
                 <div>
@@ -277,7 +301,12 @@ export default function ArticleDetailView({
                     {labels.sidebarCategory}
                   </dt>
                   <dd className="mt-1 font-medium text-neutral-800">
-                    {categoryLabel}
+                    <Link
+                      href={categoryFilterHref}
+                      className="hover:text-neutral-950 hover:underline underline-offset-2"
+                    >
+                      {categoryLabel}
+                    </Link>
                   </dd>
                 </div>
                 <div>

@@ -28,6 +28,28 @@ import {
   type NewsPageRole,
 } from "@/lib/home/newsPageLayout";
 import { resolveArticleHref } from "@/lib/home/resolveArticleHref";
+import {
+  buildHomeCategoryFilterHref,
+  parseHomeCategoryFilter,
+  parseHomeSourceFilter,
+} from "@/lib/home/buildHomeFilterHref";
+import { buildHomeFilterResults } from "@/lib/home/homeFilterResults";
+import {
+  centerBandGridRowClass,
+  isGlobalHomeFilterMode,
+  shouldShowLatestFallbackSection,
+  shouldShowTopStoriesBand,
+} from "@/lib/home/homeCenterLayoutPolicy";
+import {
+  displaySourceTabLabel,
+  featuredConfigsForGroup,
+  filterSourceLeadCardsByGroup,
+  homeSectionTabClass,
+  homePillButtonClass,
+  homeSourceGroupButtonLabels,
+  type HomeSourceGroup,
+} from "@/lib/home/homeSourceGroupFilter";
+import { normalizeSource } from "@/lib/article/normalizeSource";
 import type { HomeArticleCard, HomePageSections, TodayEditionMeta } from "@/lib/home/types";
 import { getBrandName } from "@/lib/brand";
 import TrendingIssuesPanel from "./TrendingIssuesPanel";
@@ -133,7 +155,7 @@ function TodayEditionHeader({
         {title}
       </h2>
       <p className="mt-1 text-[13px] text-neutral-600 sm:text-sm">{statusLine}</p>
-      {meta.status === "preparing" ? (
+      {meta.status === "preparing" || meta.status === "carryover" ? (
         <p className="mt-1 text-[12px] font-medium text-neutral-500">
           {preparingPhase}
         </p>
@@ -333,7 +355,7 @@ function StoryMetaLine({
         </>
       ) : null}
       <span className="text-neutral-700">
-        {getSourceLabel(article.source, article.original_url)}
+        {getSourceLabel(article.source, article.original_url, locale)}
       </span>
       <span aria-hidden className="text-neutral-300">
         ·
@@ -446,7 +468,7 @@ function StoryListRow({
         </Link>
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-            {getSourceLabel(article.source, article.original_url)}
+            {getSourceLabel(article.source, article.original_url, locale)}
             <span className="mx-1.5 font-normal text-neutral-300">·</span>
             <time
               dateTime={article.published_at ?? article.created_at}
@@ -740,7 +762,7 @@ function SidebarItem({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-            {getSourceLabel(article.source, article.original_url)}
+            {getSourceLabel(article.source, article.original_url, locale)}
           </p>
           <h3 className="mt-0.5 text-[14px] font-semibold leading-snug text-neutral-900">
             {href ? (
@@ -864,10 +886,13 @@ export default function HomeNewsView({
   searchPath,
   searchLabels,
 }: HomeNewsViewProps) {
-  const [selectedSourceLabel, setSelectedSourceLabel] = useState<string | null>(
+  const [searchQuery, setSearchQuery] = useState("");
+  const [localSourceGroup, setLocalSourceGroup] =
+    useState<HomeSourceGroup>("all");
+  const [localSourceTabKey, setLocalSourceTabKey] = useState<string | null>(
     null
   );
-  const [searchQuery, setSearchQuery] = useState("");
+  const [localCategoryTab, setLocalCategoryTab] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -885,8 +910,10 @@ export default function HomeNewsView({
   );
   const showFeatured = Boolean(displaySections.featured);
   const todayEditionMeta = displaySections.todayEdition;
+  const isCarryover = todayEditionMeta?.status === "carryover";
   const isPreparing = todayEditionMeta?.status === "preparing";
-  const showFeaturedSection = showFeatured || isPreparing;
+  const showFeaturedSection =
+    showFeatured || isPreparing || isCarryover;
   const showPreviousHighlights =
     (displaySections.previousHighlights?.length ?? 0) > 0;
   const topStories = displaySections.topStories;
@@ -933,6 +960,16 @@ export default function HomeNewsView({
   const useFeaturedComboLayout =
     showFeatured &&
     (featuredHub.leads.length >= 2 || featuredHub.related.length > 0);
+  const showTopStoriesBand = shouldShowTopStoriesBand({
+    showTopStories,
+    isCarryover,
+    useFeaturedComboLayout,
+  });
+  const showLatestFallbackSection = shouldShowLatestFallbackSection({
+    showTopStoriesBand,
+    useFeaturedComboLayout,
+    latestCount: displaySections.latest.length,
+  });
   const showSidebar = displaySections.sidebar.length > 0;
   const trendingIssues = displaySections.trendingIssues;
   const showTrending = Boolean(
@@ -949,27 +986,83 @@ export default function HomeNewsView({
       : showRightRail
         ? newsHomeRightOnlyGrid
         : "min-w-0";
-  const filteredSourceLeadCards = useMemo(() => {
-    if (!selectedSourceLabel) {
-      return displaySections.sourceLeadCards.slice(0, SOURCE_LEAD_DISPLAY_LIMIT);
+  const sourceFromUrl = parseHomeSourceFilter(searchParams.get("source"));
+  const categoryFromUrl = parseHomeCategoryFilter(searchParams.get("category"));
+
+  const globalCategoryFilter = useMemo(() => {
+    if (!categoryFromUrl) return null;
+    if (displaySections.groupedByCategory[categoryFromUrl]?.length) {
+      return categoryFromUrl;
     }
-    return displaySections.sourceLeadCards.filter(
-      (item) => item.label === selectedSourceLabel
+    const match = displaySections.visibleCategories.find(
+      (c) => c === categoryFromUrl
     );
-  }, [displaySections.sourceLeadCards, selectedSourceLabel]);
+    return match ?? null;
+  }, [categoryFromUrl, displaySections]);
+
+  const isFilterResultMode = isGlobalHomeFilterMode({
+    sourceFromUrl,
+    categoryFromUrl: globalCategoryFilter,
+  });
+
+  const showFeaturedBlock = showFeaturedSection && !isFilterResultMode;
+  const centerBandRowClass = centerBandGridRowClass(showFeaturedBlock);
+
+  const selectedSourceLabel = useMemo(() => {
+    if (!sourceFromUrl) return null;
+    const match = sourceFilterOptions.find(
+      (label) => normalizeSource(label) === sourceFromUrl
+    );
+    if (match) return match;
+    return getSourceLabel(sourceFromUrl, null, locale);
+  }, [sourceFromUrl, sourceFilterOptions, locale]);
+
+  const filteredSourceLeadCards = useMemo(() => {
+    const filtered = filterSourceLeadCardsByGroup(
+      displaySections.sourceLeadCards,
+      localSourceGroup,
+      localSourceTabKey
+    );
+    if (!localSourceTabKey && localSourceGroup === "all") {
+      return filtered.slice(0, SOURCE_LEAD_DISPLAY_LIMIT);
+    }
+    return filtered;
+  }, [
+    displaySections.sourceLeadCards,
+    localSourceGroup,
+    localSourceTabKey,
+  ]);
+
+  const activeSourceKeys = useMemo(
+    () =>
+      new Set(
+        displaySections.sourceLeadCards.map((c) => normalizeSource(c.key))
+      ),
+    [displaySections.sourceLeadCards]
+  );
+
+  const sourceTabsForGroup = useMemo(
+    () => featuredConfigsForGroup(localSourceGroup),
+    [localSourceGroup]
+  );
+
+  const selectSourceGroup = useCallback((group: HomeSourceGroup) => {
+    setLocalSourceGroup(group);
+    setLocalSourceTabKey(null);
+  }, []);
+
   const filteredGroupedByCategory = useMemo(() => {
-    if (!selectedSourceLabel) return displaySections.groupedByCategory;
+    if (!localSourceTabKey) return displaySections.groupedByCategory;
     const out: Record<string, HomeArticleCard[]> = {};
     for (const [category, items] of Object.entries(
       displaySections.groupedByCategory
     )) {
       out[category] = items.filter(
-        (article) =>
-          getSourceLabel(article.source, article.original_url) === selectedSourceLabel
+        (article) => normalizeSource(article.source) === localSourceTabKey
       );
     }
     return out;
-  }, [displaySections.groupedByCategory, selectedSourceLabel]);
+  }, [displaySections.groupedByCategory, localSourceTabKey]);
   const filteredVisibleCategories = useMemo(
     () =>
       displaySections.visibleCategories.filter(
@@ -979,43 +1072,34 @@ export default function HomeNewsView({
   );
   const showCategories = filteredVisibleCategories.length > 0;
 
-  /** Category click panel — mirrors EditionFilterBar `?category=` URL pattern. */
-  const categoryFromUrl = searchParams.get("category");
-  const selectedCategory = useMemo(() => {
-    if (
-      categoryFromUrl &&
-      filteredVisibleCategories.includes(categoryFromUrl)
-    ) {
-      return categoryFromUrl;
-    }
-    return filteredVisibleCategories[0] ?? null;
-  }, [categoryFromUrl, filteredVisibleCategories]);
-
   useEffect(() => {
     if (!categoryFromUrl) return;
-    if (filteredVisibleCategories.includes(categoryFromUrl)) return;
-    if (filteredVisibleCategories.length === 0) return;
+    if (globalCategoryFilter) return;
     const params = new URLSearchParams(searchParams.toString());
     params.delete("category");
     const q = params.toString();
     router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
   }, [
     categoryFromUrl,
-    filteredVisibleCategories,
+    globalCategoryFilter,
     pathname,
     router,
     searchParams,
   ]);
 
-  const selectCategory = useCallback(
-    (category: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("category", category);
-      const q = params.toString();
-      router.replace(`${pathname}?${q}`, { scroll: false });
-    },
-    [pathname, router, searchParams]
-  );
+  const selectedCategory = useMemo(() => {
+    if (
+      localCategoryTab &&
+      filteredVisibleCategories.includes(localCategoryTab)
+    ) {
+      return localCategoryTab;
+    }
+    return filteredVisibleCategories[0] ?? null;
+  }, [localCategoryTab, filteredVisibleCategories]);
+
+  const selectLocalCategory = useCallback((category: string) => {
+    setLocalCategoryTab(category);
+  }, []);
 
   const selectedCategoryArticles = selectedCategory
     ? (filteredGroupedByCategory[selectedCategory] ?? []).slice(0, 6)
@@ -1024,10 +1108,44 @@ export default function HomeNewsView({
     ? filteredGroupedByCategory[selectedCategory]?.length ?? 0
     : 0;
 
-  const trendingPanel = showTrending && trendingIssues ? (
+  const filterResultArticles = useMemo(() => {
+    if (!isFilterResultMode || searchArticles.length === 0) return [];
+    return buildHomeFilterResults(searchArticles, {
+      sourceKey: sourceFromUrl,
+      categoryKey: globalCategoryFilter,
+    });
+  }, [
+    isFilterResultMode,
+    searchArticles,
+    sourceFromUrl,
+    globalCategoryFilter,
+  ]);
+
+  const filteredArticleCount = filterResultArticles.length;
+
+  const clearFilters = useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("source");
+    params.delete("category");
+    const q = params.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  const showActiveFilterBanner = isFilterResultMode;
+
+  const showEditionHome =
+    !isFilterResultMode &&
+    (showFeaturedSection ||
+      showTopStoriesBand ||
+      showSidebar ||
+      showTrending ||
+      showPreviousHighlights);
+
+  const trendingPanel = showTrending && trendingIssues && !isFilterResultMode ? (
     <TrendingIssuesPanel
       block={trendingIssues}
       articleHrefPrefix={articleHrefPrefix}
+      locale={locale}
       labels={{
         title: labels.trendingTitle,
         regionUs: labels.trendingRegionUs,
@@ -1049,7 +1167,8 @@ export default function HomeNewsView({
     displaySections.latest.length > 0 ||
     displaySections.sidebar.length > 0 ||
     showPreviousHighlights ||
-    filteredVisibleCategories.length > 0;
+    filteredVisibleCategories.length > 0 ||
+    isFilterResultMode;
 
   const headerDate = headerDateText ?? labels.edition;
 
@@ -1127,6 +1246,96 @@ export default function HomeNewsView({
             )}
           </p>
         ) : null}
+        {showActiveFilterBanner ? (
+          <div
+            className="mb-6 flex flex-wrap items-center justify-between gap-3 border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700"
+            role="status"
+          >
+            <p>
+              {locale === "ko" ? (
+                <>
+                  필터:{" "}
+                  {sourceFromUrl && selectedSourceLabel ? (
+                    <span className="font-semibold text-news-navy">
+                      {selectedSourceLabel}
+                    </span>
+                  ) : null}
+                  {sourceFromUrl && globalCategoryFilter ? " · " : null}
+                  {globalCategoryFilter ? (
+                    <span className="font-semibold text-news-navy">
+                      {getCategoryLabel(globalCategoryFilter, locale)}
+                    </span>
+                  ) : null}
+                  {" · "}
+                  {filteredArticleCount}건
+                </>
+              ) : (
+                <>
+                  Filter:{" "}
+                  {sourceFromUrl && selectedSourceLabel ? (
+                    <span className="font-semibold text-news-navy">
+                      {selectedSourceLabel}
+                    </span>
+                  ) : null}
+                  {sourceFromUrl && globalCategoryFilter ? " · " : null}
+                  {globalCategoryFilter ? (
+                    <span className="font-semibold text-news-navy">
+                      {getCategoryLabel(globalCategoryFilter, locale)}
+                    </span>
+                  ) : null}
+                  {" · "}
+                  {filteredArticleCount}{" "}
+                  {filteredArticleCount === 1 ? "result" : "results"}
+                </>
+              )}
+            </p>
+            <button
+              type="button"
+              onClick={clearFilters}
+              className={`shrink-0 ${homePillButtonClass()}`}
+            >
+              {locale === "ko" ? "필터 해제" : "Clear filters"}
+            </button>
+          </div>
+        ) : null}
+        {showActiveFilterBanner && filteredArticleCount === 0 ? (
+          <p
+            className="mb-6 border border-neutral-200 bg-white px-4 py-8 text-center text-sm text-neutral-600"
+            role="status"
+          >
+            {locale === "ko"
+              ? "선택한 필터에 해당하는 공개 기사가 없습니다."
+              : "No published articles match the selected filters."}
+          </p>
+        ) : null}
+        {isFilterResultMode && filterResultArticles.length > 0 ? (
+          <section
+            id="filter-results"
+            className="mb-8 min-w-0 scroll-mt-6"
+            aria-labelledby="home-filter-results"
+          >
+            <SectionHeading
+              eyebrow={locale === "ko" ? "필터 결과" : "Filter results"}
+              title={
+                locale === "ko"
+                  ? "공개 기사 목록"
+                  : "Published articles"
+              }
+            />
+            <div>
+              {filterResultArticles.map((article) => (
+                <StoryListRow
+                  key={article.article_id ?? article.id}
+                  article={article}
+                  locale={locale}
+                  labels={labels}
+                  articleHrefPrefix={articleHrefPrefix}
+                  articleHrefFor={articleHrefFor}
+                />
+              ))}
+            </div>
+          </section>
+        ) : null}
         {errorMessage ? (
           <div
             className="mb-8 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
@@ -1142,14 +1351,14 @@ export default function HomeNewsView({
           </p>
         ) : null}
 
-        {!errorMessage && hasArticles ? (
+        {!errorMessage && hasArticles && showEditionHome ? (
           <div className={homeGridClass}>
-            {todayEditionMeta ? (
+            {todayEditionMeta && !isFilterResultMode ? (
               <TodayEditionHeader meta={todayEditionMeta} locale={locale} />
             ) : null}
 
             {/* Left rail — mobile after trending */}
-            {showLeftRail ? (
+            {showLeftRail && !isFilterResultMode ? (
               <aside className="order-3 min-w-0 xl:order-none xl:col-start-1 xl:row-start-2">
                 <SpotlightRail
                   articles={displaySections.sidebar}
@@ -1162,7 +1371,7 @@ export default function HomeNewsView({
             ) : null}
 
             {/* Center: featured or preparing */}
-            {showFeaturedSection ? (
+            {showFeaturedSection && !isFilterResultMode ? (
               <section
                 id="featured"
                 className={`order-1 min-w-0 scroll-mt-6 xl:order-none xl:row-start-2 ${
@@ -1174,7 +1383,7 @@ export default function HomeNewsView({
                   eyebrow={labels.featuredEyebrow}
                   title={labels.featuredTitle}
                 />
-                {isPreparing && !showFeatured ? (
+                {isPreparing && !showFeatured && !isCarryover ? (
                   <TodayEditionPreparing meta={todayEditionMeta!} locale={locale} />
                 ) : useFeaturedComboLayout ? (
                   <FeaturedWithRelated
@@ -1198,7 +1407,7 @@ export default function HomeNewsView({
             ) : null}
 
             {/* Right rail */}
-            {showRightRail && trendingPanel ? (
+            {showRightRail && trendingPanel && !isFilterResultMode ? (
               <aside
                 className={
                   showLeftRail
@@ -1211,10 +1420,10 @@ export default function HomeNewsView({
             ) : null}
 
             {/* Mid band: latest / top stories — left+center while issues continue */}
-            {showTopStories && topStories ? (
+            {showTopStoriesBand && topStories && !isFilterResultMode ? (
               <section
                 id="latest"
-                className={`order-1 min-w-0 scroll-mt-6 xl:order-none xl:row-start-2 ${
+                className={`order-1 min-w-0 scroll-mt-6 xl:order-none ${centerBandRowClass} ${
                   showLeftRail && showRightRail
                     ? "xl:col-span-2 xl:col-start-1"
                     : showLeftRail
@@ -1268,12 +1477,10 @@ export default function HomeNewsView({
               </section>
             ) : null}
 
-            {!showTopStories &&
-            (displaySections.latest.length > 0 ||
-              (useFeaturedComboLayout && (featuredHub.related?.length ?? 0) > 0)) ? (
+            {showLatestFallbackSection && !isFilterResultMode ? (
               <section
                 id="latest"
-                className={`order-1 min-w-0 scroll-mt-6 xl:order-none xl:row-start-2 ${
+                className={`order-1 min-w-0 scroll-mt-6 xl:order-none ${centerBandRowClass} ${
                   showLeftRail && showRightRail
                     ? "xl:col-span-2 xl:col-start-1"
                     : showLeftRail
@@ -1289,10 +1496,7 @@ export default function HomeNewsView({
                   description={labels.latestDesc}
                 />
                 <div>
-                  {(featuredHub.related.length > 0
-                    ? featuredHub.related
-                    : displaySections.latest
-                  ).map((article, index) => (
+                  {displaySections.latest.map((article, index) => (
                     <LatestRow
                       key={article.id}
                       article={article}
@@ -1307,7 +1511,7 @@ export default function HomeNewsView({
               </section>
             ) : null}
 
-            {showPreviousHighlights && displaySections.previousHighlights ? (
+            {showPreviousHighlights && displaySections.previousHighlights && !isFilterResultMode ? (
               <PreviousHighlightsSection
                 articles={displaySections.previousHighlights}
                 locale={locale}
@@ -1318,7 +1522,7 @@ export default function HomeNewsView({
             ) : null}
 
             {/* Full-bleed lower sections */}
-            {showSources ? (
+            {showSources && !isFilterResultMode ? (
               <section
                 id="sources"
                 className={`order-5 min-w-0 scroll-mt-6 border-t border-neutral-300 pt-8 xl:order-none xl:col-span-full ${
@@ -1331,34 +1535,57 @@ export default function HomeNewsView({
                   description={labels.sourcesDesc}
                 />
 
-                <div className="mb-5 flex flex-wrap gap-x-1 gap-y-1 border-b border-neutral-200">
+                <div
+                  role="tablist"
+                  aria-label={
+                    locale === "ko" ? "언론사 그룹" : "Source groups"
+                  }
+                  className="mb-3 flex flex-wrap gap-x-1 gap-y-1 border-b border-neutral-200 pb-3"
+                >
+                  {(["all", "foreign", "korean"] as const).map((group) => (
+                    <button
+                      key={group}
+                      type="button"
+                      role="tab"
+                      aria-selected={localSourceGroup === group}
+                      onClick={() => selectSourceGroup(group)}
+                      className={homeSectionTabClass(localSourceGroup === group)}
+                    >
+                      {homeSourceGroupButtonLabels(locale)[group]}
+                    </button>
+                  ))}
+                </div>
+
+                <div
+                  role="tablist"
+                  aria-label={labels.sourcesTitle}
+                  className="mb-5 flex flex-wrap gap-x-1 gap-y-1 border-b border-neutral-200"
+                >
                   <button
                     type="button"
-                    onClick={() => setSelectedSourceLabel(null)}
-                    className={`px-3 py-2 text-xs font-semibold transition sm:text-sm ${
-                      selectedSourceLabel
-                        ? "text-neutral-600 hover:text-news-navy"
-                        : "border-b-2 border-news-navy text-news-navy"
-                    }`}
+                    role="tab"
+                    aria-selected={!localSourceTabKey}
+                    onClick={() => setLocalSourceTabKey(null)}
+                    className={homeSectionTabClass(!localSourceTabKey)}
                   >
                     {sourceFilterAllLabel}
                   </button>
-                  {sourceFilterOptions.map((label) => {
-                    const hasSource =
-                      displaySections.activeSourceLabels.includes(label);
-                    const selected = selectedSourceLabel === label;
+                  {sourceTabsForGroup.map((config) => {
+                    const key = normalizeSource(config.key);
+                    const hasSource = activeSourceKeys.has(key);
+                    const selected = localSourceTabKey === key;
+                    const label = displaySourceTabLabel(config, locale);
                     return (
                       <button
-                        key={label}
+                        key={config.key}
                         type="button"
-                        onClick={() => setSelectedSourceLabel(label)}
-                        className={`px-3 py-2 text-xs font-semibold transition sm:text-sm ${
-                          selected
-                            ? "border-b-2 border-news-navy text-news-navy"
-                            : hasSource
-                              ? "text-neutral-600 hover:text-news-navy"
-                              : "text-neutral-400"
-                        }`}
+                        role="tab"
+                        aria-selected={selected}
+                        disabled={!hasSource}
+                        onClick={() => {
+                          if (hasSource) setLocalSourceTabKey(key);
+                        }}
+                        className={homeSectionTabClass(selected, hasSource)}
                       >
                         {label}
                       </button>
@@ -1369,22 +1596,33 @@ export default function HomeNewsView({
                 <h3 className="mb-4 text-[15px] font-bold text-news-navy">
                   {labels.sourceLeadsTitle}
                 </h3>
+                {filteredSourceLeadCards.length === 0 ? (
+                  <p
+                    className="border border-neutral-200 bg-white px-4 py-8 text-center text-sm text-neutral-600"
+                    role="status"
+                  >
+                    {locale === "ko"
+                      ? "선택한 언론사 그룹에 표시할 공개 기사가 없습니다."
+                      : "No published articles for the selected source group."}
+                  </p>
+                ) : (
                 <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {filteredSourceLeadCards.map((item) => (
                     <SourceLeadMini
                       key={item.key}
                       article={item.article}
-                      sourceLabel={item.label}
+                      sourceLabel={displaySourceTabLabel(item, locale)}
                       labels={labels}
                       articleHrefPrefix={articleHrefPrefix}
                       articleHrefFor={articleHrefFor}
                     />
                   ))}
                 </div>
+                )}
               </section>
             ) : null}
 
-            {showCategories ? (
+            {showCategories && !isFilterResultMode ? (
               <section
                 id="categories"
                 className={`order-6 min-w-0 scroll-mt-6 border-t border-neutral-300 pt-8 xl:order-none xl:col-span-full ${
@@ -1413,7 +1651,7 @@ export default function HomeNewsView({
                         aria-selected={selected}
                         aria-controls="category-panel"
                         tabIndex={selected ? 0 : -1}
-                        onClick={() => selectCategory(category)}
+                        onClick={() => selectLocalCategory(category)}
                         onKeyDown={(event) => {
                           if (
                             event.key !== "ArrowRight" &&
@@ -1429,13 +1667,9 @@ export default function HomeNewsView({
                               ? (idx + 1) % filteredVisibleCategories.length
                               : (idx - 1 + filteredVisibleCategories.length) %
                                 filteredVisibleCategories.length;
-                          selectCategory(filteredVisibleCategories[nextIdx]);
+                          selectLocalCategory(filteredVisibleCategories[nextIdx]!);
                         }}
-                        className={`px-3 py-2.5 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy sm:text-sm ${
-                          selected
-                            ? "border-b-2 border-news-navy text-news-navy"
-                            : "text-neutral-600 hover:text-news-navy"
-                        }`}
+                        className={homeSectionTabClass(selected)}
                       >
                         {getCategoryLabel(category, locale)}
                         <span className="ml-1.5 font-normal opacity-60">

@@ -9,6 +9,7 @@ import {
   sortArticlesByEditorialScore,
 } from "./editorialRanking";
 import { getArticleRegion, type ArticleRegion } from "./articleRegion";
+import { resolveTrendingIssueTitle } from "./resolveTrendingIssueTitle";
 import { normalizeTopicClusterKey } from "./topicClusterKey";
 import type {
   HomeArticleCard,
@@ -27,11 +28,10 @@ function truncateText(text: string, max: number): string {
 
 export function issueTitleFromArticle(
   article: HomeArticleCard,
-  topicLabel?: string
+  topicLabel?: string,
+  pageLocale: ArticleLocale = "ko"
 ): string {
-  if (topicLabel) return topicLabel;
-  const title = article.title.trim().replace(/\s+/g, " ").replace(/#\S+/g, "").trim();
-  return truncateText(title, 72);
+  return resolveTrendingIssueTitle(article, pageLocale, topicLabel);
 }
 
 export function issueDescriptionFromArticle(
@@ -156,7 +156,8 @@ function pickForRegion(
   articles: HomeArticleCard[],
   region: ArticleRegion,
   max: number,
-  nowMs: number
+  nowMs: number,
+  pageLocale: ArticleLocale
 ): TrendingIssue[] {
   const regionArticles = articles.filter((a) => getArticleRegion(a) === region);
   const pool = filterArticlesForHomeSurface(regionArticles, {
@@ -181,7 +182,10 @@ function pickForRegion(
       const id = `topic:${cluster}`;
       const existing = topicBuckets.get(id) ?? {
         id,
-        title: topicLabel || issueTitleFromArticle(article),
+        title:
+          topicLabel && pageLocale === "ko"
+            ? topicLabel
+            : issueTitleFromArticle(article, topicLabel, pageLocale),
         category,
         items: [],
       };
@@ -233,7 +237,7 @@ function pickForRegion(
     issues.push(
       buildIssue(
         `category:${region}:${category}`,
-        issueTitleFromArticle(lead),
+        issueTitleFromArticle(lead, lead.topic_label ?? undefined, pageLocale),
         lead,
         items,
         region,
@@ -247,12 +251,12 @@ function pickForRegion(
 
 export function pickTrendingIssues(
   articles: HomeArticleCard[],
-  _pageLocale: ArticleLocale,
+  pageLocale: ArticleLocale,
   maxPerRegion = 3,
   nowMs: number = Date.now()
 ): { us: TrendingIssue[]; kr: TrendingIssue[] } {
   return {
-    us: pickForRegion(articles, "us", maxPerRegion, nowMs),
-    kr: pickForRegion(articles, "kr", maxPerRegion, nowMs),
+    us: pickForRegion(articles, "us", maxPerRegion, nowMs, pageLocale),
+    kr: pickForRegion(articles, "kr", maxPerRegion, nowMs, pageLocale),
   };
 }
