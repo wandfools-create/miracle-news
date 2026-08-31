@@ -68,6 +68,10 @@ export async function promoteCollectionCandidate(input: {
   supplementalText?: string | null;
   /** Explicit force: allow short paste / length soft-save. Admin UI only. */
   adminForceCreate?: boolean;
+  /** Same-outlet same-event override — not publish approval. */
+  allowDuplicateAngleOverride?: boolean;
+  duplicateOverrideReason?: string | null;
+  duplicateOverrideActor?: string | null;
 }): Promise<PromoteCollectionCandidateResult> {
   const candidateId = input.candidateId.trim();
   if (!candidateId) {
@@ -98,33 +102,120 @@ export async function promoteCollectionCandidate(input: {
     return { ok: false, error: "후보를 찾을 수 없습니다.", step: "fetch_candidate" };
   }
 
-  // Block clear same-event before OpenAI enrich (Discord quick make + admin).
+  // Duplicate-angle policy before OpenAI enrich.
   {
     const { evaluatePublishedSameEventGuard, loadRecentPublishedForSameEvent } =
       await import("@/lib/same-event/sameEventLookback");
-    const published = await loadRecentPublishedForSameEvent();
-    const guard = evaluatePublishedSameEventGuard(
-      {
-        title: row.rss_title,
-        summary: row.rss_summary,
-        titleAlt: row.rss_title_ko,
-        summaryAlt: row.rss_summary_ko,
-        source: row.source,
-        publishedAt: row.rss_published_at,
-        hasThumbnail: Boolean(
-          (row as { thumbnail_url?: string | null }).thumbnail_url?.trim()
-        ),
-      },
-      published
+    const { evaluateDuplicateAngle } = await import(
+      "@/lib/duplicate/evaluateDuplicateAngle"
     );
-    if (guard.blocked) {
+    const { recordDuplicateAngleOverride } = await import(
+      "@/lib/duplicate/recordDuplicateOverride"
+    );
+
+    const published = await loadRecentPublishedForSameEvent();
+    const publishedPool = published.map((p) => ({
+      id: p.id,
+      source: p.source,
+      title: p.title,
+      summary: p.summary,
+      titleAlt: p.titleAlt,
+      published_at: p.publishedAt,
+    }));
+
+    let existingByUrl: (typeof publishedPool)[number] | null = null;
+    if (row.original_url?.trim()) {
+      const { data: urlRow } = await client
+        .from("articles")
+        .select("id, source, title_ko, title_original, review_status, published_at")
+        .eq("original_url", row.original_url.trim())
+        .maybeSingle();
+      if (urlRow) {
+        existingByUrl = {
+          id: String(urlRow.id),
+          source: String(urlRow.source ?? ""),
+          title: String(urlRow.title_ko || urlRow.title_original || ""),
+          published_at: urlRow.published_at as string | null,
+        };
+      }
+    }
+
+    const angle = evaluateDuplicateAngle({
+      originalUrl: row.original_url,
+      source: row.source,
+      title: row.rss_title,
+      summary: row.rss_summary,
+      titleAlt: row.rss_title_ko,
+      existingByUrl,
+      publishedPool,
+    });
+
+    if (angle.hardBlock) {
       return {
         ok: false,
-        error: `⚠️ 이미 유사한 공개 기사가 있습니다: ${guard.match.title.slice(0, 120)}`,
-        step: "same_event_published",
-        sameEventArticleId: guard.match.id,
-        sameEventTitle: guard.match.title,
+        error: "동일 original_url 기사가 이미 있습니다.",
+        step: "duplicate_exact_url",
+        sameEventArticleId: angle.match?.id,
+        sameEventTitle: angle.match?.title,
       };
+    }
+
+    if (angle.requiresOverride) {
+      if (!input.allowDuplicateAngleOverride) {
+        return {
+          ok: false,
+          error: `⚠️ ${angle.recommendedAction}`,
+          step: "duplicate_angle_guard",
+          sameEventArticleId: angle.match?.id,
+          sameEventTitle: angle.match?.title,
+        };
+      }
+      const reason = input.duplicateOverrideReason?.trim();
+      if (!reason) {
+        return {
+          ok: false,
+          error: "override 사유를 입력해 주세요.",
+          step: "duplicate_angle_guard",
+        };
+      }
+      await recordDuplicateAngleOverride({
+        actor: input.duplicateOverrideActor ?? input.selectedBy ?? "admin",
+        action: "promote_candidate",
+        candidateId,
+        matchedArticleId: angle.match?.id,
+        originalUrl: row.original_url,
+        source: row.source,
+        classification: angle.class,
+        overrideReason: reason,
+        metadata: {
+          sharedFacts: angle.sharedFacts ?? [],
+          perspectiveDiff: angle.perspectiveDiff ?? null,
+        },
+      });
+    } else {
+      const guard = evaluatePublishedSameEventGuard(
+        {
+          title: row.rss_title,
+          summary: row.rss_summary,
+          titleAlt: row.rss_title_ko,
+          summaryAlt: row.rss_summary_ko,
+          source: row.source,
+          publishedAt: row.rss_published_at,
+          hasThumbnail: Boolean(
+            (row as { thumbnail_url?: string | null }).thumbnail_url?.trim()
+          ),
+        },
+        published
+      );
+      if (guard.blocked && angle.class !== "cross-outlet-same-event") {
+        return {
+          ok: false,
+          error: `⚠️ 이미 유사한 공개 기사가 있습니다: ${guard.match.title.slice(0, 120)}`,
+          step: "same_event_published",
+          sameEventArticleId: guard.match.id,
+          sameEventTitle: guard.match.title,
+        };
+      }
     }
   }
 
