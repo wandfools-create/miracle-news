@@ -59,3 +59,26 @@ export async function fetchFirstMobileReviewArticleId(): Promise<string | null> 
 
   return (data?.id as string | undefined) ?? null;
 }
+
+/**
+ * After a successful publish, re-read the pending queue from the server.
+ * Never trust a client-supplied nextArticleId for post-publish navigation.
+ */
+export async function fetchNextPendingReviewArticleIdAfterPublish(
+  publishedArticleId: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("articles")
+    .select("id")
+    .eq("review_status", "pending")
+    .eq("status", "ready_for_human_review")
+    .eq("is_published", false)
+    .neq("id", publishedArticleId)
+    .order("collected_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) return null;
+  return (data?.id as string | undefined) ?? null;
+}

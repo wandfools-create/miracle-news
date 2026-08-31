@@ -3,7 +3,6 @@ import "server-only";
 import { ARTICLE_WORKFLOW } from "@/lib/articleWorkflow";
 import {
   isQuickReviewArticle,
-  isPendingReviewArticle,
   resolvePublishCopy,
   validateQuickPublishContent,
   type PublishArticleFields,
@@ -21,6 +20,8 @@ import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/serviceRole";
+import { runReviewCompleteAndPublish } from "@/lib/articles/reviewCompletePublishCore";
+import { createSupabaseReviewCompletePublishRpc } from "@/lib/articles/reviewCompletePublishRpc";
 
 export type { PublishArticleFields };
 export {
@@ -466,11 +467,11 @@ export async function quickPublishArticle(
 }
 
 /**
- * Review queue one-step publish: pending review → live.
- * Runs content guard + SAME EVENT hard block, then localization upsert +
- * race-safe status update. Does not auto-publish approved-only articles.
- * Optional RPC migration exists for status locking after ops applies it;
- * this TypeScript path remains authoritative until then.
+ * Review queue one-step publish: pending review → live via atomic RPC.
+ * App runs content + SAME EVENT guards, then service_role calls
+ * review_complete_and_publish_article (localizations + article status in one TX).
+ * Does NOT fall back to non-atomic publishArticleToLive when RPC is missing.
+ * Does not auto-publish approved-only (보관함) articles.
  */
 export async function reviewCompleteAndPublishArticle(
   articleId: string,
@@ -492,54 +493,81 @@ export async function reviewCompleteAndPublishArticle(
   }
 
   const { client } = createServiceRoleSupabaseClient();
-  const { data, error } = await client
-    .from("articles")
-    .select(PUBLISH_SELECT)
-    .eq("id", articleId)
-    .maybeSingle();
 
-  if (error || !data) {
+  const result = await runReviewCompleteAndPublish(
+    articleId,
+    {
+      allowSameEventOverride: options?.allowSameEventOverride,
+      approvedBy: options?.approvedBy?.trim() || "admin",
+    },
+    {
+      fetchArticle: async (id) => {
+        const { data, error } = await client
+          .from("articles")
+          .select(PUBLISH_SELECT)
+          .eq("id", id)
+          .maybeSingle();
+        if (error || !data) {
+          return {
+            ok: false as const,
+            error: error?.message || "기사를 찾을 수 없습니다.",
+          };
+        }
+        return {
+          ok: true as const,
+          article: data as PublishArticleFieldsWithMeta,
+        };
+      },
+      evaluateSameEvent: async ({ article, copy }) => {
+        const published = await loadRecentPublishedForSameEvent();
+        const guard = evaluatePublishedSameEventGuard(
+          {
+            title: copy.koTitle || copy.enTitle,
+            summary: copy.koSummary || copy.enSummary,
+            titleAlt: copy.enTitle || copy.koTitle,
+            summaryAlt: copy.enSummary || copy.koSummary,
+            source: article.source ?? null,
+            publishedAt: article.published_at,
+            hasThumbnail: Boolean(article.thumbnail_url?.trim()),
+          },
+          published,
+          { excludeArticleId: article.id }
+        );
+        if (guard.blocked) {
+          return { blocked: true as const, match: toSameEventMatch(guard.match) };
+        }
+        return {
+          blocked: false as const,
+          ...(guard.softWarning
+            ? { softWarning: toSameEventMatch(guard.softWarning) }
+            : {}),
+        };
+      },
+      rpc: createSupabaseReviewCompletePublishRpc(client),
+    }
+  );
+
+  if (!result.ok) {
     return {
       ok: false,
-      error: error?.message || "기사를 찾을 수 없습니다.",
-      step: "fetch",
+      error: result.error,
+      step: result.step,
+      ...(result.errors ? { errors: result.errors } : {}),
+      ...(result.warnings ? { warnings: result.warnings } : {}),
+      ...(result.sameEventMatch
+        ? { sameEventMatch: result.sameEventMatch }
+        : {}),
     };
   }
 
-  const article = data as PublishArticleFieldsWithMeta;
-
-  if (article.is_published === true && article.status === "published") {
-    return {
-      ok: true,
-      publishedAt: article.published_at?.trim() || new Date().toISOString(),
-      firstPublish: false,
-    };
-  }
-
-  if (!isPendingReviewArticle(article)) {
-    return {
-      ok: false,
-      error: "검토 대기 상태의 기사만 검토 완료 및 공개할 수 있습니다.",
-      step: "status_guard",
-    };
-  }
-
-  const content = validateQuickPublishContent(article);
-  if (!content.ok) {
-    return {
-      ok: false,
-      error: content.errors.join(" "),
-      step: "content_guard",
-      errors: content.errors,
-      warnings: content.warnings,
-    };
-  }
-
-  return publishArticleToLive(articleId, {
-    requireReviewStatus: ARTICLE_WORKFLOW.review.review_status,
-    allowSameEventOverride: options?.allowSameEventOverride,
-    approvedBy: options?.approvedBy,
-  });
+  return {
+    ok: true,
+    publishedAt: result.publishedAt,
+    firstPublish: result.firstPublish,
+    ...(result.softSameEventWarning
+      ? { softSameEventWarning: result.softSameEventWarning }
+      : {}),
+  };
 }
 
 /** Move quick_review → normal review queue (수정 필요). No OpenAI. */

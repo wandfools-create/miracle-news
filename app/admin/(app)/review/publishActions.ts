@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { reviewCompleteAndPublishArticle } from "@/lib/articles/publishArticle";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isAllowedAdminEmail } from "@/lib/admin/adminEmails";
+import { fetchNextPendingReviewArticleIdAfterPublish } from "@/lib/admin/fetchMobileReviewNeighbors";
 import { revalidateAdminNavCountsCache } from "@/lib/admin/revalidateAdminNav";
 import {
   holdArticle,
@@ -53,7 +54,7 @@ function mobileReviewUrl(
 export async function reviewCompleteAndPublishFromForm(formData: FormData) {
   const articleId = String(formData.get("articleId") ?? "").trim();
   const returnTo = String(formData.get("returnTo") ?? "mobile").trim();
-  const nextArticleId = String(formData.get("nextArticleId") ?? "").trim();
+  // Client nextArticleId is ignored for post-publish navigation (re-queried server-side).
   if (!articleId) {
     redirect("/admin/review/mobile?error=missing");
   }
@@ -100,6 +101,8 @@ export async function reviewCompleteAndPublishFromForm(formData: FormData) {
     redirect(`/admin/published?reviewPublished=${articleId}`);
   }
 
+  const nextArticleId =
+    await fetchNextPendingReviewArticleIdAfterPublish(articleId);
   if (nextArticleId) {
     redirect(mobileReviewUrl(nextArticleId, { published: articleId }));
   }
