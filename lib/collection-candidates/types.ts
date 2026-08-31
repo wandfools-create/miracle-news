@@ -66,6 +66,8 @@ export const COLLECTION_CANDIDATE_LIST_SELECT = `
   enrich_category,
   enrich_attempt_count,
   article_id,
+  collection_run_id,
+  source_country,
   ai_recommend_grade,
   ai_recommend_score,
   ai_recommend_reason,
