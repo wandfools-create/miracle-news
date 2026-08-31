@@ -154,6 +154,8 @@ export async function promoteCollectionCandidate(input: {
           id: String(urlRow.id),
           source: String(urlRow.source ?? ""),
           title: String(urlRow.title_ko || urlRow.title_original || ""),
+          summary: null,
+          titleAlt: null,
           published_at: urlRow.published_at as string | null,
         };
       }

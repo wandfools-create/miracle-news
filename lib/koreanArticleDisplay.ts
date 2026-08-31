@@ -4,7 +4,6 @@ import {
   isInternalArticleSource,
 } from "@/lib/article/sourceResolution";
 import { localizeSourceLabel } from "@/lib/article/sourceDisplayLabels";
-import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
 import { normalizeSource } from "@/lib/article/normalizeSource";
 import {
   featuredSourceConfigs,

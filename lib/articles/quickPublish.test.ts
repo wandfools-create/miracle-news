@@ -117,7 +117,7 @@ describe("quick publish flow (fixture only, no OpenAI/Discord/publish)", () => {
     });
 
     let promoted = false;
-    let edited: { content: string } | null = null;
+    let editedContent = "";
 
     const result = await handleDiscordComponentInteraction(
       {
@@ -150,7 +150,7 @@ describe("quick publish flow (fixture only, no OpenAI/Discord/publish)", () => {
           return { ok: true, articleId: ARTICLE_ID };
         },
         editOriginalMessage: async ({ content }) => {
-          edited = { content };
+          editedContent = content;
           return { ok: true };
         },
       }
@@ -160,8 +160,8 @@ describe("quick publish flow (fixture only, no OpenAI/Discord/publish)", () => {
     if (result.kind !== "deferred_update") return;
     await result.continueWork();
     assert.equal(promoted, true);
-    assert.ok(edited?.content.includes("기사 생성 완료"));
-    assert.ok(edited?.content.includes("빠른 검토"));
+    assert.ok(editedContent.includes("기사 생성 완료"));
+    assert.ok(editedContent.includes("빠른 검토"));
   });
 
   it("article_created payload exposes quick review link button", () => {

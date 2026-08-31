@@ -405,7 +405,7 @@ export async function publishArticleToLiveInternal(
  */
 export async function quickPublishArticle(
   articleId: string,
-  options?: { allowSameEventOverride?: boolean }
+  options?: { allowSameEventOverride?: boolean; approvedBy?: string | null }
 ): Promise<
   | PublishArticleToLiveResult
   | {

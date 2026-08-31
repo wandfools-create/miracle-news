@@ -2,6 +2,7 @@ import {
   DESK_KR_BRIEF_HOUR_UTC,
   DESK_US_BRIEF_HOUR_UTC,
 } from "@/lib/cron/americaNewYork";
+import { isEditorialDiscordEnabled } from "@/lib/discord/editorialDiscordPolicy";
 import type { CollectRegion } from "@/lib/rss/collectRegions";
 
 export type RegionalDeskRunPlan = {
@@ -39,8 +40,13 @@ export function resolveRegionalDeskRunPlan(input: {
   searchParams?: URLSearchParams | null;
   now?: Date;
 }): RegionalDeskRunPlan {
+  const editorialDiscord = isEditorialDiscordEnabled();
+
   if (input.searchParams?.get("collectOnly") === "1") {
     return { collect: true, runBrief: false, reason: "forced_collect_only" };
+  }
+  if (!editorialDiscord) {
+    return { collect: true, runBrief: false, reason: "scheduled_collect_only" };
   }
   if (input.searchParams?.get("forceBrief") === "1") {
     return { collect: true, runBrief: true, reason: "forced_brief" };

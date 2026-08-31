@@ -73,7 +73,10 @@ export default function MobileReviewDetail({
   const [revisionNote, setRevisionNote] = useState("");
   const [overrideSameEvent, setOverrideSameEvent] = useState(false);
 
-  const sourceLabel = getArticleSourceLabel(article.source, article.original_url);
+  const sourceLabel = getArticleSourceLabel({
+    source: article.source ?? "",
+    original_url: article.original_url,
+  });
   const listReturn = `/admin/review?from=mobile`;
 
   return (

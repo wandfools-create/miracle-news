@@ -141,7 +141,7 @@ export default async function CollectionCandidatesPage({
     sourceKey: feed.sourceKey,
     label: feed.label,
     feedUrl: feed.feedUrl,
-    enabled: isRssFeedSourceEnabled(feed),
+    enabled: isRssFeedSourceEnabled(feed.sourceKey),
   }));
   const [rssHealth, recentRunLogs] = await Promise.all([
     fetchRssCollectHealthFromLogs(rssFeeds),

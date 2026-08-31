@@ -4,6 +4,7 @@ import {
   parseCandidateButtonCustomId,
   parsePublishReadyArticleCustomId,
 } from "@/lib/discord/allowlist";
+import { isEditorialDiscordEnabled } from "@/lib/discord/editorialDiscordPolicy";
 import {
   buildArticleReadyPayload,
   buildMorningBriefPayload,
@@ -113,6 +114,14 @@ export async function handleDiscordComponentInteraction(
 ): Promise<InteractionHandlerResult> {
   if (payload.type === 1) {
     return { kind: "pong" };
+  }
+
+  if (!isEditorialDiscordEnabled()) {
+    return {
+      kind: "ephemeral",
+      message:
+        "편집용 Discord 기능이 비활성화되어 있습니다. 모바일 관리자를 사용해 주세요.",
+    };
   }
 
   if (payload.type !== 3) {

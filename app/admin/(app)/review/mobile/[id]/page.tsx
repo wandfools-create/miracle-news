@@ -53,6 +53,8 @@ export default async function MobileReviewArticlePage({
       category,
       thumbnail_url,
       collected_at,
+      published_at,
+      status,
       review_status,
       status,
       is_published,

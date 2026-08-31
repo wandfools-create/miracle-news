@@ -240,7 +240,7 @@ function pickForRegion(
     issues.push(
       buildIssue(
         `category:${region}:${category}`,
-        issueTitleFromArticle(lead, lead.topic_label, pageLocale),
+        issueTitleFromArticle(lead, lead.topic_label ?? undefined, pageLocale),
         lead,
         items,
         region,
