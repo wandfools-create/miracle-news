@@ -51,6 +51,12 @@ export type HomeArticleCard = {
   summary_translated?: string | null;
   topic_key?: string | null;
   topic_label?: string | null;
+  /** Locale-neutral text for editorial scoring (KO+EN combined). */
+  rankingTitle?: string;
+  rankingSummary?: string | null;
+  /** Slugs per localization — for href validation. */
+  slug_ko?: string | null;
+  slug_en?: string | null;
 };
 
 export type SourceLeadCard = {
@@ -94,7 +100,7 @@ export type TrendingIssue = {
   continuingIssue?: boolean;
 };
 
-export type TodayEditionStatus = "ready" | "preparing";
+export type TodayEditionStatus = "ready" | "preparing" | "carryover";
 
 export type TodayEditionMeta = {
   editionDateKey: string;

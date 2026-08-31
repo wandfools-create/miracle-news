@@ -3,6 +3,7 @@ import {
   resolveTitleForLocale,
   type ArticlesContentFields,
 } from "@/lib/article/resolveLocaleContent";
+import { buildLocaleNeutralRankingText } from "./localeNeutralRankingText";
 import type { ArticleEditionLocale, HomeArticleCard } from "./types";
 
 export type EditionHomeMergeEntry = {
@@ -66,6 +67,7 @@ export function buildEditionHomeCard(
   }
 
   const loc = { title: primary.title, summary: primary.summary };
+  const ranking = buildLocaleNeutralRankingText(entry);
 
   return {
     id: primary.id,
@@ -96,5 +98,9 @@ export function buildEditionHomeCard(
     locale: hrefLocale,
     topic_key: primary.topic_key,
     topic_label: primary.topic_label,
+    rankingTitle: ranking.title,
+    rankingSummary: ranking.summary,
+    slug_ko: entry.ko?.slug ?? null,
+    slug_en: entry.en?.slug ?? null,
   };
 }

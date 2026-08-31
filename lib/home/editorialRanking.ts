@@ -248,8 +248,8 @@ export function computeEditorialScore(
 
   const policy = isHomeCoreEligible(article, nowMs)
     ? homePolicyPoints({
-        title: article.title,
-        summary: article.summary,
+        title: article.rankingTitle ?? article.title,
+        summary: article.rankingSummary ?? article.summary,
         source: article.source,
         category: article.category,
         source_country: article.source_country,
@@ -333,7 +333,7 @@ function topicSignal(article: HomeArticleCard) {
   return {
     topic_key: article.topic_key,
     topic_label: article.topic_label,
-    title: article.title,
+    title: article.rankingTitle ?? article.title,
   };
 }
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
 import { getSourceLabel } from "@/lib/koreanArticleDisplay";
 import { resolveArticleHref } from "@/lib/home/resolveArticleHref";
 import type {
@@ -20,6 +21,7 @@ export type TrendingIssuesLabels = {
 type TrendingIssuesPanelProps = {
   block: TrendingIssuesBlock;
   labels: TrendingIssuesLabels;
+  locale: ArticleLocale;
   /** Locale article prefix, e.g. `/ko/article` or `/en/article`. */
   articleHrefPrefix: string;
 };
@@ -40,10 +42,12 @@ function IssueRow({
   issue,
   labels,
   articleHrefPrefix,
+  locale,
 }: {
   issue: TrendingIssue;
   labels: TrendingIssuesLabels;
   articleHrefPrefix: string;
+  locale: ArticleLocale;
 }) {
   const primary = issue.primaryArticle;
   const related = issue.relatedArticles;
@@ -97,7 +101,8 @@ function IssueRow({
               const href = articleHref(article, articleHrefPrefix);
               const sourceLabel = getSourceLabel(
                 article.source,
-                article.original_url
+                article.original_url,
+                locale
               );
               return (
                 <li key={article.id} className="min-w-0">
@@ -147,12 +152,14 @@ function RegionList({
   accentClass,
   labels,
   articleHrefPrefix,
+  locale,
 }: {
   title: string;
   issues: TrendingIssue[];
   accentClass: string;
   labels: TrendingIssuesLabels;
   articleHrefPrefix: string;
+  locale: ArticleLocale;
 }) {
   if (issues.length === 0) return null;
 
@@ -170,6 +177,7 @@ function RegionList({
             issue={issue}
             labels={labels}
             articleHrefPrefix={articleHrefPrefix}
+            locale={locale}
           />
         ))}
       </ul>
@@ -180,6 +188,7 @@ function RegionList({
 export default function TrendingIssuesPanel({
   block,
   labels,
+  locale,
   articleHrefPrefix,
 }: TrendingIssuesPanelProps) {
   return (
@@ -199,6 +208,7 @@ export default function TrendingIssuesPanel({
         accentClass="border-l-news-navy"
         labels={labels}
         articleHrefPrefix={articleHrefPrefix}
+        locale={locale}
       />
       <RegionList
         title={labels.regionKr}
@@ -206,6 +216,7 @@ export default function TrendingIssuesPanel({
         accentClass="border-l-news-red"
         labels={labels}
         articleHrefPrefix={articleHrefPrefix}
+        locale={locale}
       />
     </section>
   );

@@ -28,6 +28,13 @@ import {
   type NewsPageRole,
 } from "@/lib/home/newsPageLayout";
 import { resolveArticleHref } from "@/lib/home/resolveArticleHref";
+import {
+  buildHomeCategoryFilterHref,
+  parseHomeCategoryFilter,
+  parseHomeSourceFilter,
+} from "@/lib/home/buildHomeFilterHref";
+import { buildHomeFilterResults } from "@/lib/home/homeFilterResults";
+import { normalizeSource } from "@/lib/article/normalizeSource";
 import type { HomeArticleCard, HomePageSections, TodayEditionMeta } from "@/lib/home/types";
 import { getBrandName } from "@/lib/brand";
 import TrendingIssuesPanel from "./TrendingIssuesPanel";
@@ -133,7 +140,7 @@ function TodayEditionHeader({
         {title}
       </h2>
       <p className="mt-1 text-[13px] text-neutral-600 sm:text-sm">{statusLine}</p>
-      {meta.status === "preparing" ? (
+      {meta.status === "preparing" || meta.status === "carryover" ? (
         <p className="mt-1 text-[12px] font-medium text-neutral-500">
           {preparingPhase}
         </p>
@@ -333,7 +340,7 @@ function StoryMetaLine({
         </>
       ) : null}
       <span className="text-neutral-700">
-        {getSourceLabel(article.source, article.original_url)}
+        {getSourceLabel(article.source, article.original_url, locale)}
       </span>
       <span aria-hidden className="text-neutral-300">
         ·
@@ -446,7 +453,7 @@ function StoryListRow({
         </Link>
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-            {getSourceLabel(article.source, article.original_url)}
+            {getSourceLabel(article.source, article.original_url, locale)}
             <span className="mx-1.5 font-normal text-neutral-300">·</span>
             <time
               dateTime={article.published_at ?? article.created_at}
@@ -740,7 +747,7 @@ function SidebarItem({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-            {getSourceLabel(article.source, article.original_url)}
+            {getSourceLabel(article.source, article.original_url, locale)}
           </p>
           <h3 className="mt-0.5 text-[14px] font-semibold leading-snug text-neutral-900">
             {href ? (
@@ -864,9 +871,6 @@ export default function HomeNewsView({
   searchPath,
   searchLabels,
 }: HomeNewsViewProps) {
-  const [selectedSourceLabel, setSelectedSourceLabel] = useState<string | null>(
-    null
-  );
   const [searchQuery, setSearchQuery] = useState("");
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -885,8 +889,10 @@ export default function HomeNewsView({
   );
   const showFeatured = Boolean(displaySections.featured);
   const todayEditionMeta = displaySections.todayEdition;
+  const isCarryover = todayEditionMeta?.status === "carryover";
   const isPreparing = todayEditionMeta?.status === "preparing";
-  const showFeaturedSection = showFeatured || isPreparing;
+  const showFeaturedSection =
+    showFeatured || isPreparing || isCarryover;
   const showPreviousHighlights =
     (displaySections.previousHighlights?.length ?? 0) > 0;
   const topStories = displaySections.topStories;
@@ -949,27 +955,53 @@ export default function HomeNewsView({
       : showRightRail
         ? newsHomeRightOnlyGrid
         : "min-w-0";
+  const sourceFromUrl = parseHomeSourceFilter(searchParams.get("source"));
+  const categoryFromUrl = parseHomeCategoryFilter(searchParams.get("category"));
+
+  const selectedSourceLabel = useMemo(() => {
+    if (!sourceFromUrl) return null;
+    const match = sourceFilterOptions.find(
+      (label) => normalizeSource(label) === sourceFromUrl
+    );
+    if (match) return match;
+    return getSourceLabel(sourceFromUrl, null, locale);
+  }, [sourceFromUrl, sourceFilterOptions, locale]);
+
+  const selectSource = useCallback(
+    (sourceKey: string | null) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (!sourceKey) {
+        params.delete("source");
+      } else {
+        params.set("source", sourceKey);
+      }
+      const q = params.toString();
+      router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
+
   const filteredSourceLeadCards = useMemo(() => {
-    if (!selectedSourceLabel) {
+    if (!sourceFromUrl) {
       return displaySections.sourceLeadCards.slice(0, SOURCE_LEAD_DISPLAY_LIMIT);
     }
     return displaySections.sourceLeadCards.filter(
-      (item) => item.label === selectedSourceLabel
+      (item) => normalizeSource(item.key) === sourceFromUrl
     );
-  }, [displaySections.sourceLeadCards, selectedSourceLabel]);
+  }, [displaySections.sourceLeadCards, sourceFromUrl]);
+
   const filteredGroupedByCategory = useMemo(() => {
-    if (!selectedSourceLabel) return displaySections.groupedByCategory;
+    if (!sourceFromUrl) return displaySections.groupedByCategory;
     const out: Record<string, HomeArticleCard[]> = {};
     for (const [category, items] of Object.entries(
       displaySections.groupedByCategory
     )) {
       out[category] = items.filter(
-        (article) =>
-          getSourceLabel(article.source, article.original_url) === selectedSourceLabel
+        (article) => normalizeSource(article.source) === sourceFromUrl
       );
     }
     return out;
-  }, [displaySections.groupedByCategory, selectedSourceLabel]);
+  }, [displaySections.groupedByCategory, sourceFromUrl]);
   const filteredVisibleCategories = useMemo(
     () =>
       displaySections.visibleCategories.filter(
@@ -979,21 +1011,24 @@ export default function HomeNewsView({
   );
   const showCategories = filteredVisibleCategories.length > 0;
 
-  /** Category click panel — mirrors EditionFilterBar `?category=` URL pattern. */
-  const categoryFromUrl = searchParams.get("category");
-  const selectedCategory = useMemo(() => {
-    if (
-      categoryFromUrl &&
-      filteredVisibleCategories.includes(categoryFromUrl)
-    ) {
+  const activeCategoryFilter = useMemo(() => {
+    if (!categoryFromUrl) return null;
+    const allCategories = displaySections.visibleCategories;
+    if (allCategories.includes(categoryFromUrl)) return categoryFromUrl;
+    if (displaySections.groupedByCategory[categoryFromUrl]?.length) {
       return categoryFromUrl;
     }
+    return null;
+  }, [categoryFromUrl, displaySections]);
+
+  const selectedCategory = useMemo(() => {
+    if (activeCategoryFilter) return activeCategoryFilter;
     return filteredVisibleCategories[0] ?? null;
-  }, [categoryFromUrl, filteredVisibleCategories]);
+  }, [activeCategoryFilter, filteredVisibleCategories]);
 
   useEffect(() => {
     if (!categoryFromUrl) return;
-    if (filteredVisibleCategories.includes(categoryFromUrl)) return;
+    if (activeCategoryFilter) return;
     if (filteredVisibleCategories.length === 0) return;
     const params = new URLSearchParams(searchParams.toString());
     params.delete("category");
@@ -1001,6 +1036,7 @@ export default function HomeNewsView({
     router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
   }, [
     categoryFromUrl,
+    activeCategoryFilter,
     filteredVisibleCategories,
     pathname,
     router,
@@ -1024,10 +1060,41 @@ export default function HomeNewsView({
     ? filteredGroupedByCategory[selectedCategory]?.length ?? 0
     : 0;
 
-  const trendingPanel = showTrending && trendingIssues ? (
+  const isFilterResultMode = Boolean(sourceFromUrl || activeCategoryFilter);
+
+  const filterResultArticles = useMemo(() => {
+    if (!isFilterResultMode || searchArticles.length === 0) return [];
+    return buildHomeFilterResults(searchArticles, {
+      sourceKey: sourceFromUrl,
+      categoryKey: activeCategoryFilter,
+    });
+  }, [
+    isFilterResultMode,
+    searchArticles,
+    sourceFromUrl,
+    activeCategoryFilter,
+  ]);
+
+  const filteredArticleCount = filterResultArticles.length;
+
+  const clearFilters = useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("source");
+    params.delete("category");
+    const q = params.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  const showActiveFilterBanner = isFilterResultMode;
+
+  const showEditionHome =
+    !isFilterResultMode && (showFeaturedSection || showTopStories || showSidebar || showTrending || showPreviousHighlights);
+
+  const trendingPanel = showTrending && trendingIssues && !isFilterResultMode ? (
     <TrendingIssuesPanel
       block={trendingIssues}
       articleHrefPrefix={articleHrefPrefix}
+      locale={locale}
       labels={{
         title: labels.trendingTitle,
         regionUs: labels.trendingRegionUs,
@@ -1049,7 +1116,8 @@ export default function HomeNewsView({
     displaySections.latest.length > 0 ||
     displaySections.sidebar.length > 0 ||
     showPreviousHighlights ||
-    filteredVisibleCategories.length > 0;
+    filteredVisibleCategories.length > 0 ||
+    isFilterResultMode;
 
   const headerDate = headerDateText ?? labels.edition;
 
@@ -1127,6 +1195,96 @@ export default function HomeNewsView({
             )}
           </p>
         ) : null}
+        {showActiveFilterBanner ? (
+          <div
+            className="mb-6 flex flex-wrap items-center justify-between gap-3 border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700"
+            role="status"
+          >
+            <p>
+              {locale === "ko" ? (
+                <>
+                  필터:{" "}
+                  {sourceFromUrl && selectedSourceLabel ? (
+                    <span className="font-semibold text-news-navy">
+                      {selectedSourceLabel}
+                    </span>
+                  ) : null}
+                  {sourceFromUrl && activeCategoryFilter ? " · " : null}
+                  {activeCategoryFilter ? (
+                    <span className="font-semibold text-news-navy">
+                      {getCategoryLabel(activeCategoryFilter, locale)}
+                    </span>
+                  ) : null}
+                  {" · "}
+                  {filteredArticleCount}건
+                </>
+              ) : (
+                <>
+                  Filter:{" "}
+                  {sourceFromUrl && selectedSourceLabel ? (
+                    <span className="font-semibold text-news-navy">
+                      {selectedSourceLabel}
+                    </span>
+                  ) : null}
+                  {sourceFromUrl && activeCategoryFilter ? " · " : null}
+                  {activeCategoryFilter ? (
+                    <span className="font-semibold text-news-navy">
+                      {getCategoryLabel(activeCategoryFilter, locale)}
+                    </span>
+                  ) : null}
+                  {" · "}
+                  {filteredArticleCount}{" "}
+                  {filteredArticleCount === 1 ? "result" : "results"}
+                </>
+              )}
+            </p>
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="shrink-0 rounded-full border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy"
+            >
+              {locale === "ko" ? "필터 해제" : "Clear filters"}
+            </button>
+          </div>
+        ) : null}
+        {showActiveFilterBanner && filteredArticleCount === 0 ? (
+          <p
+            className="mb-6 border border-neutral-200 bg-white px-4 py-8 text-center text-sm text-neutral-600"
+            role="status"
+          >
+            {locale === "ko"
+              ? "선택한 필터에 해당하는 공개 기사가 없습니다."
+              : "No published articles match the selected filters."}
+          </p>
+        ) : null}
+        {isFilterResultMode && filterResultArticles.length > 0 ? (
+          <section
+            id="filter-results"
+            className="mb-8 min-w-0 scroll-mt-6"
+            aria-labelledby="home-filter-results"
+          >
+            <SectionHeading
+              eyebrow={locale === "ko" ? "필터 결과" : "Filter results"}
+              title={
+                locale === "ko"
+                  ? "공개 기사 목록"
+                  : "Published articles"
+              }
+            />
+            <div>
+              {filterResultArticles.map((article) => (
+                <StoryListRow
+                  key={article.article_id ?? article.id}
+                  article={article}
+                  locale={locale}
+                  labels={labels}
+                  articleHrefPrefix={articleHrefPrefix}
+                  articleHrefFor={articleHrefFor}
+                />
+              ))}
+            </div>
+          </section>
+        ) : null}
         {errorMessage ? (
           <div
             className="mb-8 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
@@ -1142,14 +1300,14 @@ export default function HomeNewsView({
           </p>
         ) : null}
 
-        {!errorMessage && hasArticles ? (
+        {!errorMessage && hasArticles && showEditionHome ? (
           <div className={homeGridClass}>
-            {todayEditionMeta ? (
+            {todayEditionMeta && !isFilterResultMode ? (
               <TodayEditionHeader meta={todayEditionMeta} locale={locale} />
             ) : null}
 
             {/* Left rail — mobile after trending */}
-            {showLeftRail ? (
+            {showLeftRail && !isFilterResultMode ? (
               <aside className="order-3 min-w-0 xl:order-none xl:col-start-1 xl:row-start-2">
                 <SpotlightRail
                   articles={displaySections.sidebar}
@@ -1162,7 +1320,7 @@ export default function HomeNewsView({
             ) : null}
 
             {/* Center: featured or preparing */}
-            {showFeaturedSection ? (
+            {showFeaturedSection && !isFilterResultMode ? (
               <section
                 id="featured"
                 className={`order-1 min-w-0 scroll-mt-6 xl:order-none xl:row-start-2 ${
@@ -1174,7 +1332,7 @@ export default function HomeNewsView({
                   eyebrow={labels.featuredEyebrow}
                   title={labels.featuredTitle}
                 />
-                {isPreparing && !showFeatured ? (
+                {isPreparing && !showFeatured && !isCarryover ? (
                   <TodayEditionPreparing meta={todayEditionMeta!} locale={locale} />
                 ) : useFeaturedComboLayout ? (
                   <FeaturedWithRelated
@@ -1198,7 +1356,7 @@ export default function HomeNewsView({
             ) : null}
 
             {/* Right rail */}
-            {showRightRail && trendingPanel ? (
+            {showRightRail && trendingPanel && !isFilterResultMode ? (
               <aside
                 className={
                   showLeftRail
@@ -1211,7 +1369,7 @@ export default function HomeNewsView({
             ) : null}
 
             {/* Mid band: latest / top stories — left+center while issues continue */}
-            {showTopStories && topStories ? (
+            {showTopStories && topStories && !isFilterResultMode ? (
               <section
                 id="latest"
                 className={`order-1 min-w-0 scroll-mt-6 xl:order-none xl:row-start-2 ${
@@ -1307,7 +1465,7 @@ export default function HomeNewsView({
               </section>
             ) : null}
 
-            {showPreviousHighlights && displaySections.previousHighlights ? (
+            {showPreviousHighlights && displaySections.previousHighlights && !isFilterResultMode ? (
               <PreviousHighlightsSection
                 articles={displaySections.previousHighlights}
                 locale={locale}
@@ -1318,7 +1476,7 @@ export default function HomeNewsView({
             ) : null}
 
             {/* Full-bleed lower sections */}
-            {showSources ? (
+            {showSources && !isFilterResultMode ? (
               <section
                 id="sources"
                 className={`order-5 min-w-0 scroll-mt-6 border-t border-neutral-300 pt-8 xl:order-none xl:col-span-full ${
@@ -1334,24 +1492,25 @@ export default function HomeNewsView({
                 <div className="mb-5 flex flex-wrap gap-x-1 gap-y-1 border-b border-neutral-200">
                   <button
                     type="button"
-                    onClick={() => setSelectedSourceLabel(null)}
+                    onClick={() => selectSource(null)}
                     className={`px-3 py-2 text-xs font-semibold transition sm:text-sm ${
-                      selectedSourceLabel
-                        ? "text-neutral-600 hover:text-news-navy"
-                        : "border-b-2 border-news-navy text-news-navy"
+                      !sourceFromUrl
+                        ? "border-b-2 border-news-navy text-news-navy"
+                        : "text-neutral-600 hover:text-news-navy"
                     }`}
                   >
                     {sourceFilterAllLabel}
                   </button>
                   {sourceFilterOptions.map((label) => {
+                    const key = normalizeSource(label);
                     const hasSource =
                       displaySections.activeSourceLabels.includes(label);
-                    const selected = selectedSourceLabel === label;
+                    const selected = sourceFromUrl === key;
                     return (
                       <button
                         key={label}
                         type="button"
-                        onClick={() => setSelectedSourceLabel(label)}
+                        onClick={() => selectSource(key)}
                         className={`px-3 py-2 text-xs font-semibold transition sm:text-sm ${
                           selected
                             ? "border-b-2 border-news-navy text-news-navy"
@@ -1384,7 +1543,7 @@ export default function HomeNewsView({
               </section>
             ) : null}
 
-            {showCategories ? (
+            {showCategories && !isFilterResultMode ? (
               <section
                 id="categories"
                 className={`order-6 min-w-0 scroll-mt-6 border-t border-neutral-300 pt-8 xl:order-none xl:col-span-full ${

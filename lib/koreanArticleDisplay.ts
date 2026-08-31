@@ -1,4 +1,6 @@
 import { normalizeSource } from "@/lib/article/normalizeSource";
+import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
+import { localizeSourceLabel } from "@/lib/article/sourceDisplayLabels";
 import {
   getArticleSourceLabel,
   isInternalArticleSource,
@@ -83,9 +85,11 @@ export { getArticleSourceLabel, isInternalArticleSource };
 
 export function getSourceLabel(
   source: string,
-  originalUrl?: string | null
+  originalUrl?: string | null,
+  locale: import("@/lib/article/formatPublishedDate").ArticleLocale = "ko"
 ) {
-  return getArticleSourceLabel({ source, original_url: originalUrl });
+  const label = getArticleSourceLabel({ source, original_url: originalUrl });
+  return localizeSourceLabel(label, locale, source);
 }
 
 export function getSourceDescription(source: string) {

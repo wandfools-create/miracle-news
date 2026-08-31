@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import ArticleDetailView from "@/components/article/ArticleDetailView";
 import { generatePublishedArticleMetadata } from "@/lib/seo/articlePageMetadata";
+import { resolveCrossLocaleArticleRedirect } from "@/lib/article/resolveCrossLocaleArticleRedirect";
 import type {
   ArticleDetailData,
   RelatedArticleCard,
@@ -73,6 +74,8 @@ export default async function KoreanArticleDetailPage({ params }: PageProps) {
     .maybeSingle();
 
   if (localizationError || !localization) {
+    const redirect = await resolveCrossLocaleArticleRedirect("ko", slug);
+    if (redirect) permanentRedirect(redirect.path);
     notFound();
   }
 
