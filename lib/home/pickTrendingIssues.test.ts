@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { pickTrendingIssues } from "./pickTrendingIssues";
+import { resolveArticleHref } from "./resolveArticleHref";
 import type { HomeArticleCard } from "./types";
 
 const NOW = Date.parse("2026-08-22T18:00:00.000Z");
@@ -150,5 +151,31 @@ describe("pickTrendingIssues", () => {
 
     const { us } = pickTrendingIssues(articles, "ko", 3, NOW);
     assert.equal(us.length, 3);
+  });
+
+  it("preserves locale on related articles for cross-locale href resolution", () => {
+    const articles = [
+      card({
+        id: "en-only",
+        slug: "english-only-slug-f0290eb4",
+        locale: "en",
+        source_country: "US",
+        category: "politics",
+        title: "English-only headline",
+        source_published_at: hoursAgo(2),
+      }),
+    ];
+
+    const { us } = pickTrendingIssues(articles, "ko", 3, NOW);
+    const primary = us[0]?.primaryArticle;
+    assert.ok(primary);
+    assert.equal(primary.locale, "en");
+    assert.equal(
+      resolveArticleHref(
+        { slug: primary.slug, locale: primary.locale } as HomeArticleCard,
+        "/ko/article"
+      ),
+      "/en/article/english-only-slug-f0290eb4"
+    );
   });
 });

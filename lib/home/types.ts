@@ -78,6 +78,7 @@ export type TrendingIssueRelatedArticle = {
   title: string;
   source: string;
   original_url?: string | null;
+  locale?: ArticleEditionLocale;
 };
 
 export type TrendingIssue = {
