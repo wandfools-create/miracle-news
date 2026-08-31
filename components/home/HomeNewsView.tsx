@@ -34,6 +34,12 @@ import {
   parseHomeSourceFilter,
 } from "@/lib/home/buildHomeFilterHref";
 import { buildHomeFilterResults } from "@/lib/home/homeFilterResults";
+import {
+  centerBandGridRowClass,
+  isGlobalHomeFilterMode,
+  shouldShowLatestFallbackSection,
+  shouldShowTopStoriesBand,
+} from "@/lib/home/homeCenterLayoutPolicy";
 import { normalizeSource } from "@/lib/article/normalizeSource";
 import type { HomeArticleCard, HomePageSections, TodayEditionMeta } from "@/lib/home/types";
 import { getBrandName } from "@/lib/brand";
@@ -872,6 +878,8 @@ export default function HomeNewsView({
   searchLabels,
 }: HomeNewsViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [localSourceTabKey, setLocalSourceTabKey] = useState<string | null>(null);
+  const [localCategoryTab, setLocalCategoryTab] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -939,6 +947,16 @@ export default function HomeNewsView({
   const useFeaturedComboLayout =
     showFeatured &&
     (featuredHub.leads.length >= 2 || featuredHub.related.length > 0);
+  const showTopStoriesBand = shouldShowTopStoriesBand({
+    showTopStories,
+    isCarryover,
+    useFeaturedComboLayout,
+  });
+  const showLatestFallbackSection = shouldShowLatestFallbackSection({
+    showTopStoriesBand,
+    useFeaturedComboLayout,
+    latestCount: displaySections.latest.length,
+  });
   const showSidebar = displaySections.sidebar.length > 0;
   const trendingIssues = displaySections.trendingIssues;
   const showTrending = Boolean(
@@ -958,6 +976,25 @@ export default function HomeNewsView({
   const sourceFromUrl = parseHomeSourceFilter(searchParams.get("source"));
   const categoryFromUrl = parseHomeCategoryFilter(searchParams.get("category"));
 
+  const globalCategoryFilter = useMemo(() => {
+    if (!categoryFromUrl) return null;
+    if (displaySections.groupedByCategory[categoryFromUrl]?.length) {
+      return categoryFromUrl;
+    }
+    const match = displaySections.visibleCategories.find(
+      (c) => c === categoryFromUrl
+    );
+    return match ?? null;
+  }, [categoryFromUrl, displaySections]);
+
+  const isFilterResultMode = isGlobalHomeFilterMode({
+    sourceFromUrl,
+    categoryFromUrl: globalCategoryFilter,
+  });
+
+  const showFeaturedBlock = showFeaturedSection && !isFilterResultMode;
+  const centerBandRowClass = centerBandGridRowClass(showFeaturedBlock);
+
   const selectedSourceLabel = useMemo(() => {
     if (!sourceFromUrl) return null;
     const match = sourceFilterOptions.find(
@@ -967,41 +1004,27 @@ export default function HomeNewsView({
     return getSourceLabel(sourceFromUrl, null, locale);
   }, [sourceFromUrl, sourceFilterOptions, locale]);
 
-  const selectSource = useCallback(
-    (sourceKey: string | null) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (!sourceKey) {
-        params.delete("source");
-      } else {
-        params.set("source", sourceKey);
-      }
-      const q = params.toString();
-      router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
-    },
-    [pathname, router, searchParams]
-  );
-
   const filteredSourceLeadCards = useMemo(() => {
-    if (!sourceFromUrl) {
+    if (!localSourceTabKey) {
       return displaySections.sourceLeadCards.slice(0, SOURCE_LEAD_DISPLAY_LIMIT);
     }
     return displaySections.sourceLeadCards.filter(
-      (item) => normalizeSource(item.key) === sourceFromUrl
+      (item) => normalizeSource(item.key) === localSourceTabKey
     );
-  }, [displaySections.sourceLeadCards, sourceFromUrl]);
+  }, [displaySections.sourceLeadCards, localSourceTabKey]);
 
   const filteredGroupedByCategory = useMemo(() => {
-    if (!sourceFromUrl) return displaySections.groupedByCategory;
+    if (!localSourceTabKey) return displaySections.groupedByCategory;
     const out: Record<string, HomeArticleCard[]> = {};
     for (const [category, items] of Object.entries(
       displaySections.groupedByCategory
     )) {
       out[category] = items.filter(
-        (article) => normalizeSource(article.source) === sourceFromUrl
+        (article) => normalizeSource(article.source) === localSourceTabKey
       );
     }
     return out;
-  }, [displaySections.groupedByCategory, sourceFromUrl]);
+  }, [displaySections.groupedByCategory, localSourceTabKey]);
   const filteredVisibleCategories = useMemo(
     () =>
       displaySections.visibleCategories.filter(
@@ -1011,47 +1034,34 @@ export default function HomeNewsView({
   );
   const showCategories = filteredVisibleCategories.length > 0;
 
-  const activeCategoryFilter = useMemo(() => {
-    if (!categoryFromUrl) return null;
-    const allCategories = displaySections.visibleCategories;
-    if (allCategories.includes(categoryFromUrl)) return categoryFromUrl;
-    if (displaySections.groupedByCategory[categoryFromUrl]?.length) {
-      return categoryFromUrl;
-    }
-    return null;
-  }, [categoryFromUrl, displaySections]);
-
-  const selectedCategory = useMemo(() => {
-    if (activeCategoryFilter) return activeCategoryFilter;
-    return filteredVisibleCategories[0] ?? null;
-  }, [activeCategoryFilter, filteredVisibleCategories]);
-
   useEffect(() => {
     if (!categoryFromUrl) return;
-    if (activeCategoryFilter) return;
-    if (filteredVisibleCategories.length === 0) return;
+    if (globalCategoryFilter) return;
     const params = new URLSearchParams(searchParams.toString());
     params.delete("category");
     const q = params.toString();
     router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
   }, [
     categoryFromUrl,
-    activeCategoryFilter,
-    filteredVisibleCategories,
+    globalCategoryFilter,
     pathname,
     router,
     searchParams,
   ]);
 
-  const selectCategory = useCallback(
-    (category: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("category", category);
-      const q = params.toString();
-      router.replace(`${pathname}?${q}`, { scroll: false });
-    },
-    [pathname, router, searchParams]
-  );
+  const selectedCategory = useMemo(() => {
+    if (
+      localCategoryTab &&
+      filteredVisibleCategories.includes(localCategoryTab)
+    ) {
+      return localCategoryTab;
+    }
+    return filteredVisibleCategories[0] ?? null;
+  }, [localCategoryTab, filteredVisibleCategories]);
+
+  const selectLocalCategory = useCallback((category: string) => {
+    setLocalCategoryTab(category);
+  }, []);
 
   const selectedCategoryArticles = selectedCategory
     ? (filteredGroupedByCategory[selectedCategory] ?? []).slice(0, 6)
@@ -1060,19 +1070,17 @@ export default function HomeNewsView({
     ? filteredGroupedByCategory[selectedCategory]?.length ?? 0
     : 0;
 
-  const isFilterResultMode = Boolean(sourceFromUrl || activeCategoryFilter);
-
   const filterResultArticles = useMemo(() => {
     if (!isFilterResultMode || searchArticles.length === 0) return [];
     return buildHomeFilterResults(searchArticles, {
       sourceKey: sourceFromUrl,
-      categoryKey: activeCategoryFilter,
+      categoryKey: globalCategoryFilter,
     });
   }, [
     isFilterResultMode,
     searchArticles,
     sourceFromUrl,
-    activeCategoryFilter,
+    globalCategoryFilter,
   ]);
 
   const filteredArticleCount = filterResultArticles.length;
@@ -1088,7 +1096,12 @@ export default function HomeNewsView({
   const showActiveFilterBanner = isFilterResultMode;
 
   const showEditionHome =
-    !isFilterResultMode && (showFeaturedSection || showTopStories || showSidebar || showTrending || showPreviousHighlights);
+    !isFilterResultMode &&
+    (showFeaturedSection ||
+      showTopStoriesBand ||
+      showSidebar ||
+      showTrending ||
+      showPreviousHighlights);
 
   const trendingPanel = showTrending && trendingIssues && !isFilterResultMode ? (
     <TrendingIssuesPanel
@@ -1209,10 +1222,10 @@ export default function HomeNewsView({
                       {selectedSourceLabel}
                     </span>
                   ) : null}
-                  {sourceFromUrl && activeCategoryFilter ? " · " : null}
-                  {activeCategoryFilter ? (
+                  {sourceFromUrl && globalCategoryFilter ? " · " : null}
+                  {globalCategoryFilter ? (
                     <span className="font-semibold text-news-navy">
-                      {getCategoryLabel(activeCategoryFilter, locale)}
+                      {getCategoryLabel(globalCategoryFilter, locale)}
                     </span>
                   ) : null}
                   {" · "}
@@ -1226,10 +1239,10 @@ export default function HomeNewsView({
                       {selectedSourceLabel}
                     </span>
                   ) : null}
-                  {sourceFromUrl && activeCategoryFilter ? " · " : null}
-                  {activeCategoryFilter ? (
+                  {sourceFromUrl && globalCategoryFilter ? " · " : null}
+                  {globalCategoryFilter ? (
                     <span className="font-semibold text-news-navy">
-                      {getCategoryLabel(activeCategoryFilter, locale)}
+                      {getCategoryLabel(globalCategoryFilter, locale)}
                     </span>
                   ) : null}
                   {" · "}
@@ -1369,10 +1382,10 @@ export default function HomeNewsView({
             ) : null}
 
             {/* Mid band: latest / top stories — left+center while issues continue */}
-            {showTopStories && topStories && !isFilterResultMode ? (
+            {showTopStoriesBand && topStories && !isFilterResultMode ? (
               <section
                 id="latest"
-                className={`order-1 min-w-0 scroll-mt-6 xl:order-none xl:row-start-2 ${
+                className={`order-1 min-w-0 scroll-mt-6 xl:order-none ${centerBandRowClass} ${
                   showLeftRail && showRightRail
                     ? "xl:col-span-2 xl:col-start-1"
                     : showLeftRail
@@ -1426,12 +1439,10 @@ export default function HomeNewsView({
               </section>
             ) : null}
 
-            {!showTopStories &&
-            (displaySections.latest.length > 0 ||
-              (useFeaturedComboLayout && (featuredHub.related?.length ?? 0) > 0)) ? (
+            {showLatestFallbackSection && !isFilterResultMode ? (
               <section
                 id="latest"
-                className={`order-1 min-w-0 scroll-mt-6 xl:order-none xl:row-start-2 ${
+                className={`order-1 min-w-0 scroll-mt-6 xl:order-none ${centerBandRowClass} ${
                   showLeftRail && showRightRail
                     ? "xl:col-span-2 xl:col-start-1"
                     : showLeftRail
@@ -1447,10 +1458,7 @@ export default function HomeNewsView({
                   description={labels.latestDesc}
                 />
                 <div>
-                  {(featuredHub.related.length > 0
-                    ? featuredHub.related
-                    : displaySections.latest
-                  ).map((article, index) => (
+                  {displaySections.latest.map((article, index) => (
                     <LatestRow
                       key={article.id}
                       article={article}
@@ -1492,9 +1500,9 @@ export default function HomeNewsView({
                 <div className="mb-5 flex flex-wrap gap-x-1 gap-y-1 border-b border-neutral-200">
                   <button
                     type="button"
-                    onClick={() => selectSource(null)}
+                    onClick={() => setLocalSourceTabKey(null)}
                     className={`px-3 py-2 text-xs font-semibold transition sm:text-sm ${
-                      !sourceFromUrl
+                      !localSourceTabKey
                         ? "border-b-2 border-news-navy text-news-navy"
                         : "text-neutral-600 hover:text-news-navy"
                     }`}
@@ -1505,12 +1513,12 @@ export default function HomeNewsView({
                     const key = normalizeSource(label);
                     const hasSource =
                       displaySections.activeSourceLabels.includes(label);
-                    const selected = sourceFromUrl === key;
+                    const selected = localSourceTabKey === key;
                     return (
                       <button
                         key={label}
                         type="button"
-                        onClick={() => selectSource(key)}
+                        onClick={() => setLocalSourceTabKey(key)}
                         className={`px-3 py-2 text-xs font-semibold transition sm:text-sm ${
                           selected
                             ? "border-b-2 border-news-navy text-news-navy"
@@ -1572,7 +1580,7 @@ export default function HomeNewsView({
                         aria-selected={selected}
                         aria-controls="category-panel"
                         tabIndex={selected ? 0 : -1}
-                        onClick={() => selectCategory(category)}
+                        onClick={() => selectLocalCategory(category)}
                         onKeyDown={(event) => {
                           if (
                             event.key !== "ArrowRight" &&
@@ -1588,7 +1596,7 @@ export default function HomeNewsView({
                               ? (idx + 1) % filteredVisibleCategories.length
                               : (idx - 1 + filteredVisibleCategories.length) %
                                 filteredVisibleCategories.length;
-                          selectCategory(filteredVisibleCategories[nextIdx]);
+                          selectLocalCategory(filteredVisibleCategories[nextIdx]!);
                         }}
                         className={`px-3 py-2.5 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy sm:text-sm ${
                           selected
