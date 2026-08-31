@@ -40,6 +40,15 @@ import {
   shouldShowLatestFallbackSection,
   shouldShowTopStoriesBand,
 } from "@/lib/home/homeCenterLayoutPolicy";
+import {
+  displaySourceTabLabel,
+  featuredConfigsForGroup,
+  filterSourceLeadCardsByGroup,
+  homeSectionTabClass,
+  homePillButtonClass,
+  homeSourceGroupButtonLabels,
+  type HomeSourceGroup,
+} from "@/lib/home/homeSourceGroupFilter";
 import { normalizeSource } from "@/lib/article/normalizeSource";
 import type { HomeArticleCard, HomePageSections, TodayEditionMeta } from "@/lib/home/types";
 import { getBrandName } from "@/lib/brand";
@@ -878,7 +887,11 @@ export default function HomeNewsView({
   searchLabels,
 }: HomeNewsViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [localSourceTabKey, setLocalSourceTabKey] = useState<string | null>(null);
+  const [localSourceGroup, setLocalSourceGroup] =
+    useState<HomeSourceGroup>("all");
+  const [localSourceTabKey, setLocalSourceTabKey] = useState<string | null>(
+    null
+  );
   const [localCategoryTab, setLocalCategoryTab] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -1005,13 +1018,38 @@ export default function HomeNewsView({
   }, [sourceFromUrl, sourceFilterOptions, locale]);
 
   const filteredSourceLeadCards = useMemo(() => {
-    if (!localSourceTabKey) {
-      return displaySections.sourceLeadCards.slice(0, SOURCE_LEAD_DISPLAY_LIMIT);
-    }
-    return displaySections.sourceLeadCards.filter(
-      (item) => normalizeSource(item.key) === localSourceTabKey
+    const filtered = filterSourceLeadCardsByGroup(
+      displaySections.sourceLeadCards,
+      localSourceGroup,
+      localSourceTabKey
     );
-  }, [displaySections.sourceLeadCards, localSourceTabKey]);
+    if (!localSourceTabKey && localSourceGroup === "all") {
+      return filtered.slice(0, SOURCE_LEAD_DISPLAY_LIMIT);
+    }
+    return filtered;
+  }, [
+    displaySections.sourceLeadCards,
+    localSourceGroup,
+    localSourceTabKey,
+  ]);
+
+  const activeSourceKeys = useMemo(
+    () =>
+      new Set(
+        displaySections.sourceLeadCards.map((c) => normalizeSource(c.key))
+      ),
+    [displaySections.sourceLeadCards]
+  );
+
+  const sourceTabsForGroup = useMemo(
+    () => featuredConfigsForGroup(localSourceGroup),
+    [localSourceGroup]
+  );
+
+  const selectSourceGroup = useCallback((group: HomeSourceGroup) => {
+    setLocalSourceGroup(group);
+    setLocalSourceTabKey(null);
+  }, []);
 
   const filteredGroupedByCategory = useMemo(() => {
     if (!localSourceTabKey) return displaySections.groupedByCategory;
@@ -1254,7 +1292,7 @@ export default function HomeNewsView({
             <button
               type="button"
               onClick={clearFilters}
-              className="shrink-0 rounded-full border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy"
+              className={`shrink-0 ${homePillButtonClass()}`}
             >
               {locale === "ko" ? "필터 해제" : "Clear filters"}
             </button>
@@ -1497,35 +1535,57 @@ export default function HomeNewsView({
                   description={labels.sourcesDesc}
                 />
 
-                <div className="mb-5 flex flex-wrap gap-x-1 gap-y-1 border-b border-neutral-200">
+                <div
+                  role="tablist"
+                  aria-label={
+                    locale === "ko" ? "언론사 그룹" : "Source groups"
+                  }
+                  className="mb-3 flex flex-wrap gap-x-1 gap-y-1 border-b border-neutral-200 pb-3"
+                >
+                  {(["all", "foreign", "korean"] as const).map((group) => (
+                    <button
+                      key={group}
+                      type="button"
+                      role="tab"
+                      aria-selected={localSourceGroup === group}
+                      onClick={() => selectSourceGroup(group)}
+                      className={homeSectionTabClass(localSourceGroup === group)}
+                    >
+                      {homeSourceGroupButtonLabels(locale)[group]}
+                    </button>
+                  ))}
+                </div>
+
+                <div
+                  role="tablist"
+                  aria-label={labels.sourcesTitle}
+                  className="mb-5 flex flex-wrap gap-x-1 gap-y-1 border-b border-neutral-200"
+                >
                   <button
                     type="button"
+                    role="tab"
+                    aria-selected={!localSourceTabKey}
                     onClick={() => setLocalSourceTabKey(null)}
-                    className={`px-3 py-2 text-xs font-semibold transition sm:text-sm ${
-                      !localSourceTabKey
-                        ? "border-b-2 border-news-navy text-news-navy"
-                        : "text-neutral-600 hover:text-news-navy"
-                    }`}
+                    className={homeSectionTabClass(!localSourceTabKey)}
                   >
                     {sourceFilterAllLabel}
                   </button>
-                  {sourceFilterOptions.map((label) => {
-                    const key = normalizeSource(label);
-                    const hasSource =
-                      displaySections.activeSourceLabels.includes(label);
+                  {sourceTabsForGroup.map((config) => {
+                    const key = normalizeSource(config.key);
+                    const hasSource = activeSourceKeys.has(key);
                     const selected = localSourceTabKey === key;
+                    const label = displaySourceTabLabel(config, locale);
                     return (
                       <button
-                        key={label}
+                        key={config.key}
                         type="button"
-                        onClick={() => setLocalSourceTabKey(key)}
-                        className={`px-3 py-2 text-xs font-semibold transition sm:text-sm ${
-                          selected
-                            ? "border-b-2 border-news-navy text-news-navy"
-                            : hasSource
-                              ? "text-neutral-600 hover:text-news-navy"
-                              : "text-neutral-400"
-                        }`}
+                        role="tab"
+                        aria-selected={selected}
+                        disabled={!hasSource}
+                        onClick={() => {
+                          if (hasSource) setLocalSourceTabKey(key);
+                        }}
+                        className={homeSectionTabClass(selected, hasSource)}
                       >
                         {label}
                       </button>
@@ -1536,18 +1596,29 @@ export default function HomeNewsView({
                 <h3 className="mb-4 text-[15px] font-bold text-news-navy">
                   {labels.sourceLeadsTitle}
                 </h3>
+                {filteredSourceLeadCards.length === 0 ? (
+                  <p
+                    className="border border-neutral-200 bg-white px-4 py-8 text-center text-sm text-neutral-600"
+                    role="status"
+                  >
+                    {locale === "ko"
+                      ? "선택한 언론사 그룹에 표시할 공개 기사가 없습니다."
+                      : "No published articles for the selected source group."}
+                  </p>
+                ) : (
                 <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {filteredSourceLeadCards.map((item) => (
                     <SourceLeadMini
                       key={item.key}
                       article={item.article}
-                      sourceLabel={item.label}
+                      sourceLabel={displaySourceTabLabel(item, locale)}
                       labels={labels}
                       articleHrefPrefix={articleHrefPrefix}
                       articleHrefFor={articleHrefFor}
                     />
                   ))}
                 </div>
+                )}
               </section>
             ) : null}
 
@@ -1598,11 +1669,7 @@ export default function HomeNewsView({
                                 filteredVisibleCategories.length;
                           selectLocalCategory(filteredVisibleCategories[nextIdx]!);
                         }}
-                        className={`px-3 py-2.5 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy sm:text-sm ${
-                          selected
-                            ? "border-b-2 border-news-navy text-news-navy"
-                            : "text-neutral-600 hover:text-news-navy"
-                        }`}
+                        className={homeSectionTabClass(selected)}
                       >
                         {getCategoryLabel(category, locale)}
                         <span className="ml-1.5 font-normal opacity-60">

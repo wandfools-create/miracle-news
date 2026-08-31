@@ -90,13 +90,14 @@ describe("homeCenterLayoutPolicy", () => {
       "utf8"
     );
     assert.match(view, /localSourceTabKey/);
+    assert.match(view, /localSourceGroup/);
     assert.match(view, /localCategoryTab/);
     assert.match(view, /setLocalSourceTabKey/);
     assert.match(view, /selectLocalCategory/);
     assert.match(view, /isGlobalHomeFilterMode/);
     assert.match(view, /shouldShowLatestFallbackSection/);
-    assert.doesNotMatch(view, /onClick=\{\(\) => selectSource/);
-    assert.doesNotMatch(view, /onClick=\{\(\) => selectCategory/);
+    assert.doesNotMatch(view, /onClick=\{\(\) => selectSource\(/);
+    assert.doesNotMatch(view, /onClick=\{\(\) => selectCategory\(/);
   });
 });
 
