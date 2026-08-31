@@ -3,6 +3,7 @@ import "server-only";
 import { ARTICLE_WORKFLOW } from "@/lib/articleWorkflow";
 import {
   isQuickReviewArticle,
+  isPendingReviewArticle,
   resolvePublishCopy,
   validateQuickPublishContent,
   type PublishArticleFields,
@@ -79,6 +80,8 @@ export type PublishArticleToLivePublicOptions = {
   requireReviewStatus?: string;
   /** Admin override for clear same-event block (quick_review etc.). */
   allowSameEventOverride?: boolean;
+  /** Record human approver on publish (review complete flow). */
+  approvedBy?: string | null;
 };
 
 /** @internal — use publishApprovedArticleToLive() for approved-queue human publish. */
@@ -358,6 +361,9 @@ export async function publishArticleToLiveInternal(
       ...ARTICLE_WORKFLOW.published,
       ...(firstPublish ? { published_at: sitePublishedAt } : {}),
       approved_at: new Date().toISOString(),
+      ...(options?.approvedBy?.trim()
+        ? { approved_by: options.approvedBy.trim() }
+        : {}),
     })
     .eq("id", articleId)
     .eq("is_published", false);
@@ -454,6 +460,72 @@ export async function quickPublishArticle(
   return publishArticleToLive(articleId, {
     requireReviewStatus: ARTICLE_WORKFLOW.quickReview.review_status,
     allowSameEventOverride: options?.allowSameEventOverride,
+    approvedBy: options?.approvedBy,
+  });
+}
+
+/**
+ * Review queue one-step publish: content guard + publishArticleToLive.
+ * Records approver and skips the separate approved holding step.
+ */
+export async function reviewCompleteAndPublishArticle(
+  articleId: string,
+  options?: { allowSameEventOverride?: boolean; approvedBy?: string | null }
+): Promise<
+  | PublishArticleToLiveResult
+  | {
+      ok: false;
+      error: string;
+      step: string;
+      errors?: string[];
+      warnings?: string[];
+      sameEventMatch?: SameEventPublishMatch;
+    }
+> {
+  const envCheck = await checkSupabaseServiceEnvWithDns();
+  if (!envCheck.ok) {
+    return { ok: false, error: envCheck.error, step: envCheck.step };
+  }
+
+  const { client } = createServiceRoleSupabaseClient();
+  const { data, error } = await client
+    .from("articles")
+    .select(PUBLISH_SELECT)
+    .eq("id", articleId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return {
+      ok: false,
+      error: error?.message || "기사를 찾을 수 없습니다.",
+      step: "fetch",
+    };
+  }
+
+  const article = data as PublishArticleFieldsWithMeta;
+  if (!isPendingReviewArticle(article)) {
+    return {
+      ok: false,
+      error: "검토 대기 상태의 기사만 검토 완료 및 공개할 수 있습니다.",
+      step: "status_guard",
+    };
+  }
+
+  const content = validateQuickPublishContent(article);
+  if (!content.ok) {
+    return {
+      ok: false,
+      error: content.errors.join(" "),
+      step: "content_guard",
+      errors: content.errors,
+      warnings: content.warnings,
+    };
+  }
+
+  return publishArticleToLive(articleId, {
+    requireReviewStatus: ARTICLE_WORKFLOW.review.review_status,
+    allowSameEventOverride: options?.allowSameEventOverride,
+    approvedBy: options?.approvedBy,
   });
 }
 

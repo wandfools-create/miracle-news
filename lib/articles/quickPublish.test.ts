@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { ARTICLE_WORKFLOW } from "@/lib/articleWorkflow";
 import {
   isQuickReviewArticle,
+  isPendingReviewArticle,
   validateQuickPublishContent,
   type PublishArticleFields,
 } from "@/lib/articles/quickPublishGuards";
@@ -234,5 +235,21 @@ describe("quick publish flow (fixture only, no OpenAI/Discord/publish)", () => {
     );
     assert.match(insertSrc, /landingWorkflow/);
     assert.match(insertSrc, /quick_review/);
+  });
+
+  it("isPendingReviewArticle matches review queue workflow", () => {
+    assert.equal(
+      isPendingReviewArticle(
+        baseArticle({
+          review_status: "pending",
+          status: "ready_for_human_review",
+        })
+      ),
+      true
+    );
+    assert.equal(
+      isPendingReviewArticle(baseArticle({ review_status: "quick_review" })),
+      false
+    );
   });
 });
