@@ -33,6 +33,7 @@ const primaryNavItems = [
     key: "collection-shortlist",
   },
   { href: "/admin/editorial-interest", label: "관심 기준", key: "editorial-interest" },
+  { href: "/admin/extraction-failures", label: "추출 실패", key: "extraction-failures" },
   { href: "/admin/quick-review", label: "빠른 검토", key: "quick-review" },
   { href: "/admin/review/mobile", label: "모바일 검토", key: "review-mobile" },
   { href: "/admin/review", label: "검토 대기", key: "review" },

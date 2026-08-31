@@ -56,6 +56,25 @@ async function markCandidateFailed(input: {
       enrich_category: classified.category,
     })
     .eq("id", input.candidateId);
+
+  const { logExtractionAttempt } = await import("@/lib/extraction/logExtractionAttempt");
+  const { mapEnrichCategoryToFailureCode } = await import(
+    "@/lib/extraction/failureTaxonomy"
+  );
+  const { data: candidateRow } = await client
+    .from("collection_candidates")
+    .select("original_url, source")
+    .eq("id", input.candidateId)
+    .maybeSingle();
+  if (candidateRow?.original_url) {
+    await logExtractionAttempt({
+      url: String(candidateRow.original_url),
+      source: String(candidateRow.source ?? ""),
+      failureCode: mapEnrichCategoryToFailureCode(classified.category),
+      extractionMethod: input.step,
+      metadata: { error: input.error.slice(0, 500) },
+    });
+  }
 }
 
 /** Admin-selected enrich: from-link pipeline then review-queue insert. OpenAI only here. */
