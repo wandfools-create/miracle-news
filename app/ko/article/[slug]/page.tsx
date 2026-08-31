@@ -12,6 +12,10 @@ import {
   type RelatedArticleRow,
 } from "@/lib/article/relatedArticles";
 import { buildArticleDetailForLocale } from "@/lib/article/buildArticleDetail";
+import {
+  buildHomeCategoryFilterHref,
+  buildHomeSourceFilterHref,
+} from "@/lib/home/buildHomeFilterHref";
 import { splitArticleParagraphs } from "@/lib/article/splitParagraphs";
 import { supabase } from "../../../../lib/supabase";
 
@@ -194,6 +198,12 @@ export default async function KoreanArticleDetailPage({ params }: PageProps) {
       labels={koArticleDetailLabels}
       homeHref="/ko"
       articleHrefPrefix="/ko/article"
+      sourceFilterHref={buildHomeSourceFilterHref("ko", articleMeta.source)}
+      categoryFilterHref={
+        articleMeta.category
+          ? buildHomeCategoryFilterHref("ko", articleMeta.category)
+          : null
+      }
       alternateVersionHref={
         englishVersion?.slug
           ? `/en/article/${englishVersion.slug}`

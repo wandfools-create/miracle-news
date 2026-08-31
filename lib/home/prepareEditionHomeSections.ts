@@ -56,10 +56,14 @@ export function prepareEditionHomeSections(
   let featuredLeads: HomeArticleCard[] = [];
   let featuredRelated: HomeArticleCard[] = [];
 
-  if (todayEdition.todayCount === 0) {
+  if (todayEdition.todayCount === 0 && todayEdition.status !== "carryover") {
     featuredLeads = [];
     featuredRelated = [];
-  } else if (todayEdition.todayCount === 1 && featured) {
+  } else if (
+    todayEdition.todayCount === 1 &&
+    featured &&
+    todayEdition.status !== "carryover"
+  ) {
     featuredLeads = [featured];
     featuredRelated = [];
   } else if (featured) {

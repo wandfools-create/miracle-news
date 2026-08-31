@@ -94,7 +94,7 @@ export type TrendingIssue = {
   continuingIssue?: boolean;
 };
 
-export type TodayEditionStatus = "ready" | "preparing";
+export type TodayEditionStatus = "ready" | "preparing" | "carryover";
 
 export type TodayEditionMeta = {
   editionDateKey: string;
