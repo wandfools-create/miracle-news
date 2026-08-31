@@ -1,4 +1,5 @@
 import HomeNewsView from "@/components/home/HomeNewsView";
+import AnalyticsPageView from "@/components/analytics/AnalyticsPageView";
 import { enrichHomeArticlesWithRelativeDates } from "@/lib/home/enrichHomeRelativeDates";
 import { fetchEditionHomeArticles } from "@/lib/home/fetchEditionHomeArticles";
 import { enHomeLabels } from "@/lib/home/enHomeLabels";
@@ -34,6 +35,7 @@ export default async function EnglishHomePage() {
         </main>
       }
     >
+      <AnalyticsPageView locale="en" path="/en" />
       <HomeNewsView
         pageRole="en"
         locale="en"
