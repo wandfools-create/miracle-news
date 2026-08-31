@@ -22,6 +22,7 @@ import {
 import { formatEditionLastUpdated } from "./homeRelativeTime";
 import { offsetNyDateKey, nyDateKeyDiff } from "./homeRelativeTime";
 import { pickTrendingIssues } from "./pickTrendingIssues";
+import { pickPreviousEditionFeatured } from "./pickPreviousEditionFeatured";
 import { normalizeTopicClusterKey } from "./topicClusterKey";
 import type {
   HomeArticleCard,
@@ -37,7 +38,7 @@ export const PREVIOUS_HIGHLIGHTS_MAX_DAYS = 7;
 export const PREVIOUS_HIGHLIGHTS_LIMIT = 5;
 export const TODAY_TOP_STORIES_PER_COLUMN = 6;
 
-export type TodayEditionStatus = "ready" | "preparing";
+export type TodayEditionStatus = "ready" | "preparing" | "carryover";
 
 export type TodayEdition = {
   editionDateKey: string;
@@ -458,7 +459,18 @@ export function buildTodayEdition(
   let status: TodayEditionStatus = "ready";
 
   if (todayCount === 0) {
-    status = "preparing";
+    const carryover = pickPreviousEditionFeatured(articles, {
+      nowMs,
+      locale: options.locale,
+    });
+    if (carryover?.featured) {
+      status = "carryover";
+      featured = carryover.featured;
+      secondaryFeatured = carryover.secondaryFeatured;
+      featuredRelated = carryover.featuredRelated;
+    } else {
+      status = "preparing";
+    }
   } else {
     featured = pickFeaturedArticle(todayCore, nowMs);
     if (todayCount >= 2 && featured) {
@@ -521,6 +533,18 @@ export function buildTodayEdition(
       : null;
 
   const statusLines = buildStatusLines(todayCount, lastUpdatedAt, "ko");
+  const carryoverKo =
+    status === "carryover"
+      ? "최근 주요 기사"
+      : null;
+  const carryoverEn =
+    status === "carryover" ? "Recent top story" : null;
+  const carryoverPhaseKo =
+    status === "carryover" ? "새로운 오늘 기사 준비 중" : preparingPhase(nowMs, "ko");
+  const carryoverPhaseEn =
+    status === "carryover"
+      ? "Today's new stories are being prepared"
+      : preparingPhase(nowMs, "en");
 
   return {
     editionDateKey,
@@ -536,16 +560,20 @@ export function buildTodayEdition(
     previousHighlights,
     headerDateKo: formatEditionHeaderDate(nowMs, "ko"),
     headerDateEn: formatEditionHeaderDate(nowMs, "en"),
-    editionTitleKo: "오늘의 한눈",
-    editionTitleEn: "Today's Hannoon",
+    editionTitleKo: carryoverKo ?? "오늘의 한눈",
+    editionTitleEn: carryoverEn ?? "Today's Hannoon",
     statusLineKo: statusLines.ko,
     statusLineEn: statusLines.en,
     preparingMessageKo:
-      "오늘의 주요뉴스를 준비하고 있습니다.\n수집·검토 후 새로운 기사가 업데이트됩니다.",
+      status === "carryover"
+        ? "오늘 공개된 기사가 아직 없습니다.\n직전 에디션의 대표 기사를 표시합니다."
+        : "오늘의 주요뉴스를 준비하고 있습니다.\n수집·검토 후 새로운 기사가 업데이트됩니다.",
     preparingMessageEn:
-      "Today's top stories are being prepared.\nNew stories will appear after collection and editorial review.",
-    preparingPhaseKo: preparingPhase(nowMs, "ko"),
-    preparingPhaseEn: preparingPhase(nowMs, "en"),
+      status === "carryover"
+        ? "No stories published yet today.\nShowing the most recent edition lead."
+        : "Today's top stories are being prepared.\nNew stories will appear after collection and editorial review.",
+    preparingPhaseKo: carryoverPhaseKo,
+    preparingPhaseEn: carryoverPhaseEn,
   };
 }
 
