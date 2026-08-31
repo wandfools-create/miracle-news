@@ -12,6 +12,8 @@ import {
   candidateFreshnessCutoffIso,
   parseAiRecommendResponseItems,
 } from "@/lib/collection-candidates/candidateRecommend";
+import { fetchEditorialInterestRules } from "@/lib/editorialInterest/fetchInterestRules";
+import { buildInterestRulesPromptSection } from "@/lib/editorialInterest/rules";
 import { applyAiRecommendPostProcess } from "@/lib/collection-candidates/candidateRecommendPostProcess";
 import {
   sourceKeysForCollectRegion,
@@ -118,9 +120,13 @@ export async function recommendUnevaluatedCollectionCandidates(options?: {
     queued: payload.length,
   });
 
+  const interestRules = await fetchEditorialInterestRules();
+  const systemPrompt =
+    AI_RECOMMEND_SYSTEM_PROMPT + buildInterestRulesPromptSection(interestRules);
+
   const completion = await chatCompletionJson<{ items?: unknown }>({
     step: "collection_candidates_recommend",
-    system: AI_RECOMMEND_SYSTEM_PROMPT,
+    system: systemPrompt,
     user: buildAiRecommendUserPayload(payload),
     temperature: 0.2,
     model,

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { ARTICLE_WORKFLOW } from "@/lib/articleWorkflow";
 import {
   isQuickReviewArticle,
+  isPendingReviewArticle,
   validateQuickPublishContent,
   type PublishArticleFields,
 } from "@/lib/articles/quickPublishGuards";
@@ -116,7 +117,7 @@ describe("quick publish flow (fixture only, no OpenAI/Discord/publish)", () => {
     });
 
     let promoted = false;
-    let edited: { content: string } | null = null;
+    let editedContent = "";
 
     const result = await handleDiscordComponentInteraction(
       {
@@ -149,7 +150,7 @@ describe("quick publish flow (fixture only, no OpenAI/Discord/publish)", () => {
           return { ok: true, articleId: ARTICLE_ID };
         },
         editOriginalMessage: async ({ content }) => {
-          edited = { content };
+          editedContent = content;
           return { ok: true };
         },
       }
@@ -159,8 +160,8 @@ describe("quick publish flow (fixture only, no OpenAI/Discord/publish)", () => {
     if (result.kind !== "deferred_update") return;
     await result.continueWork();
     assert.equal(promoted, true);
-    assert.ok(edited?.content.includes("기사 생성 완료"));
-    assert.ok(edited?.content.includes("빠른 검토"));
+    assert.ok(editedContent.includes("기사 생성 완료"));
+    assert.ok(editedContent.includes("빠른 검토"));
   });
 
   it("article_created payload exposes quick review link button", () => {
@@ -234,5 +235,21 @@ describe("quick publish flow (fixture only, no OpenAI/Discord/publish)", () => {
     );
     assert.match(insertSrc, /landingWorkflow/);
     assert.match(insertSrc, /quick_review/);
+  });
+
+  it("isPendingReviewArticle matches review queue workflow", () => {
+    assert.equal(
+      isPendingReviewArticle(
+        baseArticle({
+          review_status: "pending",
+          status: "ready_for_human_review",
+        })
+      ),
+      true
+    );
+    assert.equal(
+      isPendingReviewArticle(baseArticle({ review_status: "quick_review" })),
+      false
+    );
   });
 });

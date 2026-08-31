@@ -18,6 +18,7 @@ import {
   rejectArticleFromForm,
   setMainTopStoryFromForm,
 } from "./actions";
+import { reviewCompleteAndPublishDetailFromForm } from "../publishActions";
 
 export const dynamic = "force-dynamic";
 
@@ -398,15 +399,48 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
           </div>
 
           <div className="mt-6 rounded-2xl border bg-green-50 p-4 sm:mt-8 sm:p-5">
-            <h4 className="text-base font-semibold text-green-800">기사 승인</h4>
+            <h4 className="text-base font-semibold text-green-800">
+              검토 완료 및 공개
+            </h4>
+            <p className="mt-2 text-sm text-green-900/90">
+              승인 보관함을 거치지 않고 한 번에 공개합니다. 내용·중복 검증을 통과해야
+              합니다.
+            </p>
+            <form
+              className="mt-4 flex flex-wrap gap-3"
+              action={reviewCompleteAndPublishDetailFromForm}
+            >
+              <input type="hidden" name="articleId" value={article.id} />
+              <button
+                type="submit"
+                className="rounded-xl bg-green-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-800"
+              >
+                검토 완료 및 공개
+              </button>
+              <Link
+                href={`/admin/review/mobile/${article.id}`}
+                className="rounded-xl border border-green-300 bg-white px-5 py-3 text-sm font-semibold text-green-900"
+              >
+                모바일 검토 화면
+              </Link>
+            </form>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 sm:mt-8 sm:p-5">
+            <h4 className="text-base font-semibold text-neutral-800">
+              이전 승인 보관함 흐름
+            </h4>
+            <p className="mt-2 text-sm text-neutral-600">
+              공개 없이 승인만 기록하려면 아래 버튼을 사용하세요.
+            </p>
 
             <form className="mt-4" action={approveArticleDetailFromForm}>
               <input type="hidden" name="articleId" value={article.id} />
               <button
                 type="submit"
-                className="w-full rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-700 sm:w-auto"
+                className="w-full rounded-xl border border-neutral-300 bg-white px-5 py-3 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-100 sm:w-auto"
               >
-                승인 완료로 이동
+                승인 완료로 이동 (공개 없음)
               </button>
             </form>
           </div>

@@ -1,4 +1,5 @@
 import HomeNewsView from "@/components/home/HomeNewsView";
+import AnalyticsPageView from "@/components/analytics/AnalyticsPageView";
 import { enrichHomeArticlesWithRelativeDates } from "@/lib/home/enrichHomeRelativeDates";
 import { fetchEditionHomeArticles } from "@/lib/home/fetchEditionHomeArticles";
 import { koHomeLabels } from "@/lib/home/koHomeLabels";
@@ -34,6 +35,7 @@ export default async function KoreanHomePage() {
         </main>
       }
     >
+      <AnalyticsPageView locale="ko" path="/ko" />
       <HomeNewsView
         pageRole="ko"
         locale="ko"

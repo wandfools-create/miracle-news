@@ -8,6 +8,7 @@ import { recommendUnevaluatedCollectionCandidates } from "@/lib/collection-candi
 import { sendDiscordChannelMessage } from "@/lib/discord/discordApi";
 import type { DiscordFetch } from "@/lib/discord/discordApi";
 import { getDiscordEnv } from "@/lib/discord/env";
+import { isEditorialDiscordEnabled } from "@/lib/discord/editorialDiscordPolicy";
 import { buildMorningBriefPayload } from "@/lib/discord/morningBriefMessage";
 import type { CollectRegion } from "@/lib/rss/collectRegions";
 
@@ -57,6 +58,18 @@ export async function runMorningBriefDiscord(options?: {
   dryRun?: boolean;
   region?: CollectRegion | null;
 }): Promise<MorningBriefDiscordResult> {
+  if (!isEditorialDiscordEnabled()) {
+    return {
+      ok: true,
+      sent: 0,
+      skipped: 0,
+      errors: ["editorial_discord_disabled"],
+      dryRun: options?.dryRun,
+      region: options?.region ?? null,
+      briefEligibleCount: 0,
+    };
+  }
+
   const errors: string[] = [];
   let sent = 0;
   let skipped = 0;

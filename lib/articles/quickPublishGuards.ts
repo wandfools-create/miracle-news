@@ -79,3 +79,15 @@ export function isQuickReviewArticle(article: {
     article.is_published !== true
   );
 }
+
+export function isPendingReviewArticle(article: {
+  review_status?: string | null;
+  status?: string | null;
+  is_published?: boolean | null;
+}): boolean {
+  return (
+    article.review_status === ARTICLE_WORKFLOW.review.review_status &&
+    article.status === ARTICLE_WORKFLOW.review.status &&
+    article.is_published !== true
+  );
+}

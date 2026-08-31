@@ -1,11 +1,17 @@
 import Link from "next/link";
 
 import CandidateListScrollRestore from "@/components/admin/CandidateListScrollRestore";
+import CollectionRunPanel from "@/components/admin/CollectionRunPanel";
 import CollectionCandidatesWorkbench, {
   type WorkbenchCandidate,
 } from "@/components/admin/CollectionCandidatesWorkbench";
 import RecommendCandidatesForm from "@/components/admin/RecommendCandidatesForm";
-import RssSourceHealthPanel from "@/components/admin/RssSourceHealthPanel";
+import RssCollectionAccordion from "@/components/admin/RssCollectionAccordion";
+import {
+  filterCandidatesByRunKey,
+  parseRunFilterParam,
+  summarizeCollectionRuns,
+} from "@/lib/collection-candidates/groupCandidatesByRun";
 import {
   CANDIDATE_CATEGORY_FILTERS,
   classifyCandidateCategory,
@@ -28,6 +34,15 @@ import {
   type RelatedStoryRef,
 } from "@/lib/same-event/relatedStories";
 import type { CollectionCandidateStatus } from "@/lib/collection-candidates/types";
+import {
+  fetchRecentCollectionRunLogs,
+  fetchRssCollectHealthFromLogs,
+} from "@/lib/rss/fetchRssCollectHealthFromLogs";
+import {
+  RSS_FEED_SOURCES,
+  isRssFeedSourceEnabled,
+} from "@/lib/rss/feedSources";
+import { Suspense } from "react";
 
 export const revalidate = 0;
 export const dynamic = "force-dynamic";
@@ -51,6 +66,8 @@ type PageProps = {
     recommended?: string;
     recommendQueued?: string;
     advanced?: string;
+    run?: string;
+    pendingOnly?: string;
   }>;
 };
 
@@ -89,7 +106,49 @@ export default async function CollectionCandidatesPage({
       category: params.category,
     });
 
-  const classified: WorkbenchCandidate[] = candidates.map((c) => {
+  const runSummaries = summarizeCollectionRuns(
+    candidates.map((c) => ({
+      id: c.id,
+      source: c.source,
+      source_country: c.source_country,
+      status: c.status as CollectionCandidateStatus,
+      collection_run_id: c.collection_run_id,
+      created_at: c.created_at,
+      enrich_error: c.enrich_error,
+    }))
+  );
+  const activeRunKey = parseRunFilterParam(params.run);
+  const showPendingOnly = params.pendingOnly === "1";
+  const runFilteredIds = new Set(
+    filterCandidatesByRunKey(
+      candidates.map((c) => ({
+        id: c.id,
+        source: c.source,
+        source_country: c.source_country,
+        status: c.status as CollectionCandidateStatus,
+        collection_run_id: c.collection_run_id,
+        created_at: c.created_at,
+        enrich_error: c.enrich_error,
+      })),
+      activeRunKey
+    ).map((row) => row.id)
+  );
+  const scopedCandidates = activeRunKey
+    ? candidates.filter((c) => runFilteredIds.has(c.id))
+    : candidates;
+
+  const rssFeeds = RSS_FEED_SOURCES.map((feed) => ({
+    sourceKey: feed.sourceKey,
+    label: feed.label,
+    feedUrl: feed.feedUrl,
+    enabled: isRssFeedSourceEnabled(feed.sourceKey),
+  }));
+  const [rssHealth, recentRunLogs] = await Promise.all([
+    fetchRssCollectHealthFromLogs(rssFeeds),
+    fetchRecentCollectionRunLogs(),
+  ]);
+
+  const classified: WorkbenchCandidate[] = scopedCandidates.map((c) => {
     const candidateCategory = classifyCandidateCategory({
       source: c.source,
       rssTitle: c.rss_title,
@@ -156,10 +215,13 @@ export default async function CollectionCandidatesPage({
           (c) => c.candidateCategory === query.category
         );
 
-  const filtered =
+  const filteredBase =
     query.view === "ai"
       ? [...byCategory].sort(compareCandidatesByAiRecommend)
       : byCategory;
+  const filtered = showPendingOnly
+    ? filteredBase.filter((c) => c.status === "pending")
+    : filteredBase;
 
   let relatedStoriesMap: Record<string, RelatedStoryRef[]> = {};
   let relatedStoryPoolCapped = false;
@@ -233,7 +295,14 @@ export default async function CollectionCandidatesPage({
         </p>
 
         <div className="mt-4">
-          <RssSourceHealthPanel />
+          <RssCollectionAccordion sources={rssHealth} recentRuns={recentRunLogs} />
+          <Suspense fallback={null}>
+            <CollectionRunPanel
+              runs={runSummaries}
+              activeRunKey={activeRunKey}
+              showPendingOnly={showPendingOnly}
+            />
+          </Suspense>
         </div>
 
         <div className="mt-5 flex flex-wrap gap-1.5">
