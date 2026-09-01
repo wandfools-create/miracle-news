@@ -2,20 +2,32 @@
 
 import { useEffect, useRef } from "react";
 import {
-  createAnonymousSessionId,
+  parseStoredAnonymousSession,
+  resolveAnonymousSession,
   type AnalyticsEventName,
   type AnalyticsLocale,
 } from "@/lib/analytics/types";
 
 const SESSION_KEY = "mn_analytics_session";
 
-function getSessionId(): string {
+function readStoredSession(): ReturnType<typeof parseStoredAnonymousSession> {
+  if (typeof window === "undefined") return null;
+  return parseStoredAnonymousSession(window.localStorage.getItem(SESSION_KEY));
+}
+
+function writeStoredSession(id: string, createdAt: number) {
+  window.localStorage.setItem(
+    SESSION_KEY,
+    JSON.stringify({ id, createdAt })
+  );
+}
+
+export function getAnonymousSessionId(): string {
   if (typeof window === "undefined") return "";
-  const existing = window.localStorage.getItem(SESSION_KEY);
-  if (existing) return existing;
-  const next = createAnonymousSessionId();
-  window.localStorage.setItem(SESSION_KEY, next);
-  return next;
+  const now = Date.now();
+  const resolved = resolveAnonymousSession(readStoredSession(), now);
+  writeStoredSession(resolved.id, resolved.createdAt);
+  return resolved.id;
 }
 
 function resolveDeviceClass(): "mobile" | "desktop" {
@@ -50,7 +62,7 @@ async function sendEvent(input: TrackAnalyticsInput) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         ...input,
-        sessionId: getSessionId(),
+        sessionId: getAnonymousSessionId(),
         path: input.path ?? window.location.pathname,
         referrerDomain: document.referrer || null,
         deviceClass: resolveDeviceClass(),

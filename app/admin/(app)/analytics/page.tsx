@@ -58,8 +58,8 @@ export default async function AnalyticsAdminPage({ searchParams }: PageProps) {
         <h1 className="mt-2 text-2xl font-bold">방문 분석</h1>
         <p className="mt-2 text-sm leading-relaxed text-gray-600">
           IP·전체 user-agent·임의 metadata는 저장하지 않습니다. 익명 방문 세션은
-          브라우저 localStorage 기반 추정치이며 실제 방문자 수와 같지 않습니다.
-          Preview·봇 방문은 통계를 왜곡할 수 있습니다.
+          브라우저 localStorage 기반 24시간 단위 추정치이며 실제 방문자 수와
+          같지 않습니다. Preview·봇 방문은 통계를 왜곡할 수 있습니다.
         </p>
 
         <div className="mt-4 flex flex-wrap gap-2 text-sm">
@@ -96,7 +96,7 @@ export default async function AnalyticsAdminPage({ searchParams }: PageProps) {
               <Metric
                 label="익명 방문 세션"
                 value={result.summary.sessions}
-                hint="추정 방문 기기·세션"
+                hint="24시간 단위 추정 기기·세션"
               />
               <Metric label="기사 상세 조회" value={result.summary.articleViews} />
               <Metric label="기사 클릭 합계" value={result.summary.articleClicks} />
@@ -275,7 +275,9 @@ function SearchRankSection({
     <section className="mt-8">
       <h2 className="text-lg font-bold">사이트 검색어 · 관심 이슈</h2>
       <p className="mt-1 text-xs text-gray-500">
-        검색어 원문은 최대 80자·PII 마스킹 후 저장되며 30일 보존 설계입니다.
+        검색어 원문은 최대 80자·PII 마스킹 후 저장됩니다. 30일 이후 검색어 텍스트는
+        운영 cleanup(`anonymize_analytics_search_queries`)으로 NULL 익명화되며,
+        검색 실행 횟수 통계는 보존됩니다. 자동 schedule은 이번 PR에 포함되지 않습니다.
       </p>
       {rows.length === 0 ? (
         <p className="mt-2 text-sm text-gray-500">데이터 없음</p>

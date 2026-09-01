@@ -6,14 +6,19 @@ import {
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/serviceRole";
 import {
+  toPublicAnalyticsError,
+  type PublicAnalyticsErrorCode,
+} from "./publicErrors";
+import {
   buildAnalyticsDedupeKey,
   isAllowedAnalyticsEvent,
   isAnalyticsLocale,
+  isAnalyticsSchemaMissing,
   isValidUuid,
+  resolveExternalReferrerDomain,
   sanitizeAnalyticsKey,
   sanitizeAnalyticsPath,
   sanitizeDeviceClass,
-  sanitizeReferrerDomain,
   sanitizeSearchQuery,
   sanitizeSessionId,
   type AnalyticsEventPayload,
@@ -25,10 +30,11 @@ function hashDedupeKey(raw: string): string {
 
 export type RecordAnalyticsResult =
   | { ok: true; deduped?: boolean }
-  | { ok: false; error: string };
+  | { ok: false; error: PublicAnalyticsErrorCode };
 
 export async function recordAnalyticsEvent(
-  payload: AnalyticsEventPayload
+  payload: AnalyticsEventPayload,
+  options?: { requestHost?: string | null }
 ): Promise<RecordAnalyticsResult> {
   if (!isAllowedAnalyticsEvent(payload.eventName)) {
     return { ok: false, error: "event_not_allowed" };
@@ -76,7 +82,7 @@ export async function recordAnalyticsEvent(
 
   const envCheck = await checkSupabaseServiceEnvWithDns();
   if (!envCheck.ok) {
-    return { ok: false, error: envCheck.error };
+    return { ok: false, error: "analytics_unavailable" };
   }
 
   const { client } = createServiceRoleSupabaseClient();
@@ -89,7 +95,10 @@ export async function recordAnalyticsEvent(
     source_key: sourceKey,
     category_key: categoryKey,
     search_query: searchQuery,
-    referrer_domain: sanitizeReferrerDomain(payload.referrerDomain),
+    referrer_domain: resolveExternalReferrerDomain(
+      payload.referrerDomain,
+      options?.requestHost ?? null
+    ),
     device_class: sanitizeDeviceClass(payload.deviceClass),
     dedupe_key: dedupeKey,
   });
@@ -100,5 +109,12 @@ export async function recordAnalyticsEvent(
     return { ok: true, deduped: true };
   }
 
-  return { ok: false, error: error.message };
+  if (isAnalyticsSchemaMissing(error)) {
+    return { ok: false, error: "analytics_unavailable" };
+  }
+
+  return {
+    ok: false,
+    error: toPublicAnalyticsError("store_failed", error),
+  };
 }

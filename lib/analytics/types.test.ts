@@ -14,6 +14,7 @@ import {
   sanitizeReferrerDomain,
   sanitizeSearchQuery,
   sanitizeSessionId,
+  resolveExternalReferrerDomain,
 } from "./types";
 
 describe("analytics event allowlist", () => {
@@ -81,6 +82,13 @@ describe("referrer and session sanitization", () => {
       "news.google.com"
     );
     assert.equal(sanitizeReferrerDomain(""), null);
+  });
+
+  it("treats internal site navigation as non-external referrer", () => {
+    assert.equal(
+      resolveExternalReferrerDomain("https://www.hannoon.co/ko", "hannoon.co"),
+      null
+    );
   });
 
   it("accepts safe session ids only", () => {

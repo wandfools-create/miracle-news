@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
 import { recordAnalyticsEvent } from "@/lib/analytics/recordAnalyticsEvent";
 import {
+  publicAnalyticsHttpStatus,
+  type PublicAnalyticsErrorCode,
+} from "@/lib/analytics/publicErrors";
+import { validateAnalyticsOrigin } from "@/lib/analytics/validateAnalyticsOrigin";
+import {
   ANALYTICS_MAX_BODY_BYTES,
   isAllowedAnalyticsEvent,
   isAnalyticsLocale,
   isValidUuid,
+  normalizeAnalyticsHost,
   sanitizeAnalyticsKey,
   sanitizeAnalyticsPath,
   sanitizeDeviceClass,
-  sanitizeReferrerDomain,
   sanitizeSearchQuery,
   sanitizeSessionId,
 } from "@/lib/analytics/types";
@@ -28,44 +33,53 @@ type Body = {
   deviceClass?: string;
 };
 
+function publicErrorResponse(error: PublicAnalyticsErrorCode) {
+  return NextResponse.json({ ok: false, error }, { status: publicAnalyticsHttpStatus(error) });
+}
+
 export async function POST(request: Request) {
+  const originCheck = validateAnalyticsOrigin(request);
+  if (!originCheck.ok) {
+    return publicErrorResponse(originCheck.error);
+  }
+
   const contentLength = Number(request.headers.get("content-length") ?? "0");
   if (contentLength > ANALYTICS_MAX_BODY_BYTES) {
-    return NextResponse.json({ ok: false, error: "payload_too_large" }, { status: 400 });
+    return publicErrorResponse("payload_too_large");
   }
 
   const rawBody = await request.text();
   if (rawBody.length > ANALYTICS_MAX_BODY_BYTES) {
-    return NextResponse.json({ ok: false, error: "payload_too_large" }, { status: 400 });
+    return publicErrorResponse("payload_too_large");
   }
 
   let body: Body;
   try {
     body = JSON.parse(rawBody) as Body;
   } catch {
-    return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
+    return publicErrorResponse("invalid_json");
   }
 
   const eventName = String(body.eventName ?? "").trim();
   if (!isAllowedAnalyticsEvent(eventName)) {
-    return NextResponse.json({ ok: false, error: "event_not_allowed" }, { status: 400 });
+    return publicErrorResponse("event_not_allowed");
   }
 
   const sessionId = sanitizeSessionId(String(body.sessionId ?? ""));
   if (!sessionId) {
-    return NextResponse.json({ ok: false, error: "missing_session" }, { status: 400 });
+    return publicErrorResponse("missing_session");
   }
 
   const locale = isAnalyticsLocale(body.locale) ? body.locale : null;
   const path = sanitizeAnalyticsPath(body.path ?? null);
   if (body.path && !path) {
-    return NextResponse.json({ ok: false, error: "invalid_path" }, { status: 400 });
+    return publicErrorResponse("invalid_path");
   }
 
   let articleId: string | undefined;
   if (body.articleId) {
     if (!isValidUuid(body.articleId)) {
-      return NextResponse.json({ ok: false, error: "invalid_article_id" }, { status: 400 });
+      return publicErrorResponse("invalid_article_id");
     }
     articleId = body.articleId.trim();
   }
@@ -76,24 +90,27 @@ export async function POST(request: Request) {
     eventName === "search_submit" ? sanitizeSearchQuery(body.searchQuery) : undefined;
 
   if (eventName === "search_submit" && body.searchQuery && !searchQuery) {
-    return NextResponse.json({ ok: false, error: "invalid_search_query" }, { status: 400 });
+    return publicErrorResponse("invalid_search_query");
   }
 
-  const result = await recordAnalyticsEvent({
-    eventName,
-    sessionId,
-    locale,
-    path,
-    articleId,
-    sourceKey,
-    categoryKey,
-    searchQuery,
-    referrerDomain: sanitizeReferrerDomain(body.referrerDomain),
-    deviceClass: sanitizeDeviceClass(body.deviceClass),
-  });
+  const result = await recordAnalyticsEvent(
+    {
+      eventName,
+      sessionId,
+      locale,
+      path,
+      articleId,
+      sourceKey,
+      categoryKey,
+      searchQuery,
+      referrerDomain: body.referrerDomain ?? null,
+      deviceClass: sanitizeDeviceClass(body.deviceClass),
+    },
+    { requestHost: normalizeAnalyticsHost(request.headers.get("host")) }
+  );
 
   if (!result.ok) {
-    return NextResponse.json(result, { status: 400 });
+    return publicErrorResponse(result.error);
   }
 
   return NextResponse.json({ ok: true, deduped: result.deduped ?? false });

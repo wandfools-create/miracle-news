@@ -142,11 +142,6 @@ export default function HomeNewsSearch({
   const navigateToSearchPage = () => {
     const trimmed = query.trim();
     if (!trimmed) return;
-    trackAnalyticsEvent({
-      eventName: "search_submit",
-      locale,
-      searchQuery: trimmed,
-    });
     router.push(`${searchPath}?q=${encodeURIComponent(trimmed)}`);
     setPanelOpen(false);
     setMobileOpen(false);

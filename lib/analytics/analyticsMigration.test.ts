@@ -26,9 +26,17 @@ describe("analytics migration security", () => {
     assert.match(migration, /analytics_events_dedupe_key_uq/);
   });
 
-  it("provides manual cleanup function for 30-day search retention", () => {
-    assert.match(migration, /cleanup_analytics_search_queries/);
+  it("provides manual anonymize function for 30-day search text retention", () => {
+    assert.match(migration, /anonymize_analytics_search_queries/);
+    assert.match(migration, /SET search_query = NULL/i);
+    assert.doesNotMatch(migration, /DELETE FROM analytics_events/i);
     assert.match(migration, /p_retention_days integer DEFAULT 30/);
+  });
+
+  it("adds DB-level allowlist and length checks", () => {
+    assert.match(migration, /analytics_events_event_name_chk/);
+    assert.match(migration, /analytics_events_locale_chk/);
+    assert.match(migration, /analytics_events_search_query_len_chk/);
   });
 });
 

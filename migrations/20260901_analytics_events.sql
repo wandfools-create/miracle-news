@@ -16,7 +16,33 @@ CREATE TABLE IF NOT EXISTS public.analytics_events (
   dedupe_key text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT analytics_events_device_class_chk
-    CHECK (device_class IS NULL OR device_class IN ('mobile', 'desktop'))
+    CHECK (device_class IS NULL OR device_class IN ('mobile', 'desktop')),
+  CONSTRAINT analytics_events_event_name_chk
+    CHECK (event_name IN (
+      'page_view',
+      'article_view',
+      'article_click',
+      'source_filter_click',
+      'category_filter_click',
+      'related_article_click',
+      'language_switch',
+      'search_submit',
+      'search_result_click'
+    )),
+  CONSTRAINT analytics_events_locale_chk
+    CHECK (locale IS NULL OR locale IN ('ko', 'en')),
+  CONSTRAINT analytics_events_session_id_len_chk
+    CHECK (char_length(session_id) <= 64),
+  CONSTRAINT analytics_events_path_len_chk
+    CHECK (path IS NULL OR char_length(path) <= 500),
+  CONSTRAINT analytics_events_source_key_len_chk
+    CHECK (source_key IS NULL OR char_length(source_key) <= 80),
+  CONSTRAINT analytics_events_category_key_len_chk
+    CHECK (category_key IS NULL OR char_length(category_key) <= 80),
+  CONSTRAINT analytics_events_search_query_len_chk
+    CHECK (search_query IS NULL OR char_length(search_query) <= 80),
+  CONSTRAINT analytics_events_referrer_domain_len_chk
+    CHECK (referrer_domain IS NULL OR char_length(referrer_domain) <= 120)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS analytics_events_dedupe_key_uq
@@ -47,7 +73,7 @@ COMMENT ON TABLE public.analytics_events IS
   'Anonymous newsroom analytics. No IP, user-agent, or arbitrary metadata.';
 
 COMMENT ON COLUMN public.analytics_events.search_query IS
-  'Normalized search text (max 80 chars, PII masked). Retain ~30 days via cleanup function.';
+  'Normalized search text (max 80 chars, PII masked). Anonymized after retention via ops cleanup.';
 
 ALTER TABLE public.analytics_events ENABLE ROW LEVEL SECURITY;
 
@@ -215,7 +241,7 @@ REVOKE ALL ON FUNCTION public.analytics_admin_summary(integer) FROM anon;
 REVOKE ALL ON FUNCTION public.analytics_admin_summary(integer) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.analytics_admin_summary(integer) TO service_role;
 
-CREATE OR REPLACE FUNCTION public.cleanup_analytics_search_queries(
+CREATE OR REPLACE FUNCTION public.anonymize_analytics_search_queries(
   p_retention_days integer DEFAULT 30
 )
 RETURNS integer
@@ -224,26 +250,27 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_deleted integer;
+  v_anonymized integer;
 BEGIN
   IF p_retention_days < 1 OR p_retention_days > 365 THEN
     RAISE EXCEPTION 'invalid_retention_days';
   END IF;
 
-  DELETE FROM analytics_events
+  UPDATE analytics_events
+  SET search_query = NULL
   WHERE event_name = 'search_submit'
     AND search_query IS NOT NULL
     AND created_at < now() - make_interval(days => p_retention_days);
 
-  GET DIAGNOSTICS v_deleted = ROW_COUNT;
-  RETURN v_deleted;
+  GET DIAGNOSTICS v_anonymized = ROW_COUNT;
+  RETURN v_anonymized;
 END;
 $$;
 
-COMMENT ON FUNCTION public.cleanup_analytics_search_queries(integer) IS
-  'Remove stored search_query text older than retention window. Run manually or via ops cron.';
+COMMENT ON FUNCTION public.anonymize_analytics_search_queries(integer) IS
+  'Null out stored search_query text older than retention window. Event rows and counts remain; run manually via ops.';
 
-REVOKE ALL ON FUNCTION public.cleanup_analytics_search_queries(integer) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.cleanup_analytics_search_queries(integer) FROM anon;
-REVOKE ALL ON FUNCTION public.cleanup_analytics_search_queries(integer) FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.cleanup_analytics_search_queries(integer) TO service_role;
+REVOKE ALL ON FUNCTION public.anonymize_analytics_search_queries(integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.anonymize_analytics_search_queries(integer) FROM anon;
+REVOKE ALL ON FUNCTION public.anonymize_analytics_search_queries(integer) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.anonymize_analytics_search_queries(integer) TO service_role;

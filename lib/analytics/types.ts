@@ -42,6 +42,14 @@ export const ANALYTICS_MAX_SEARCH_QUERY_LENGTH = 80;
 export const ANALYTICS_MAX_PATH_LENGTH = 500;
 export const ANALYTICS_MAX_KEY_LENGTH = 80;
 export const ANALYTICS_MAX_SESSION_ID_LENGTH = 64;
+export const ANALYTICS_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+const INTERNAL_SITE_ROOTS = ["hannoon.co"] as const;
+
+export type StoredAnonymousSession = {
+  id: string;
+  createdAt: number;
+};
 
 export function isAllowedAnalyticsEvent(name: string): name is AnalyticsEventName {
   return (ANALYTICS_EVENT_ALLOWLIST as readonly string[]).includes(name);
@@ -101,7 +109,31 @@ export function normalizeSearchQueryForDisplay(query: string): string {
   return query.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-export function sanitizeReferrerDomain(
+export function normalizeAnalyticsHost(host: string | null | undefined): string | null {
+  if (!host?.trim()) return null;
+  const withoutPort = host.trim().toLowerCase().split(":")[0] ?? "";
+  const normalized = withoutPort.replace(/^www\./, "");
+  return normalized || null;
+}
+
+export function isSameAnalyticsSite(
+  hostA: string | null | undefined,
+  hostB: string | null | undefined
+): boolean {
+  const a = normalizeAnalyticsHost(hostA);
+  const b = normalizeAnalyticsHost(hostB);
+  if (!a || !b) return false;
+  if (a === b) return true;
+
+  for (const root of INTERNAL_SITE_ROOTS) {
+    const matchesRoot = (host: string) => host === root || host.endsWith(`.${root}`);
+    if (matchesRoot(a) && matchesRoot(b)) return true;
+  }
+
+  return false;
+}
+
+export function extractReferrerHostname(
   referrer: string | null | undefined
 ): string | null {
   if (!referrer?.trim()) return null;
@@ -113,6 +145,22 @@ export function sanitizeReferrerDomain(
     if (!trimmed || trimmed.includes("/") || trimmed.includes(" ")) return null;
     return trimmed.slice(0, 120) || null;
   }
+}
+
+export function sanitizeReferrerDomain(
+  referrer: string | null | undefined
+): string | null {
+  return extractReferrerHostname(referrer);
+}
+
+export function resolveExternalReferrerDomain(
+  referrer: string | null | undefined,
+  currentHost: string | null | undefined
+): string | null {
+  const referrerHost = extractReferrerHostname(referrer);
+  if (!referrerHost) return null;
+  if (isSameAnalyticsSite(referrerHost, currentHost)) return null;
+  return referrerHost;
 }
 
 export function sanitizeSessionId(sessionId: string | null | undefined): string | null {
@@ -140,11 +188,13 @@ export function buildAnalyticsDedupeKey(parts: {
 }): string {
   const bucket =
     parts.minuteBucket ?? Math.floor(Date.now() / 60_000);
+  const pathPart =
+    parts.eventName === "search_submit" ? "" : (parts.path ?? "");
   return [
     parts.sessionId,
     parts.eventName,
     parts.articleId ?? "",
-    parts.path ?? "",
+    pathPart,
     parts.sourceKey ?? "",
     parts.categoryKey ?? "",
     parts.searchQuery ?? "",
@@ -162,6 +212,40 @@ export function createAnonymousSessionId(): string {
     }
   }
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export function parseStoredAnonymousSession(
+  raw: string | null | undefined
+): StoredAnonymousSession | null {
+  if (!raw?.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as { id?: unknown; createdAt?: unknown };
+    const id = typeof parsed.id === "string" ? sanitizeSessionId(parsed.id) : null;
+    const createdAt =
+      typeof parsed.createdAt === "number" && Number.isFinite(parsed.createdAt)
+        ? parsed.createdAt
+        : null;
+    if (!id || createdAt === null) return null;
+    return { id, createdAt };
+  } catch {
+    const legacyId = sanitizeSessionId(raw);
+    if (!legacyId) return null;
+    return { id: legacyId, createdAt: 0 };
+  }
+}
+
+export function resolveAnonymousSession(
+  stored: StoredAnonymousSession | null,
+  nowMs: number = Date.now()
+): StoredAnonymousSession {
+  if (
+    stored &&
+    nowMs - stored.createdAt >= 0 &&
+    nowMs - stored.createdAt < ANALYTICS_SESSION_TTL_MS
+  ) {
+    return stored;
+  }
+  return { id: createAnonymousSessionId(), createdAt: nowMs };
 }
 
 export function isAnalyticsSchemaMissing(error: {
