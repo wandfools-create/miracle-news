@@ -15,7 +15,7 @@ import {
   isAnalyticsLocale,
   isAnalyticsSchemaMissing,
   isValidUuid,
-  resolveExternalReferrerDomain,
+  resolveStoredReferrerDomain,
   sanitizeAnalyticsKey,
   sanitizeAnalyticsPath,
   sanitizeDeviceClass,
@@ -95,7 +95,8 @@ export async function recordAnalyticsEvent(
     source_key: sourceKey,
     category_key: categoryKey,
     search_query: searchQuery,
-    referrer_domain: resolveExternalReferrerDomain(
+    referrer_domain: resolveStoredReferrerDomain(
+      payload.eventName,
       payload.referrerDomain,
       options?.requestHost ?? null
     ),

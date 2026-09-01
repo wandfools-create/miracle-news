@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import {
   parseStoredAnonymousSession,
   resolveAnonymousSession,
+  shouldStoreReferrerForEvent,
   type AnalyticsEventName,
   type AnalyticsLocale,
 } from "@/lib/analytics/types";
@@ -64,7 +65,9 @@ async function sendEvent(input: TrackAnalyticsInput) {
         ...input,
         sessionId: getAnonymousSessionId(),
         path: input.path ?? window.location.pathname,
-        referrerDomain: document.referrer || null,
+        referrerDomain: shouldStoreReferrerForEvent(input.eventName)
+          ? document.referrer || null
+          : null,
         deviceClass: resolveDeviceClass(),
       }),
       keepalive: true,

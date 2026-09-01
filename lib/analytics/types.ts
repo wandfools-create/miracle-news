@@ -96,13 +96,11 @@ export function maskPiiInSearchQuery(query: string): string {
 }
 
 export function sanitizeSearchQuery(raw: string | null | undefined): string | null {
-  const cleaned = maskPiiInSearchQuery(
-    (raw ?? "")
-      .replace(/[\u0000-\u001f\u007f]/g, "")
-      .trim()
-      .slice(0, ANALYTICS_MAX_SEARCH_QUERY_LENGTH)
-  );
-  return cleaned || null;
+  const withoutControl = (raw ?? "").replace(/[\u0000-\u001f\u007f]/g, "");
+  const masked = maskPiiInSearchQuery(withoutControl);
+  const normalized = masked.trim().replace(/\s+/g, " ");
+  const limited = normalized.slice(0, ANALYTICS_MAX_SEARCH_QUERY_LENGTH);
+  return limited || null;
 }
 
 export function normalizeSearchQueryForDisplay(query: string): string {
@@ -161,6 +159,19 @@ export function resolveExternalReferrerDomain(
   if (!referrerHost) return null;
   if (isSameAnalyticsSite(referrerHost, currentHost)) return null;
   return referrerHost;
+}
+
+export function shouldStoreReferrerForEvent(eventName: AnalyticsEventName): boolean {
+  return eventName === "page_view" || eventName === "article_view";
+}
+
+export function resolveStoredReferrerDomain(
+  eventName: AnalyticsEventName,
+  referrer: string | null | undefined,
+  currentHost: string | null | undefined
+): string | null {
+  if (!shouldStoreReferrerForEvent(eventName)) return null;
+  return resolveExternalReferrerDomain(referrer, currentHost);
 }
 
 export function sanitizeSessionId(sessionId: string | null | undefined): string | null {

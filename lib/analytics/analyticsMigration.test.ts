@@ -38,6 +38,21 @@ describe("analytics migration security", () => {
     assert.match(migration, /analytics_events_locale_chk/);
     assert.match(migration, /analytics_events_search_query_len_chk/);
   });
+
+  it("is safe to run twice without policy duplication errors", () => {
+    assert.match(migration, /DROP POLICY IF EXISTS analytics_events_service_role_all/i);
+    assert.match(migration, /REVOKE ALL ON TABLE public\.analytics_events FROM PUBLIC/i);
+    assert.match(migration, /REVOKE ALL ON TABLE public\.analytics_events FROM anon/i);
+    assert.match(migration, /REVOKE ALL ON TABLE public\.analytics_events FROM authenticated/i);
+    assert.match(migration, /GRANT ALL ON TABLE public\.analytics_events TO service_role/i);
+    assert.doesNotMatch(migration, /TRUNCATE/i);
+    assert.doesNotMatch(migration, /DELETE FROM public\.analytics_events/i);
+  });
+
+  it("counts referrers by distinct anonymous sessions on entry events only", () => {
+    assert.match(migration, /count\(DISTINCT session_id\)/i);
+    assert.match(migration, /event_name IN \('page_view', 'article_view'\)/);
+  });
 });
 
 describe("analytics aggregation RPC", () => {

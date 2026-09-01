@@ -7,12 +7,9 @@ import {
   parseStoredAnonymousSession,
   resolveAnonymousSession,
   resolveExternalReferrerDomain,
+  resolveStoredReferrerDomain,
+  shouldStoreReferrerForEvent,
 } from "./types";
-import {
-  hasRecordedSearchSubmit,
-  markSearchSubmitRecorded,
-  searchSubmitStorageKey,
-} from "../../components/analytics/AnalyticsSearchSubmit";
 
 describe("search submit single authoritative path", () => {
   it("does not send search_submit from home search navigation", () => {
@@ -42,21 +39,75 @@ describe("search submit single authoritative path", () => {
   });
 });
 
-describe("search submit strict-mode guard helpers", () => {
-  it("uses sessionStorage keys per locale and normalized query", () => {
-    assert.equal(
-      searchSubmitStorageKey("ko", "  Hello "),
-      searchSubmitStorageKey("ko", "hello")
+describe("search submit strict-mode and minute dedupe", () => {
+  it("uses useRef guard instead of sessionStorage lifetime blocking", () => {
+    const source = readFileSync(
+      new URL("../../components/analytics/AnalyticsSearchSubmit.tsx", import.meta.url),
+      "utf8"
     );
-    assert.notEqual(
-      searchSubmitStorageKey("ko", "hello"),
-      searchSubmitStorageKey("en", "hello")
-    );
+    assert.match(source, /useRef/);
+    assert.doesNotMatch(source, /sessionStorage/);
   });
 
-  it("exports sessionStorage guard helpers for single page-load recording", () => {
-    assert.equal(typeof hasRecordedSearchSubmit, "function");
-    assert.equal(typeof markSearchSubmitRecorded, "function");
+  it("allows the same query again in a later minute bucket", () => {
+    const minuteA = buildAnalyticsDedupeKey({
+      sessionId: "sess",
+      eventName: "search_submit",
+      searchQuery: "election",
+      minuteBucket: 100,
+    });
+    const minuteB = buildAnalyticsDedupeKey({
+      sessionId: "sess",
+      eventName: "search_submit",
+      searchQuery: "election",
+      minuteBucket: 101,
+    });
+    assert.notEqual(minuteA, minuteB);
+  });
+
+  it("dedupes the same session and query within one minute", () => {
+    const first = buildAnalyticsDedupeKey({
+      sessionId: "sess",
+      eventName: "search_submit",
+      searchQuery: "election",
+      minuteBucket: 200,
+    });
+    const second = buildAnalyticsDedupeKey({
+      sessionId: "sess",
+      eventName: "search_submit",
+      searchQuery: "election",
+      minuteBucket: 200,
+    });
+    assert.equal(first, second);
+  });
+});
+
+describe("referrer storage policy", () => {
+  it("stores referrer only for entry events", () => {
+    assert.equal(shouldStoreReferrerForEvent("page_view"), true);
+    assert.equal(shouldStoreReferrerForEvent("article_view"), true);
+    assert.equal(shouldStoreReferrerForEvent("article_click"), false);
+    assert.equal(shouldStoreReferrerForEvent("search_result_click"), false);
+    assert.equal(shouldStoreReferrerForEvent("language_switch"), false);
+  });
+
+  it("drops referrer for action events even when external", () => {
+    assert.equal(
+      resolveStoredReferrerDomain(
+        "article_click",
+        "https://news.google.com/",
+        "www.hannoon.co"
+      ),
+      null
+    );
+    assert.equal(
+      resolveStoredReferrerDomain(
+        "page_view",
+        "https://news.google.com/",
+        "www.hannoon.co"
+      ),
+      "news.google.com"
+    );
   });
 });
 

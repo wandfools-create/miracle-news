@@ -305,7 +305,11 @@ function ReferrerRankSection({
 }) {
   return (
     <section className="mt-8">
-      <h2 className="text-lg font-bold">외부 유입 도메인</h2>
+      <h2 className="text-lg font-bold">외부 유입 도메인 — 익명 세션 기준</h2>
+      <p className="mt-1 text-xs text-gray-500">
+        page_view·article_view 진입 시 저장된 외부 referrer만 집계하며, 동일 익명
+        세션은 도메인당 1회로 계산합니다.
+      </p>
       {rows.length === 0 ? (
         <p className="mt-2 text-sm text-gray-500">데이터 없음</p>
       ) : (

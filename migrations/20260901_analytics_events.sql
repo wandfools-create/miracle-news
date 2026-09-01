@@ -77,6 +77,12 @@ COMMENT ON COLUMN public.analytics_events.search_query IS
 
 ALTER TABLE public.analytics_events ENABLE ROW LEVEL SECURITY;
 
+REVOKE ALL ON TABLE public.analytics_events FROM PUBLIC;
+REVOKE ALL ON TABLE public.analytics_events FROM anon;
+REVOKE ALL ON TABLE public.analytics_events FROM authenticated;
+GRANT ALL ON TABLE public.analytics_events TO service_role;
+
+DROP POLICY IF EXISTS analytics_events_service_role_all ON public.analytics_events;
 CREATE POLICY analytics_events_service_role_all
   ON public.analytics_events
   FOR ALL
@@ -220,10 +226,11 @@ BEGIN
       COALESCE((
         SELECT jsonb_agg(row_to_json(t) ORDER BY t.count DESC)
         FROM (
-          SELECT referrer_domain AS domain, count(*)::int AS count
+          SELECT referrer_domain AS domain, count(DISTINCT session_id)::int AS count
           FROM analytics_events
           WHERE created_at >= v_since
             AND referrer_domain IS NOT NULL
+            AND event_name IN ('page_view', 'article_view')
           GROUP BY referrer_domain
           ORDER BY count DESC
           LIMIT 12

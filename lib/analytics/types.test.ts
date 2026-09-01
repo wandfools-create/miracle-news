@@ -63,6 +63,36 @@ describe("search query normalization", () => {
     assert.ok(masked.length <= 80);
   });
 
+  it("masks PII before applying the 80 character limit", () => {
+    const longEmail = `${"a".repeat(70)}@example.com`;
+    const masked = sanitizeSearchQuery(longEmail);
+    assert.ok(masked);
+    assert.equal(masked, "[email]");
+    assert.ok(!masked.includes("@example.com"));
+  });
+
+  it("masks split email fragments from naive truncation", () => {
+    const partial = sanitizeSearchQuery("user@example.com extra terms");
+    assert.ok(partial);
+    assert.match(partial, /\[email\]/);
+    assert.doesNotMatch(partial, /@example\.com/);
+  });
+
+  it("handles international phone numbers and mixed KO/EN queries", () => {
+    const mixed = sanitizeSearchQuery("대선 +1 (415) 555-0101 결과");
+    assert.ok(mixed);
+    assert.match(mixed, /\[phone\]/);
+    assert.match(mixed, /대선/);
+
+    const english = sanitizeSearchQuery("  US   election   news  ");
+    assert.equal(english, "US election news");
+  });
+
+  it("rejects empty queries after normalization", () => {
+    assert.equal(sanitizeSearchQuery("   "), null);
+    assert.equal(sanitizeSearchQuery("\u0000\u0001"), null);
+  });
+
   it("masks email and phone helpers", () => {
     assert.equal(
       maskPiiInSearchQuery("hello user@example.com"),

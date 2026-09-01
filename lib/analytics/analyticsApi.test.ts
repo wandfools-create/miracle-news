@@ -21,7 +21,19 @@ describe("analytics API response safety", () => {
   it("record path maps storage failures to public codes only", () => {
     assert.match(recordSource, /analytics_unavailable/);
     assert.match(recordSource, /toPublicAnalyticsError/);
+    assert.match(recordSource, /resolveStoredReferrerDomain/);
     assert.doesNotMatch(recordSource, /error: error\.message/);
     assert.doesNotMatch(recordSource, /return \{ ok: false, error: envCheck\.error \}/);
+  });
+});
+
+describe("analytics client referrer policy", () => {
+  it("sends referrer only for entry events from the browser", () => {
+    const source = readFileSync(
+      new URL("../../components/analytics/AnalyticsPageView.tsx", import.meta.url),
+      "utf8"
+    );
+    assert.match(source, /shouldStoreReferrerForEvent/);
+    assert.doesNotMatch(source, /referrerDomain: document\.referrer \|\| null/);
   });
 });
