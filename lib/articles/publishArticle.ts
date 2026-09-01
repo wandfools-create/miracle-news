@@ -20,10 +20,13 @@ import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/serviceRole";
+import { runReviewCompleteAndPublish } from "@/lib/articles/reviewCompletePublishCore";
+import { createSupabaseReviewCompletePublishRpc } from "@/lib/articles/reviewCompletePublishRpc";
 
 export type { PublishArticleFields };
 export {
   isQuickReviewArticle,
+  isPendingReviewArticle,
   resolvePublishCopy,
   validateQuickPublishContent,
 } from "@/lib/articles/quickPublishGuards";
@@ -79,6 +82,8 @@ export type PublishArticleToLivePublicOptions = {
   requireReviewStatus?: string;
   /** Admin override for clear same-event block (quick_review etc.). */
   allowSameEventOverride?: boolean;
+  /** Record human approver on publish (review complete / quick publish). */
+  approvedBy?: string | null;
 };
 
 /** @internal — use publishApprovedArticleToLive() for approved-queue human publish. */
@@ -358,6 +363,9 @@ export async function publishArticleToLiveInternal(
       ...ARTICLE_WORKFLOW.published,
       ...(firstPublish ? { published_at: sitePublishedAt } : {}),
       approved_at: new Date().toISOString(),
+      ...(options?.approvedBy?.trim()
+        ? { approved_by: options.approvedBy.trim() }
+        : {}),
     })
     .eq("id", articleId)
     .eq("is_published", false);
@@ -399,7 +407,7 @@ export async function publishArticleToLiveInternal(
  */
 export async function quickPublishArticle(
   articleId: string,
-  options?: { allowSameEventOverride?: boolean }
+  options?: { allowSameEventOverride?: boolean; approvedBy?: string | null }
 ): Promise<
   | PublishArticleToLiveResult
   | {
@@ -454,7 +462,112 @@ export async function quickPublishArticle(
   return publishArticleToLive(articleId, {
     requireReviewStatus: ARTICLE_WORKFLOW.quickReview.review_status,
     allowSameEventOverride: options?.allowSameEventOverride,
+    approvedBy: options?.approvedBy,
   });
+}
+
+/**
+ * Review queue one-step publish: pending review → live via atomic RPC.
+ * App runs content + SAME EVENT guards, then service_role calls
+ * review_complete_and_publish_article (localizations + article status in one TX).
+ * Does NOT fall back to non-atomic publishArticleToLive when RPC is missing.
+ * Does not auto-publish approved-only (보관함) articles.
+ */
+export async function reviewCompleteAndPublishArticle(
+  articleId: string,
+  options?: { allowSameEventOverride?: boolean; approvedBy?: string | null }
+): Promise<
+  | PublishArticleToLiveResult
+  | {
+      ok: false;
+      error: string;
+      step: string;
+      errors?: string[];
+      warnings?: string[];
+      sameEventMatch?: SameEventPublishMatch;
+    }
+> {
+  const envCheck = await checkSupabaseServiceEnvWithDns();
+  if (!envCheck.ok) {
+    return { ok: false, error: envCheck.error, step: envCheck.step };
+  }
+
+  const { client } = createServiceRoleSupabaseClient();
+
+  const result = await runReviewCompleteAndPublish(
+    articleId,
+    {
+      allowSameEventOverride: options?.allowSameEventOverride,
+      approvedBy: options?.approvedBy?.trim() || "admin",
+    },
+    {
+      fetchArticle: async (id) => {
+        const { data, error } = await client
+          .from("articles")
+          .select(PUBLISH_SELECT)
+          .eq("id", id)
+          .maybeSingle();
+        if (error || !data) {
+          return {
+            ok: false as const,
+            error: error?.message || "기사를 찾을 수 없습니다.",
+          };
+        }
+        return {
+          ok: true as const,
+          article: data as PublishArticleFieldsWithMeta,
+        };
+      },
+      evaluateSameEvent: async ({ article, copy }) => {
+        const published = await loadRecentPublishedForSameEvent();
+        const guard = evaluatePublishedSameEventGuard(
+          {
+            title: copy.koTitle || copy.enTitle,
+            summary: copy.koSummary || copy.enSummary,
+            titleAlt: copy.enTitle || copy.koTitle,
+            summaryAlt: copy.enSummary || copy.koSummary,
+            source: article.source ?? null,
+            publishedAt: article.published_at,
+            hasThumbnail: Boolean(article.thumbnail_url?.trim()),
+          },
+          published,
+          { excludeArticleId: article.id }
+        );
+        if (guard.blocked) {
+          return { blocked: true as const, match: toSameEventMatch(guard.match) };
+        }
+        return {
+          blocked: false as const,
+          ...(guard.softWarning
+            ? { softWarning: toSameEventMatch(guard.softWarning) }
+            : {}),
+        };
+      },
+      rpc: createSupabaseReviewCompletePublishRpc(client),
+    }
+  );
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: result.error,
+      step: result.step,
+      ...(result.errors ? { errors: result.errors } : {}),
+      ...(result.warnings ? { warnings: result.warnings } : {}),
+      ...(result.sameEventMatch
+        ? { sameEventMatch: result.sameEventMatch }
+        : {}),
+    };
+  }
+
+  return {
+    ok: true,
+    publishedAt: result.publishedAt,
+    firstPublish: result.firstPublish,
+    ...(result.softSameEventWarning
+      ? { softSameEventWarning: result.softSameEventWarning }
+      : {}),
+  };
 }
 
 /** Move quick_review → normal review queue (수정 필요). No OpenAI. */
