@@ -5,6 +5,9 @@ type Props = {
   date: string;
   category?: string;
   advanced?: boolean;
+  run?: string | null;
+  runRegion?: string | null;
+  pendingOnly?: boolean;
 };
 
 export default function CandidateFilterHiddenFields({
@@ -14,6 +17,9 @@ export default function CandidateFilterHiddenFields({
   date,
   category = "all",
   advanced = false,
+  run = null,
+  runRegion = null,
+  pendingOnly = false,
 }: Props) {
   return (
     <>
@@ -24,6 +30,13 @@ export default function CandidateFilterHiddenFields({
       <input type="hidden" name="categoryFilter" value={category} />
       <input type="hidden" name="scrollY" defaultValue="0" />
       {advanced ? <input type="hidden" name="advanced" value="1" /> : null}
+      {run ? <input type="hidden" name="run" value={run} /> : null}
+      {runRegion ? (
+        <input type="hidden" name="runRegion" value={runRegion} />
+      ) : null}
+      {pendingOnly ? (
+        <input type="hidden" name="pendingOnly" value="1" />
+      ) : null}
     </>
   );
 }

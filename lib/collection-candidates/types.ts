@@ -66,6 +66,7 @@ export const COLLECTION_CANDIDATE_LIST_SELECT = `
   enrich_category,
   enrich_attempt_count,
   article_id,
+  collection_run_id,
   ai_recommend_grade,
   ai_recommend_score,
   ai_recommend_reason,
@@ -76,6 +77,18 @@ export const COLLECTION_CANDIDATE_LIST_SELECT = `
   category,
   created_at,
   updated_at
+`;
+
+/** Lightweight columns for run grouping (higher limit safe). */
+export const COLLECTION_CANDIDATE_RUN_INDEX_SELECT = `
+  id,
+  source,
+  source_country,
+  status,
+  collection_run_id,
+  created_at,
+  enrich_error,
+  discord_brief_sent_at
 `;
 
 export const CANDIDATE_STATUS_LABELS: Record<CollectionCandidateStatus, string> =

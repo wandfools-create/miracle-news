@@ -78,7 +78,10 @@ type Props = {
   sourceFilter: string;
   dateFilter: string;
   categoryFilter: string;
-  showLocalizeTools: boolean;
+  showLocalizeTools?: boolean;
+  runFilter?: string | null;
+  runRegionFilter?: string | null;
+  pendingOnly?: boolean;
 };
 
 type DeskMutationResult =
@@ -98,7 +101,10 @@ export default function CollectionCandidatesWorkbench({
   sourceFilter,
   dateFilter,
   categoryFilter,
-  showLocalizeTools,
+  showLocalizeTools = false,
+  runFilter = null,
+  runRegionFilter = null,
+  pendingOnly = false,
 }: Props) {
   const [rows, setRows] = useState(candidates);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -261,6 +267,9 @@ export default function CollectionCandidatesWorkbench({
       date={dateFilter}
       category={categoryFilter}
       advanced={showLocalizeTools}
+      run={runFilter}
+      runRegion={runRegionFilter}
+      pendingOnly={pendingOnly}
     />
   );
 
