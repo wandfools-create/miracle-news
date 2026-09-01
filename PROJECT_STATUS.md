@@ -449,6 +449,18 @@ Git history와 현재 코드에서 확인:
 - **Desk 분류:** Korea Herald(`korea-herald`)는 US/International(아침), Korea Desk는 `chosun`·`tvchosun`·`yonhap-kr-radar`·`insight`·`joongang`(예약)
 - **운영 원칙:** 사람 검토 원칙 유지, 자동 공개·Production DB write·schema 변경 없음
 
+## 12A. 방문 분석 (Analytics PR — Draft)
+
+| 항목 | 상태 |
+|---|---|
+| Branch | `feature/privacy-newsroom-analytics-v1` |
+| 범위 | `/admin/analytics`, 공개 이벤트 수집 API, `analytics_events` migration |
+| Migration | `migrations/20260901_analytics_events.sql` — **미적용** |
+| 집계 | SQL RPC `analytics_admin_summary` (`.limit(5000)` TS 집계 없음) |
+| 검색어 | 정규화·PII 마스킹·80자 저장; 30일 cleanup 함수 제공 (cron 미추가) |
+| 익명 세션 | localStorage 기반 추정 세션 — unique visitor 아님 |
+| Production | **미변경** — Draft PR merge·migration 적용 전 |
+
 ## 13. 문서 관리 규칙
 
 - 모든 Miracle News 작업은 최신 GitHub `main`과 이 문서를 먼저 확인한다.

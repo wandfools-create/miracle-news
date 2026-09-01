@@ -12,6 +12,7 @@ import {
 import { resolveArticleHref } from "@/lib/home/resolveArticleHref";
 import { getSourceLabel } from "@/lib/koreanArticleDisplay";
 import type { HomeArticleCard } from "@/lib/home/types";
+import { trackAnalyticsEvent } from "@/components/analytics/AnalyticsPageView";
 
 export type HomeNewsSearchLabels = {
   placeholder: string;
@@ -76,7 +77,17 @@ function SearchResultRow({
     <li>
       <Link
         href={href}
-        onClick={onPick}
+        onClick={() => {
+          onPick();
+          const articleId = article.article_id ?? article.id;
+          if (articleId) {
+            trackAnalyticsEvent({
+              eventName: "search_result_click",
+              locale,
+              articleId,
+            });
+          }
+        }}
         className="block px-3 py-2.5 hover:bg-neutral-50"
       >
         <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
@@ -131,6 +142,11 @@ export default function HomeNewsSearch({
   const navigateToSearchPage = () => {
     const trimmed = query.trim();
     if (!trimmed) return;
+    trackAnalyticsEvent({
+      eventName: "search_submit",
+      locale,
+      searchQuery: trimmed,
+    });
     router.push(`${searchPath}?q=${encodeURIComponent(trimmed)}`);
     setPanelOpen(false);
     setMobileOpen(false);

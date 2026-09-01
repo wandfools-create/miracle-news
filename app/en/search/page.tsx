@@ -1,4 +1,5 @@
 import NewsSearchResultsView from "@/components/home/NewsSearchResultsView";
+import AnalyticsPageView from "@/components/analytics/AnalyticsPageView";
 import { filterArticlesForSearch } from "@/lib/home/articleSearch";
 import { fetchEditionHomeArticles } from "@/lib/home/fetchEditionHomeArticles";
 import { enSearchResultsLabels } from "@/lib/home/enSearchLabels";
@@ -15,7 +16,9 @@ export default async function EnglishSearchPage({ searchParams }: PageProps) {
   const results = filterArticlesForSearch(articles, q, "en");
 
   return (
-    <NewsSearchResultsView
+    <>
+      <AnalyticsPageView locale="en" path="/en/search" />
+      <NewsSearchResultsView
       locale="en"
       query={q}
       results={results}
@@ -25,5 +28,6 @@ export default async function EnglishSearchPage({ searchParams }: PageProps) {
       articleHrefPrefix="/en/article"
       searchPath="/en/search"
     />
+    </>
   );
 }

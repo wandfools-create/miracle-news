@@ -1,4 +1,5 @@
 import NewsSearchResultsView from "@/components/home/NewsSearchResultsView";
+import AnalyticsPageView from "@/components/analytics/AnalyticsPageView";
 import { filterArticlesForSearch } from "@/lib/home/articleSearch";
 import { fetchEditionHomeArticles } from "@/lib/home/fetchEditionHomeArticles";
 import { koSearchResultsLabels } from "@/lib/home/koSearchLabels";
@@ -15,7 +16,9 @@ export default async function KoreanSearchPage({ searchParams }: PageProps) {
   const results = filterArticlesForSearch(articles, q, "ko");
 
   return (
-    <NewsSearchResultsView
+    <>
+      <AnalyticsPageView locale="ko" path="/ko/search" />
+      <NewsSearchResultsView
       locale="ko"
       query={q}
       results={results}
@@ -25,5 +28,6 @@ export default async function KoreanSearchPage({ searchParams }: PageProps) {
       articleHrefPrefix="/ko/article"
       searchPath="/ko/search"
     />
+    </>
   );
 }

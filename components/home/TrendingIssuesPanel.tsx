@@ -8,6 +8,7 @@ import type {
   TrendingIssueRelatedArticle,
   TrendingIssuesBlock,
 } from "@/lib/home/types";
+import { trackHomeArticleClick } from "@/lib/analytics/trackHomeEvents";
 
 export type TrendingIssuesLabels = {
   title: string;
@@ -61,6 +62,14 @@ function IssueRow({
         <Link
           href={primaryHref}
           className="group block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy"
+          onClick={() => {
+            if (primary) {
+              trackHomeArticleClick(locale, {
+                id: primary.id,
+                article_id: primary.article_id,
+              } as HomeArticleCard);
+            }
+          }}
         >
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <p className="text-[13px] font-semibold leading-snug text-neutral-950 group-hover:underline decoration-neutral-300 underline-offset-2">
@@ -110,6 +119,12 @@ function IssueRow({
                     <Link
                       href={href}
                       className="block text-[11px] leading-snug text-neutral-700 hover:text-news-navy hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-news-navy"
+                      onClick={() =>
+                        trackHomeArticleClick(locale, {
+                          id: article.id,
+                          article_id: article.article_id,
+                        } as HomeArticleCard)
+                      }
                     >
                       <span className="font-medium text-neutral-500">
                         {sourceLabel}

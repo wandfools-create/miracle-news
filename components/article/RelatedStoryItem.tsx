@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   formatPublishedDate,
@@ -5,6 +7,7 @@ import {
 } from "@/lib/article/formatPublishedDate";
 import { getCategoryLabel } from "@/lib/article/categoryLabels";
 import { getSourceLabel } from "@/lib/koreanArticleDisplay";
+import { trackAnalyticsEvent } from "@/components/analytics/AnalyticsPageView";
 import type { RelatedArticleCard } from "./types";
 
 type RelatedStoryItemProps = {
@@ -14,6 +17,14 @@ type RelatedStoryItemProps = {
   noImageLabel: string;
 };
 
+function trackRelatedClick(locale: ArticleLocale, article: RelatedArticleCard) {
+  trackAnalyticsEvent({
+    eventName: "related_article_click",
+    locale,
+    articleId: article.article_id,
+  });
+}
+
 export default function RelatedStoryItem({
   article,
   hrefPrefix,
@@ -21,13 +32,15 @@ export default function RelatedStoryItem({
   noImageLabel,
 }: RelatedStoryItemProps) {
   const published = formatPublishedDate(article.published_at, locale);
+  const href = `${hrefPrefix}/${article.slug}`;
 
   return (
     <article className="group border-b border-neutral-200/80 pb-4 last:border-b-0 last:pb-0">
       <div className="flex gap-3.5">
         <Link
-          href={`${hrefPrefix}/${article.slug}`}
+          href={href}
           className="relative block h-[4.5rem] w-[5.5rem] shrink-0 overflow-hidden rounded-lg bg-neutral-100 ring-1 ring-neutral-200/80"
+          onClick={() => trackRelatedClick(locale, article)}
         >
           {article.thumbnail_url ? (
             <img
@@ -50,8 +63,9 @@ export default function RelatedStoryItem({
 
           <h3 className="mt-1.5 text-[15px] font-semibold leading-snug text-neutral-900">
             <Link
-              href={`${hrefPrefix}/${article.slug}`}
+              href={href}
               className="hover:text-neutral-950 hover:underline decoration-neutral-400 underline-offset-2"
+              onClick={() => trackRelatedClick(locale, article)}
             >
               {article.title}
             </Link>
