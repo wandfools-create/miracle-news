@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import ArticleDetailView from "@/components/article/ArticleDetailView";
+import { AnalyticsArticleView } from "@/components/analytics/AnalyticsArticleView";
 import { generatePublishedArticleMetadata } from "@/lib/seo/articlePageMetadata";
 import { resolveCrossLocaleArticleRedirect } from "@/lib/article/resolveCrossLocaleArticleRedirect";
 import type {
@@ -190,7 +191,13 @@ export default async function KoreanArticleDetailPage({ params }: PageProps) {
   const paragraphs = splitArticleParagraphs(article.body);
 
   return (
-    <ArticleDetailView
+    <>
+      <AnalyticsArticleView
+        articleId={article.article_id}
+        locale="ko"
+        path={`/ko/article/${slug}`}
+      />
+      <ArticleDetailView
       article={article}
       paragraphs={paragraphs}
       locale="ko"
@@ -205,5 +212,6 @@ export default async function KoreanArticleDetailPage({ params }: PageProps) {
       sameTopicArticles={sameTopicArticles}
       sameCategoryArticles={sameCategoryArticles}
     />
+    </>
   );
 }

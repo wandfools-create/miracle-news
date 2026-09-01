@@ -5,6 +5,7 @@ import { enHomeLabels } from "@/lib/home/enHomeLabels";
 import { prepareEditionHomeSections } from "@/lib/home/prepareEditionHomeSections";
 import { enHomeSearchLabels } from "@/lib/home/enSearchLabels";
 import { Suspense } from "react";
+import AnalyticsPageView from "@/components/analytics/AnalyticsPageView";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ export default async function EnglishHomePage() {
         </main>
       }
     >
+      <AnalyticsPageView locale="en" path="/en" />
       <HomeNewsView
         pageRole="en"
         locale="en"

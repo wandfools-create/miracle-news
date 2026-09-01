@@ -53,6 +53,12 @@ import { normalizeSource } from "@/lib/article/normalizeSource";
 import type { HomeArticleCard, HomePageSections, TodayEditionMeta } from "@/lib/home/types";
 import { getBrandName } from "@/lib/brand";
 import TrendingIssuesPanel from "./TrendingIssuesPanel";
+import {
+  trackCategoryFilterClick,
+  trackHomeArticleClick,
+  trackLanguageSwitch,
+  trackSourceFilterClick,
+} from "@/lib/analytics/trackHomeEvents";
 
 export type HomeNewsLabels = {
   edition: string;
@@ -238,10 +244,12 @@ function NavPill({
   href,
   children,
   variant = "default",
+  onClick,
 }: {
   href: string;
   children: ReactNode;
   variant?: "default" | "primary" | "ghost";
+  onClick?: () => void;
 }) {
   const base =
     "inline-flex shrink-0 items-center justify-center px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap transition sm:text-sm";
@@ -261,7 +269,7 @@ function NavPill({
   }
 
   return (
-    <Link href={href} className={styles}>
+    <Link href={href} className={styles} onClick={onClick}>
       {children}
     </Link>
   );
@@ -388,7 +396,11 @@ function FeaturedHero({
 
   return (
     <article className="border-b border-neutral-300 pb-6">
-      <Link href={href} className="block">
+      <Link
+        href={href}
+        className="block"
+        onClick={() => trackHomeArticleClick(displayLocale, article)}
+      >
         <div className={`${newsThumbFrameClass} aspect-[16/10] w-full`}>
           <ArticleThumb
             article={article}
@@ -405,6 +417,7 @@ function FeaturedHero({
           <Link
             href={href}
             className="hover:text-news-red hover:underline decoration-neutral-300 underline-offset-4"
+            onClick={() => trackHomeArticleClick(displayLocale, article)}
           >
             {article.title}
           </Link>
@@ -421,6 +434,7 @@ function FeaturedHero({
           <Link
             href={href}
             className="text-[13px] font-semibold text-news-navy underline-offset-2 hover:underline"
+            onClick={() => trackHomeArticleClick(displayLocale, article)}
           >
             {labels.readArticle}
           </Link>
@@ -456,7 +470,11 @@ function StoryListRow({
   return (
     <article className="border-b border-neutral-200 py-3.5 last:border-b-0 sm:py-4">
       <div className="flex gap-3 sm:gap-4">
-        <Link href={href} className={thumbClass}>
+        <Link
+          href={href}
+          className={thumbClass}
+          onClick={() => trackHomeArticleClick(displayLocale, article)}
+        >
           <div className={`${newsThumbFrameClass} h-full w-full aspect-[16/10]`}>
             <ArticleThumb
               article={article}
@@ -481,6 +499,7 @@ function StoryListRow({
             <Link
               href={href}
               className={`${titleClamp === 3 ? "line-clamp-3" : "line-clamp-2"} hover:underline`}
+              onClick={() => trackHomeArticleClick(displayLocale, article)}
             >
               {article.title}
             </Link>
@@ -514,7 +533,11 @@ function FeaturedSecondary({
 
   return (
     <article className="border-b border-neutral-200 pb-4 sm:border-b-0 sm:border-l sm:border-neutral-200 sm:pb-0 sm:pl-5">
-      <Link href={href} className="block">
+      <Link
+        href={href}
+        className="block"
+        onClick={() => trackHomeArticleClick(displayLocale, article)}
+      >
         <div className={`${newsThumbFrameClass} aspect-[16/10] w-full`}>
           <ArticleThumb
             article={article}
@@ -706,7 +729,11 @@ function CategoryLead({
 
   return (
     <article className="min-w-0 border-b border-neutral-200 pb-5 sm:border-b-0 sm:pb-0 sm:pr-6 lg:border-r lg:border-neutral-200">
-      <Link href={href} className="block">
+      <Link
+        href={href}
+        className="block"
+        onClick={() => trackHomeArticleClick(displayLocale, article)}
+      >
         <div className={newsThumbFrameForVariant("categoryCard")}>
           <ArticleThumb
             article={article}
@@ -720,7 +747,11 @@ function CategoryLead({
       <div className="pt-3">
         <StoryMetaLine article={article} locale={displayLocale} />
         <h3 className="mt-2 text-lg font-bold leading-snug text-neutral-950 sm:text-xl">
-          <Link href={href} className="line-clamp-3 hover:underline">
+          <Link
+            href={href}
+            className="line-clamp-3 hover:underline"
+            onClick={() => trackHomeArticleClick(displayLocale, article)}
+          >
             {article.title}
           </Link>
         </h3>
@@ -766,7 +797,11 @@ function SidebarItem({
           </p>
           <h3 className="mt-0.5 text-[14px] font-semibold leading-snug text-neutral-900">
             {href ? (
-              <Link href={href} className="line-clamp-2 hover:underline">
+              <Link
+                href={href}
+                className="line-clamp-2 hover:underline"
+                onClick={() => trackHomeArticleClick(displayLocale, article)}
+              >
                 {article.title}
               </Link>
             ) : (
@@ -830,20 +865,27 @@ function SourceLeadMini({
   article,
   sourceLabel,
   labels,
+  locale,
   articleHrefPrefix,
   articleHrefFor,
 }: {
   article: HomeArticleCard;
   sourceLabel: string;
   labels: HomeNewsLabels;
+  locale: ArticleLocale;
   articleHrefPrefix: string;
   articleHrefFor?: (article: HomeArticleCard) => string;
 }) {
+  const displayLocale = article.locale ?? locale;
   const href = resolveArticleHref(article, articleHrefPrefix, articleHrefFor);
 
   return (
     <article className="min-w-0">
-      <Link href={href} className="block">
+      <Link
+        href={href}
+        className="block"
+        onClick={() => trackHomeArticleClick(displayLocale, article)}
+      >
         <div className={newsThumbFrameForVariant("sourceCard")}>
           <ArticleThumb
             article={article}
@@ -859,7 +901,11 @@ function SourceLeadMini({
           {sourceLabel}
         </p>
         <h3 className="mt-1 text-[14px] font-semibold leading-snug text-neutral-950 sm:text-[15px]">
-          <Link href={href} className="line-clamp-2 hover:underline">
+          <Link
+            href={href}
+            className="line-clamp-2 hover:underline"
+            onClick={() => trackHomeArticleClick(displayLocale, article)}
+          >
             {article.title}
           </Link>
         </h3>
@@ -1218,7 +1264,11 @@ export default function HomeNewsView({
                   </>
                 ) : null}
                 <NavPill href={homeHref}>{labels.navHome}</NavPill>
-                <NavPill href={alternateLangHref} variant="primary">
+                <NavPill
+                  href={alternateLangHref}
+                  variant="primary"
+                  onClick={() => trackLanguageSwitch(locale)}
+                >
                   {labels.alternateLang}
                 </NavPill>
               </nav>
@@ -1583,7 +1633,10 @@ export default function HomeNewsView({
                         aria-selected={selected}
                         disabled={!hasSource}
                         onClick={() => {
-                          if (hasSource) setLocalSourceTabKey(key);
+                          if (hasSource) {
+                            trackSourceFilterClick(locale, key);
+                            setLocalSourceTabKey(key);
+                          }
                         }}
                         className={homeSectionTabClass(selected, hasSource)}
                       >
@@ -1613,6 +1666,7 @@ export default function HomeNewsView({
                       article={item.article}
                       sourceLabel={displaySourceTabLabel(item, locale)}
                       labels={labels}
+                      locale={locale}
                       articleHrefPrefix={articleHrefPrefix}
                       articleHrefFor={articleHrefFor}
                     />
@@ -1651,7 +1705,10 @@ export default function HomeNewsView({
                         aria-selected={selected}
                         aria-controls="category-panel"
                         tabIndex={selected ? 0 : -1}
-                        onClick={() => selectLocalCategory(category)}
+                        onClick={() => {
+                          trackCategoryFilterClick(locale, category);
+                          selectLocalCategory(category);
+                        }}
                         onKeyDown={(event) => {
                           if (
                             event.key !== "ArrowRight" &&

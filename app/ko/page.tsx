@@ -5,6 +5,7 @@ import { koHomeLabels } from "@/lib/home/koHomeLabels";
 import { prepareEditionHomeSections } from "@/lib/home/prepareEditionHomeSections";
 import { koHomeSearchLabels } from "@/lib/home/koSearchLabels";
 import { Suspense } from "react";
+import AnalyticsPageView from "@/components/analytics/AnalyticsPageView";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ export default async function KoreanHomePage() {
         </main>
       }
     >
+      <AnalyticsPageView locale="ko" path="/ko" />
       <HomeNewsView
         pageRole="ko"
         locale="ko"

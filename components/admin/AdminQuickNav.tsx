@@ -35,6 +35,7 @@ const primaryNavItems = [
   { href: "/admin/quick-review", label: "빠른 검토", key: "quick-review" },
   { href: "/admin/review/mobile", label: "모바일 검토", key: "review-mobile" },
   { href: "/admin/review", label: "검토 대기", key: "review" },
+  { href: "/admin/analytics", label: "방문 분석", key: "analytics" },
   { href: "/admin/published", label: "공개 기사", key: "published" },
   { href: "/admin/shorts", label: "Shorts 제작실", key: "shorts" },
   { href: "/admin/rejected", label: "반려 기사", key: "rejected" },

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import AnalyticsTrackedLink from "@/components/analytics/AnalyticsTrackedLink";
 import {
   formatPublishedDate,
   type ArticleLocale,
@@ -111,21 +112,27 @@ export default function ArticleDetailView({
             <span aria-hidden className="text-neutral-300">
               /
             </span>
-            <Link
+            <AnalyticsTrackedLink
               href={sourceFilterHref}
               className="truncate font-medium hover:text-neutral-900 hover:underline underline-offset-2"
+              eventName="source_filter_click"
+              locale={locale}
+              sourceKey={article.source}
             >
               {sourceLabel}
-            </Link>
+            </AnalyticsTrackedLink>
             <span aria-hidden className="text-neutral-300">
               /
             </span>
-            <Link
+            <AnalyticsTrackedLink
               href={categoryFilterHref}
               className="font-medium hover:text-neutral-900 hover:underline underline-offset-2"
+              eventName="category_filter_click"
+              locale={locale}
+              categoryKey={article.category ?? "other"}
             >
               {categoryLabel}
-            </Link>
+            </AnalyticsTrackedLink>
           </nav>
 
           <div className="pb-8 pt-5 lg:pb-10 lg:pt-6">
@@ -197,12 +204,14 @@ export default function ArticleDetailView({
                   {labels.viewOriginal}
                 </a>
                 {alternateVersionHref ? (
-                  <Link
+                  <AnalyticsTrackedLink
                     href={alternateVersionHref}
                     className="inline-flex items-center justify-center rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-neutral-800"
+                    eventName="language_switch"
+                    locale={locale}
                   >
                     {labels.alternateVersion}
-                  </Link>
+                  </AnalyticsTrackedLink>
                 ) : null}
               </div>
             </div>
@@ -288,12 +297,15 @@ export default function ArticleDetailView({
                     {labels.sidebarSource}
                   </dt>
                   <dd className="mt-1 font-medium text-neutral-800">
-                    <Link
+                    <AnalyticsTrackedLink
                       href={sourceFilterHref}
                       className="hover:text-neutral-950 hover:underline underline-offset-2"
+                      eventName="source_filter_click"
+                      locale={locale}
+                      sourceKey={article.source}
                     >
                       {sourceLabel}
-                    </Link>
+                    </AnalyticsTrackedLink>
                   </dd>
                 </div>
                 <div>
@@ -301,12 +313,15 @@ export default function ArticleDetailView({
                     {labels.sidebarCategory}
                   </dt>
                   <dd className="mt-1 font-medium text-neutral-800">
-                    <Link
+                    <AnalyticsTrackedLink
                       href={categoryFilterHref}
                       className="hover:text-neutral-950 hover:underline underline-offset-2"
+                      eventName="category_filter_click"
+                      locale={locale}
+                      categoryKey={article.category ?? "other"}
                     >
                       {categoryLabel}
-                    </Link>
+                    </AnalyticsTrackedLink>
                   </dd>
                 </div>
                 <div>
@@ -392,12 +407,14 @@ export default function ArticleDetailView({
                 </li>
                 {alternateVersionHref && labels.navAlternate ? (
                   <li>
-                    <Link
+                    <AnalyticsTrackedLink
                       href={alternateVersionHref}
                       className="text-neutral-700 hover:text-neutral-950 hover:underline underline-offset-2"
+                      eventName="language_switch"
+                      locale={locale}
                     >
                       {labels.navAlternate}
-                    </Link>
+                    </AnalyticsTrackedLink>
                   </li>
                 ) : null}
               </ul>

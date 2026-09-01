@@ -1,4 +1,6 @@
 import Link from "next/link";
+import AnalyticsTrackedLink from "@/components/analytics/AnalyticsTrackedLink";
+import { AnalyticsSearchSubmit } from "@/components/analytics/AnalyticsSearchSubmit";
 import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
 import { getCategoryLabel } from "@/lib/article/categoryLabels";
 import { newsPageShell } from "@/lib/home/newsPageLayout";
@@ -66,9 +68,15 @@ function SearchResultCard({
         <time dateTime={article.published_at ?? article.created_at}>{date}</time>
       </p>
       <h2 className="mt-2 text-lg font-bold leading-snug text-news-navy">
-        <Link href={href} className="hover:text-news-red hover:underline">
+        <AnalyticsTrackedLink
+          href={href}
+          className="hover:text-news-red hover:underline"
+          eventName="search_result_click"
+          locale={locale}
+          articleId={article.article_id ?? article.id}
+        >
           {article.title}
-        </Link>
+        </AnalyticsTrackedLink>
       </h2>
       {article.summary ? (
         <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-neutral-600">
@@ -93,6 +101,7 @@ export default function NewsSearchResultsView({
 
   return (
     <main className="min-h-screen bg-[#f4f3ef] text-neutral-950">
+      <AnalyticsSearchSubmit locale={locale} query={trimmed} />
       <header className="border-b-4 border-news-red bg-white">
         <div className={`${newsPageShell} py-5 sm:py-6`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -111,12 +120,14 @@ export default function NewsSearchResultsView({
               >
                 {labels.homeLink}
               </Link>
-              <Link
+              <AnalyticsTrackedLink
                 href={alternateLangHref}
                 className="inline-flex items-center rounded-md bg-news-navy px-3 py-2 text-xs font-semibold text-white hover:brightness-110 sm:text-sm"
+                eventName="language_switch"
+                locale={locale}
               >
                 {labels.alternateLang}
-              </Link>
+              </AnalyticsTrackedLink>
             </div>
           </div>
           <form action={searchPath} method="get" className="mt-4 max-w-xl">
