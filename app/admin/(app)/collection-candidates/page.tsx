@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { Suspense } from "react";
 
 import CandidateListScrollRestore from "@/components/admin/CandidateListScrollRestore";
 import CollectionCandidatesWorkbench, {
   type WorkbenchCandidate,
 } from "@/components/admin/CollectionCandidatesWorkbench";
+import CollectionRunPanel from "@/components/admin/CollectionRunPanel";
 import RecommendCandidatesForm from "@/components/admin/RecommendCandidatesForm";
 import RssSourceHealthPanel from "@/components/admin/RssSourceHealthPanel";
 import {
@@ -15,13 +17,28 @@ import {
   normalizeAiRecommendGrade,
 } from "@/lib/collection-candidates/candidateRecommend";
 import { applyAiRecommendPostProcess } from "@/lib/collection-candidates/candidateRecommendPostProcess";
+import {
+  filterRunSummariesByRegion,
+  parseRegionFilterParam,
+  parseRunFilterParam,
+  summarizeCollectionRuns,
+} from "@/lib/collection-candidates/groupCandidatesByRun";
 import { fetchCollectionCandidates } from "@/lib/admin/fetchCollectionCandidates";
+import {
+  fetchCandidateRunIndex,
+  fetchRecentCollectionRuns,
+} from "@/lib/admin/fetchCollectionRuns";
 import {
   CANDIDATE_DATE_FILTERS,
   CANDIDATE_SOURCE_FILTERS,
   CANDIDATE_VIEW_FILTERS,
   candidateListSearchParams,
 } from "@/lib/collection-candidates/candidateListQuery";
+import {
+  fetchRecentCollectionRunLogs,
+  fetchRssCollectHealthFromLogs,
+  summarizeRssHealth,
+} from "@/lib/rss/fetchRssCollectHealthFromLogs";
 import {
   batchRelatedStoriesForCandidates,
   loadRelatedStoryPool,
@@ -40,6 +57,9 @@ type PageProps = {
     source?: string;
     date?: string;
     category?: string;
+    run?: string;
+    runRegion?: string;
+    pendingOnly?: string;
     made?: string;
     bulkMade?: string;
     localized?: string;
@@ -79,15 +99,54 @@ export default async function CollectionCandidatesPage({
   const recommended = params.recommended?.trim() || null;
   const recommendQueued = params.recommendQueued?.trim() || null;
   const showLocalizeTools = params.advanced?.trim() === "1";
+  const activeRunKey = parseRunFilterParam(params.run);
+  const regionFilter = parseRegionFilterParam(params.runRegion);
+  const showPendingOnly =
+    params.pendingOnly === "1" || params.pendingOnly === "true";
 
-  const { candidates, error, statusFilter, query } =
-    await fetchCollectionCandidates({
+  const [
+    { candidates, error, statusFilter, query },
+    runIndex,
+    storedRunsResult,
+    rssHealthRows,
+    recentRunLogs,
+  ] = await Promise.all([
+    fetchCollectionCandidates({
       view: params.view,
       status: params.status,
       source: params.source,
       date: params.date,
       category: params.category,
-    });
+      runKey: activeRunKey,
+      runRegion: regionFilter,
+      pendingOnly: showPendingOnly,
+    }),
+    fetchCandidateRunIndex({ view: params.view }),
+    fetchRecentCollectionRuns(),
+    fetchRssCollectHealthFromLogs(),
+    fetchRecentCollectionRunLogs(),
+  ]);
+
+  const rssHealthSummary = summarizeRssHealth(rssHealthRows);
+
+  const runSummariesAll = summarizeCollectionRuns(
+    runIndex,
+    storedRunsResult.runs.map((r) => ({
+      id: r.id,
+      region: r.region,
+      started_at: r.started_at,
+      finished_at: r.finished_at,
+      status: r.status,
+      collected_count: r.collected_count,
+      new_candidate_count: r.new_candidate_count,
+      duplicate_count: r.duplicate_count,
+      failed_count: r.failed_count,
+    }))
+  );
+  const runSummaries = filterRunSummariesByRegion(
+    runSummariesAll,
+    regionFilter
+  );
 
   const classified: WorkbenchCandidate[] = candidates.map((c) => {
     const candidateCategory = classifyCandidateCategory({
@@ -149,6 +208,8 @@ export default async function CollectionCandidatesPage({
     };
   });
 
+  // Category remains a display-layer classifier (not always a DB column match).
+  // Run / region / pending filters are applied in fetchCollectionCandidates.
   const byCategory =
     query.category === "all"
       ? classifiedWithPostProcess
@@ -199,14 +260,26 @@ export default async function CollectionCandidatesPage({
     };
   });
 
-  const listQueryBase = candidateListSearchParams(query);
-  const advancedSuffix = showLocalizeTools
-    ? `${listQueryBase ? "&" : ""}advanced=1`
-    : "";
-  const advancedOnHref = `/admin/collection-candidates?${listQueryBase}${
-    listQueryBase ? "&" : ""
-  }advanced=1`;
-  const advancedOffHref = `/admin/collection-candidates?${listQueryBase}`;
+  const withFilters = (
+    patch: Record<string, string | null | undefined>,
+    baseQuery = query
+  ) => {
+    const params = new URLSearchParams(candidateListSearchParams(baseQuery));
+    if (activeRunKey) params.set("run", activeRunKey);
+    if (regionFilter !== "all") params.set("runRegion", regionFilter);
+    if (showPendingOnly) params.set("pendingOnly", "1");
+    if (showLocalizeTools) params.set("advanced", "1");
+    for (const [k, v] of Object.entries(patch)) {
+      if (v == null || v === "") params.delete(k);
+      else params.set(k, v);
+    }
+    const q = params.toString();
+    return q
+      ? `/admin/collection-candidates?${q}`
+      : "/admin/collection-candidates";
+  };
+  const advancedOnHref = withFilters({ advanced: "1" });
+  const advancedOffHref = withFilters({ advanced: null });
 
   return (
     <main className="min-h-screen bg-white text-black">
@@ -233,20 +306,42 @@ export default async function CollectionCandidatesPage({
         </p>
 
         <div className="mt-4">
-          <RssSourceHealthPanel />
+          <RssSourceHealthPanel
+            rows={rssHealthRows}
+            summary={rssHealthSummary}
+            recentRuns={recentRunLogs}
+          />
         </div>
+
+        <Suspense
+          fallback={
+            <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-xs text-gray-500">
+              수집 회차 로딩…
+            </div>
+          }
+        >
+          <CollectionRunPanel
+            runs={runSummaries}
+            activeRunKey={activeRunKey}
+            regionFilter={regionFilter}
+            showPendingOnly={showPendingOnly}
+          />
+        </Suspense>
 
         <div className="mt-5 flex flex-wrap gap-1.5">
           {CANDIDATE_VIEW_FILTERS.map((tab) => {
             const active = query.view === tab.key;
-            const href = `/admin/collection-candidates?${candidateListSearchParams({
-              ...query,
-              view: tab.key,
-              status:
-                tab.key === "older" || tab.key === "recent"
-                  ? "pending"
-                  : "actionable",
-            })}${advancedSuffix}`;
+            const href = withFilters(
+              {},
+              {
+                ...query,
+                view: tab.key,
+                status:
+                  tab.key === "older" || tab.key === "recent"
+                    ? "pending"
+                    : "actionable",
+              }
+            );
             return (
               <Link
                 key={tab.key}
@@ -281,10 +376,7 @@ export default async function CollectionCandidatesPage({
         <div className="mt-3 flex flex-wrap gap-1.5">
           {categoryCounts.map((tab) => {
             const active = query.category === tab.key;
-            const href = `/admin/collection-candidates?${candidateListSearchParams({
-              ...query,
-              category: tab.key,
-            })}${advancedSuffix}`;
+            const href = withFilters({}, { ...query, category: tab.key });
             return (
               <Link
                 key={tab.key}
@@ -306,11 +398,10 @@ export default async function CollectionCandidatesPage({
         <div className="mt-3 flex flex-wrap gap-1.5">
           {STATUS_TABS.map((tab) => {
             const active = query.status === tab.key && query.view === "ai";
-            const href = `/admin/collection-candidates?${candidateListSearchParams({
-              ...query,
-              view: "ai",
-              status: tab.key,
-            })}${advancedSuffix}`;
+            const href = withFilters(
+              {},
+              { ...query, view: "ai", status: tab.key }
+            );
             return (
               <Link
                 key={tab.key}
@@ -337,6 +428,15 @@ export default async function CollectionCandidatesPage({
           <input type="hidden" name="view" value={query.view} />
           <input type="hidden" name="status" value={query.status} />
           <input type="hidden" name="category" value={query.category} />
+          {activeRunKey ? (
+            <input type="hidden" name="run" value={activeRunKey} />
+          ) : null}
+          {regionFilter !== "all" ? (
+            <input type="hidden" name="runRegion" value={regionFilter} />
+          ) : null}
+          {showPendingOnly ? (
+            <input type="hidden" name="pendingOnly" value="1" />
+          ) : null}
           {showLocalizeTools ? (
             <input type="hidden" name="advanced" value="1" />
           ) : null}
@@ -492,6 +592,9 @@ export default async function CollectionCandidatesPage({
               dateFilter={query.date}
               categoryFilter={query.category}
               showLocalizeTools={showLocalizeTools}
+              runFilter={activeRunKey}
+              runRegionFilter={regionFilter === "all" ? null : regionFilter}
+              pendingOnly={showPendingOnly}
             />
           </div>
         ) : null}

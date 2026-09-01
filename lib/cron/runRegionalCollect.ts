@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 
+import { resolveCollectionTriggerType } from "@/lib/collection-candidates/collectionRunsCore";
 import { collectRssToReviewQueue } from "@/lib/rss/collectRssToReviewQueue";
 import type { CollectRssResult } from "@/lib/rss/collectRssToReviewQueue";
 import type { CollectRegion } from "@/lib/rss/collectRegions";
@@ -11,6 +12,7 @@ export async function runRegionalCollect(
   searchParams?: URLSearchParams | null
 ): Promise<CollectRssResult> {
   const options = resolveCollectRssOptionsForRegion(region, searchParams);
+  options.triggerType = resolveCollectionTriggerType(searchParams);
   return collectRssToReviewQueue(options);
 }
 

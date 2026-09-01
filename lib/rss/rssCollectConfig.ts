@@ -45,6 +45,11 @@ export type CollectRssOptions = {
   maxSavesPerDay: number;
   /** When set, only feeds in this regional desk run. */
   region: CollectRegion | null;
+  /**
+   * Optional desk trigger hint for collection_runs (fail-open if unused).
+   * Infer from query when omitted.
+   */
+  triggerType?: "vercel_cron" | "github_actions" | "manual" | "unknown";
 };
 
 function isTruthy(value: string | null | undefined): boolean {
@@ -119,6 +124,7 @@ export function resolveCollectRssOptions(
     maxEnrichPerRun: 0,
     maxSavesPerDay: getRssMaxSavesPerDay(),
     region,
+    triggerType: undefined,
   };
 }
 

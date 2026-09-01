@@ -1,6 +1,12 @@
 import "server-only";
 
 import {
+  createCollectionRun,
+  finishCollectionRun,
+  resolveCollectionTriggerType,
+  type CollectionRunTriggerType,
+} from "@/lib/collection-candidates/collectionRuns";
+import {
   findCollectionCandidateByUrl,
   insertCollectionCandidate,
 } from "@/lib/collection-candidates/insertCollectionCandidate";
@@ -96,6 +102,7 @@ type CollectRunContext = {
   recordDbWrite: () => void;
   seenTitles: string[];
   recentSameEventCandidates: SameEventCandidateRow[];
+  collectionRunId: string | null;
 };
 
 async function loadRecentCandidateTitles(): Promise<string[]> {
@@ -341,6 +348,7 @@ async function processRssItem(
     customUniqueId: rssCustomUniqueId(feed.sourceKey, link, item.guid),
     thumbnailUrl: item.thumbnailUrl,
     category: feed.category ?? categoryFromItem,
+    collectionRunId: ctx.collectionRunId,
   });
 
   if (!result.ok) {
@@ -736,6 +744,17 @@ export async function collectRssToReviewQueue(
   const seenTitles = await loadRecentCandidateTitles();
   const recentSameEventCandidates = await loadRecentCandidatesForSameEvent();
 
+  // Fail-open: if collection_runs migration is missing, runId stays null.
+  let collectionRunId: string | null = null;
+  if (options.save && !options.testMode && options.region) {
+    const triggerType: CollectionRunTriggerType =
+      options.triggerType ?? resolveCollectionTriggerType(null);
+    collectionRunId = await createCollectionRun({
+      region: options.region,
+      triggerType,
+    });
+  }
+
   const ctx: CollectRunContext = {
     options,
     costs,
@@ -743,6 +762,7 @@ export async function collectRssToReviewQueue(
     recordDbWrite,
     seenTitles,
     recentSameEventCandidates,
+    collectionRunId,
   };
 
   if (!options.save) {
@@ -765,6 +785,7 @@ export async function collectRssToReviewQueue(
     mode: options.mode,
     save: options.save,
     region: options.region,
+    collectionRunId,
     maxCandidatesPerRun: options.maxCandidatesPerRun,
     maxInsertsPerFeed: RSS_MAX_INSERTS_PER_FEED,
     firstPassInsertsPerFeed: RSS_FIRST_PASS_INSERTS_PER_FEED,
@@ -774,6 +795,10 @@ export async function collectRssToReviewQueue(
     registeredFeedCount: RSS_FEED_SOURCES.length,
   });
 
+  let hardFailed = false;
+  let errorSummary: string | null = null;
+
+  try {
   // 1) Prepare every active feed (fetch failures isolated per source).
   //    Main publishers first; Yonhap KR radar last so it does not crowd pass-1.
   const prepared: PreparedFeed[] = [];
@@ -841,7 +866,19 @@ export async function collectRssToReviewQueue(
 
   await logRunCollection(totals, ctx);
 
-  console.info("[collectRss] run done", { totals, costs });
+  if (collectionRunId) {
+    await finishCollectionRun({
+      runId: collectionRunId,
+      collectedCount: totals.checked,
+      newCandidateCount: totals.inserted,
+      duplicateCount: totals.duplicates,
+      failedCount: totals.failed,
+      hardFailed,
+      errorSummary,
+    });
+  }
+
+  console.info("[collectRss] run done", { totals, costs, collectionRunId });
 
   return {
     ok: feeds.every(
@@ -863,4 +900,21 @@ export async function collectRssToReviewQueue(
     feeds,
     totals,
   };
+  } catch (err) {
+    hardFailed = true;
+    errorSummary =
+      err instanceof Error ? err.message : String(err);
+    if (collectionRunId) {
+      await finishCollectionRun({
+        runId: collectionRunId,
+        collectedCount: 0,
+        newCandidateCount: costs.candidatesAdded,
+        duplicateCount: 0,
+        failedCount: 1,
+        hardFailed: true,
+        errorSummary,
+      });
+    }
+    throw err;
+  }
 }
