@@ -19,10 +19,8 @@ import {
 import { applyAiRecommendPostProcess } from "@/lib/collection-candidates/candidateRecommendPostProcess";
 import {
   filterRunSummariesByRegion,
-  inferCandidateCollectRegion,
   parseRegionFilterParam,
   parseRunFilterParam,
-  runKeyForCandidate,
   summarizeCollectionRuns,
 } from "@/lib/collection-candidates/groupCandidatesByRun";
 import { fetchCollectionCandidates } from "@/lib/admin/fetchCollectionCandidates";
@@ -119,6 +117,9 @@ export default async function CollectionCandidatesPage({
       source: params.source,
       date: params.date,
       category: params.category,
+      runKey: activeRunKey,
+      runRegion: regionFilter,
+      pendingOnly: showPendingOnly,
     }),
     fetchCandidateRunIndex({ view: params.view }),
     fetchRecentCollectionRuns(),
@@ -177,22 +178,6 @@ export default async function CollectionCandidatesPage({
     };
   });
 
-  const candidateRunMeta = new Map(
-    candidates.map((c) => [
-      c.id,
-      {
-        id: c.id,
-        source: c.source,
-        source_country: c.source_country,
-        status: c.status as CollectionCandidateStatus,
-        collection_run_id: c.collection_run_id,
-        created_at: c.created_at,
-        enrich_error: c.enrich_error,
-        discord_brief_sent_at: c.discord_brief_sent_at,
-      },
-    ])
-  );
-
   const postProcessedById = new Map(
     applyAiRecommendPostProcess(
       classified
@@ -223,6 +208,8 @@ export default async function CollectionCandidatesPage({
     };
   });
 
+  // Category remains a display-layer classifier (not always a DB column match).
+  // Run / region / pending filters are applied in fetchCollectionCandidates.
   const byCategory =
     query.category === "all"
       ? classifiedWithPostProcess
@@ -230,31 +217,10 @@ export default async function CollectionCandidatesPage({
           (c) => c.candidateCategory === query.category
         );
 
-  const byRegion =
-    regionFilter === "all"
-      ? byCategory
-      : byCategory.filter((c) => {
-          const meta = candidateRunMeta.get(c.id);
-          if (!meta) return false;
-          return inferCandidateCollectRegion(meta) === regionFilter;
-        });
-
-  const byRun = activeRunKey
-    ? byRegion.filter((c) => {
-        const meta = candidateRunMeta.get(c.id);
-        if (!meta) return false;
-        return runKeyForCandidate(meta) === activeRunKey;
-      })
-    : byRegion;
-
-  const byPending = showPendingOnly
-    ? byRun.filter((c) => c.status === "pending")
-    : byRun;
-
   const filtered =
     query.view === "ai"
-      ? [...byPending].sort(compareCandidatesByAiRecommend)
-      : byPending;
+      ? [...byCategory].sort(compareCandidatesByAiRecommend)
+      : byCategory;
 
   let relatedStoriesMap: Record<string, RelatedStoryRef[]> = {};
   let relatedStoryPoolCapped = false;

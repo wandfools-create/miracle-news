@@ -1,6 +1,7 @@
 import "server-only";
 
 import { isCollectionRunsSchemaMissing } from "@/lib/collection-candidates/collectionRunsCore";
+import { collectRowsByRangePagination } from "@/lib/collection-candidates/candidateFetchPagination";
 import type { CandidateRunRow } from "@/lib/collection-candidates/groupCandidatesByRun";
 import { COLLECTION_CANDIDATE_RUN_INDEX_SELECT } from "@/lib/collection-candidates/types";
 import { candidateFreshnessCutoffIso } from "@/lib/collection-candidates/candidateRecommend";
@@ -10,7 +11,6 @@ import {
 } from "@/lib/supabase/serviceRole";
 
 const RECENT_RUNS_LIMIT = 40;
-const RUN_INDEX_LIMIT = 500;
 
 export type FetchedCollectionRun = {
   id: string;
@@ -64,42 +64,49 @@ export async function fetchRecentCollectionRuns(limit = RECENT_RUNS_LIMIT): Prom
   }
 }
 
+/**
+ * Lightweight candidate rows for run grouping.
+ * Uses `.range()` pagination — no fixed 500-row ceiling.
+ */
 export async function fetchCandidateRunIndex(input?: {
   view?: string | null;
-  limit?: number;
 }): Promise<CandidateRunRow[]> {
   const envCheck = await checkSupabaseServiceEnvWithDnsCached();
   if (!envCheck.ok) return [];
 
   const { client } = createServiceRoleSupabaseClient();
   const cutoffIso = candidateFreshnessCutoffIso();
-  const limit = input?.limit ?? RUN_INDEX_LIMIT;
   const view = input?.view?.trim() || "ai";
 
-  let dbQuery = client
-    .from("collection_candidates")
-    .select(COLLECTION_CANDIDATE_RUN_INDEX_SELECT)
-    .order("created_at", { ascending: false })
-    .limit(limit);
+  const paged = await collectRowsByRangePagination<CandidateRunRow>(
+    async (from, to) => {
+      let dbQuery = client
+        .from("collection_candidates")
+        .select(COLLECTION_CANDIDATE_RUN_INDEX_SELECT)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false });
 
-  if (view === "older") {
-    dbQuery = dbQuery.eq("status", "pending").or(
-      `rss_published_at.lt.${cutoffIso},and(rss_published_at.is.null,created_at.lt.${cutoffIso})`
-    );
-  } else {
-    dbQuery = dbQuery.or(
-      `rss_published_at.gte.${cutoffIso},and(rss_published_at.is.null,created_at.gte.${cutoffIso})`
-    );
-  }
+      if (view === "older") {
+        dbQuery = dbQuery.eq("status", "pending").or(
+          `rss_published_at.lt.${cutoffIso},and(rss_published_at.is.null,created_at.lt.${cutoffIso})`
+        );
+      } else {
+        dbQuery = dbQuery.or(
+          `rss_published_at.gte.${cutoffIso},and(rss_published_at.is.null,created_at.gte.${cutoffIso})`
+        );
+      }
 
-  const { data, error } = await dbQuery;
-  if (error) {
-    console.warn("[admin/collection-runs] index fetch failed", {
-      code: error.code,
-      message: error.message?.slice(0, 160),
-    });
+      const { data, error } = await dbQuery.range(from, to);
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      return { ok: true, rows: (data ?? []) as CandidateRunRow[] };
+    }
+  );
+
+  if (!paged.ok) {
+    console.warn("[admin/collection-runs] index fetch failed", paged.error);
     return [];
   }
-
-  return (data ?? []) as CandidateRunRow[];
+  return paged.rows;
 }

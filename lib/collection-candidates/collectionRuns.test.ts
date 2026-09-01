@@ -14,16 +14,25 @@ import {
   isCollectionRunsSchemaMissing,
 } from "@/lib/collection-candidates/collectionRunsCore";
 import {
+  estimateCollectionBucketEndIso,
   estimateCollectionBucketStartIso,
   filterCandidatesByRunKey,
   filterRunSummariesByRegion,
   formatCollectionRunTimeEt,
   inferCandidateCollectRegion,
+  parseCollectionRunDbFilter,
   parseRunFilterParam,
   runKeyForCandidate,
+  sourceKeysForRunRegionFilter,
   summarizeCollectionRuns,
   type CandidateRunRow,
 } from "@/lib/collection-candidates/groupCandidatesByRun";
+import { collectRowsByRangePagination } from "@/lib/collection-candidates/candidateFetchPagination";
+import {
+  applyCollectionRunDbFilter,
+  createQueryCallRecorder,
+} from "@/lib/collection-candidates/candidateRunDbFilter";
+import { ADMIN_LIST_PAGE_SIZE } from "@/lib/admin/listPagination";
 
 function summarizeRssHealth(
   rows: Array<{ status: "ok" | "error" | "inactive" | "unknown"; lastSuccessAt: string | null; lastFailureAt: string | null }>
@@ -276,6 +285,126 @@ describe("groupCandidatesByRun", () => {
       })
     );
     assert.equal(key, "run:abc");
+  });
+
+  it("parseCollectionRunDbFilter builds real and estimated DB predicates", () => {
+    const real = parseCollectionRunDbFilter(
+      "run:33333333-3333-4333-8333-333333333333"
+    );
+    assert.deepEqual(real, {
+      kind: "real",
+      runId: "33333333-3333-4333-8333-333333333333",
+    });
+
+    const start = "2026-08-31T12:00:00.000Z";
+    const est = parseCollectionRunDbFilter(`est:korea:${start}`);
+    assert.equal(est?.kind, "estimated");
+    if (est?.kind === "estimated") {
+      assert.equal(est.region, "korea");
+      assert.equal(est.startedAt, start);
+      assert.equal(est.endedAt, estimateCollectionBucketEndIso(start));
+      assert.equal(est.endedAt, "2026-08-31T18:00:00.000Z");
+    }
+  });
+
+  it("applyCollectionRunDbFilter uses collection_run_id for real runs", () => {
+    const { api, calls } = createQueryCallRecorder();
+    applyCollectionRunDbFilter(api, {
+      kind: "real",
+      runId: "run-1",
+    });
+    assert.deepEqual(calls, [
+      { method: "eq", args: ["collection_run_id", "run-1"] },
+    ]);
+  });
+
+  it("applyCollectionRunDbFilter uses time range + region sources for estimated", () => {
+    const { api, calls } = createQueryCallRecorder();
+    applyCollectionRunDbFilter(api, {
+      kind: "estimated",
+      region: "us-intl",
+      startedAt: "2026-08-31T12:00:00.000Z",
+      endedAt: "2026-08-31T18:00:00.000Z",
+    });
+    assert.deepEqual(calls[0], {
+      method: "is",
+      args: ["collection_run_id", null],
+    });
+    assert.deepEqual(calls[1], {
+      method: "gte",
+      args: ["created_at", "2026-08-31T12:00:00.000Z"],
+    });
+    assert.deepEqual(calls[2], {
+      method: "lt",
+      args: ["created_at", "2026-08-31T18:00:00.000Z"],
+    });
+    assert.equal(calls[3]?.method, "in");
+    assert.equal(calls[3]?.args[0], "source");
+    assert.ok(
+      (calls[3]?.args[1] as string[]).includes("ap")
+    );
+    assert.ok(sourceKeysForRunRegionFilter("korea")?.includes("chosun"));
+  });
+
+  it("range pagination returns all rows beyond 100 and 500", async () => {
+    const total = 530;
+    const pages: string[][] = [];
+    for (let i = 0; i < total; i += ADMIN_LIST_PAGE_SIZE) {
+      pages.push(
+        Array.from({ length: Math.min(ADMIN_LIST_PAGE_SIZE, total - i) }, (_, j) =>
+          `id-${i + j}`
+        )
+      );
+    }
+    let pageCalls = 0;
+    const result = await collectRowsByRangePagination<string>(
+      async (from, to) => {
+        pageCalls += 1;
+        const pageIndex = Math.floor(from / ADMIN_LIST_PAGE_SIZE);
+        assert.equal(to - from + 1, ADMIN_LIST_PAGE_SIZE);
+        return { ok: true, rows: pages[pageIndex] ?? [] };
+      }
+    );
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.rows.length, 530);
+      assert.equal(result.rows[0], "id-0");
+      assert.equal(result.rows[100], "id-100");
+      assert.equal(result.rows[500], "id-500");
+      assert.equal(result.rows[529], "id-529");
+    }
+    assert.ok(pageCalls > 10);
+    assert.equal(pageCalls, Math.ceil(530 / ADMIN_LIST_PAGE_SIZE));
+  });
+
+  it("stable created_at+id tie-break ordering is documented in fetch", () => {
+    const fetchSrc = readFileSync(
+      join(process.cwd(), "lib/admin/fetchCollectionCandidates.ts"),
+      "utf8"
+    );
+    assert.match(fetchSrc, /order\("created_at"/);
+    assert.match(fetchSrc, /order\("id"/);
+    assert.match(fetchSrc, /collectRowsByRangePagination/);
+    assert.match(fetchSrc, /parseCollectionRunDbFilter/);
+    assert.doesNotMatch(fetchSrc, /\.limit\(500\)/);
+
+    const indexSrc = readFileSync(
+      join(process.cwd(), "lib/admin/fetchCollectionRuns.ts"),
+      "utf8"
+    );
+    assert.match(indexSrc, /collectRowsByRangePagination/);
+    assert.doesNotMatch(indexSrc, /RUN_INDEX_LIMIT|\.limit\(500\)/);
+
+    const pageSrc = readFileSync(
+      join(
+        process.cwd(),
+        "app/admin/(app)/collection-candidates/page.tsx"
+      ),
+      "utf8"
+    );
+    assert.match(pageSrc, /runKey: activeRunKey/);
+    assert.match(pageSrc, /pendingOnly: showPendingOnly/);
+    assert.doesNotMatch(pageSrc, /byRun\.filter|candidateRunMeta/);
   });
 });
 

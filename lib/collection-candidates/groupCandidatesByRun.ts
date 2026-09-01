@@ -8,6 +8,7 @@ import { CRON_TIMEZONE } from "@/lib/cron/americaNewYork";
 import {
   KOREA_SOURCE_KEYS,
   US_INTL_SOURCE_KEYS,
+  sourceKeysForCollectRegion,
   type CollectRegion,
 } from "@/lib/rss/collectRegions";
 import type { CollectionCandidateStatus } from "./types";
@@ -70,6 +71,63 @@ export function estimateCollectionBucketStartIso(createdAt: string): string {
   if (!Number.isFinite(ms)) return createdAt;
   const bucket = Math.floor(ms / RUN_BUCKET_MS) * RUN_BUCKET_MS;
   return new Date(bucket).toISOString();
+}
+
+/** Exclusive end of a 6h UTC estimated bucket. */
+export function estimateCollectionBucketEndIso(startedAt: string): string {
+  const ms = Date.parse(startedAt);
+  if (!Number.isFinite(ms)) return startedAt;
+  return new Date(ms + RUN_BUCKET_MS).toISOString();
+}
+
+export type CollectionRunDbFilter =
+  | { kind: "real"; runId: string }
+  | {
+      kind: "estimated";
+      region: CollectRegion | "unknown";
+      startedAt: string;
+      endedAt: string;
+    };
+
+/**
+ * Convert UI run key into DB predicates.
+ * Real: collection_run_id = id
+ * Estimated: collection_run_id IS NULL + created_at ∈ [start, end) + region sources
+ */
+export function parseCollectionRunDbFilter(
+  runKey: string | null | undefined
+): CollectionRunDbFilter | null {
+  const key = parseRunFilterParam(runKey);
+  if (!key) return null;
+  if (key.startsWith("run:")) {
+    const runId = key.slice("run:".length).trim();
+    return runId ? { kind: "real", runId } : null;
+  }
+  if (key.startsWith("est:")) {
+    const parts = key.split(":");
+    const regionPart = parts[1] ?? "unknown";
+    const startedAt = parts.slice(2).join(":");
+    if (!startedAt || !Number.isFinite(Date.parse(startedAt))) return null;
+    const region: CollectRegion | "unknown" =
+      regionPart === "korea" || regionPart === "us-intl"
+        ? regionPart
+        : "unknown";
+    return {
+      kind: "estimated",
+      region,
+      startedAt,
+      endedAt: estimateCollectionBucketEndIso(startedAt),
+    };
+  }
+  return null;
+}
+
+export function sourceKeysForRunRegionFilter(
+  region: CollectRegion | "all" | "unknown"
+): string[] | null {
+  if (region === "all") return null;
+  if (region === "unknown") return null;
+  return sourceKeysForCollectRegion(region);
 }
 
 export function inferCandidateCollectRegion(
