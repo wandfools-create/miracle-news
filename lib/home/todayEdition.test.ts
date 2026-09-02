@@ -141,7 +141,7 @@ describe("todayEdition", () => {
     assert.equal(edition.secondaryFeatured, null);
   });
 
-  it("1 today article → featured only", () => {
+  it("1 today article → featured + prior eligible secondary", () => {
     const articles = [
       card({
         id: "today-only",
@@ -158,7 +158,8 @@ describe("todayEdition", () => {
     const edition = buildTodayEdition(articles, { nowMs: NOW_AUG28_NOON_ET });
     assert.equal(edition.todayCount, 1);
     assert.equal(edition.featured?.id, "today-only");
-    assert.equal(edition.secondaryFeatured, null);
+    assert.equal(edition.secondaryFeatured?.id, "yesterday");
+    assert.notEqual(edition.featured?.id, edition.secondaryFeatured?.id);
   });
 
   it("2+ today articles → featured + secondary", () => {
@@ -206,31 +207,31 @@ describe("todayEdition", () => {
     assert.equal(edition.featured?.id, "today-normal");
   });
 
-  it("spotlight excludes articles older than 24h site publish", () => {
+  it("spotlight prefers 24h articles then backfills from 7-day eligible pool", () => {
     const articles = [
       card({
         id: "today-spot",
         published_at: nyTodayAt(11),
       }),
       card({
+        id: "today-second",
+        published_at: nyTodayAt(9),
+        ai_recommend_grade: "normal",
+      }),
+      card({
         id: "within-24h",
         published_at: new Date(NOW_AUG28_NOON_ET - 20 * 3600_000).toISOString(),
       }),
       card({
-        id: "too-old",
-        published_at: new Date(NOW_AUG28_NOON_ET - 30 * 3600_000).toISOString(),
+        id: "week-old",
+        published_at: nyDaysAgoAt(8),
       }),
     ];
 
     const edition = buildTodayEdition(articles, { nowMs: NOW_AUG28_NOON_ET });
     const ids = edition.spotlight.map((a) => a.id);
-    assert.ok(ids.includes("today-spot") || ids.includes("within-24h"));
-    assert.ok(!ids.includes("too-old"));
-    assert.ok(
-      filterBySitePublishAge(articles, NOW_AUG28_NOON_ET, SPOTLIGHT_MAX_MS).every(
-        (a) => NOW_AUG28_NOON_ET - new Date(a.published_at!).getTime() <= SPOTLIGHT_MAX_MS
-      )
-    );
+    assert.ok(ids.includes("within-24h"));
+    assert.ok(!ids.includes("week-old"));
   });
 
   it("trending excludes articles older than 48h", () => {
@@ -536,6 +537,143 @@ describe("todayEdition", () => {
     assert.equal(ko.status, en.status);
   });
 
+  it("prepareEditionHomeSections keeps two featured leads when today has one story", () => {
+    const articles = [
+      card({
+        id: "today-only",
+        published_at: nyTodayAt(8, 10),
+        ai_recommend_grade: "best",
+      }),
+      card({
+        id: "yesterday",
+        published_at: nyDaysAgoAt(1),
+        is_top_story: true,
+      }),
+    ];
+    const sections = prepareEditionHomeSections(
+      articles,
+      "ko",
+      { leftTitle: "L", rightTitle: "R" },
+      { nowMs: NOW_AUG28_NOON_ET }
+    );
+    assert.equal(sections.featuredLeads?.length, 2);
+    assert.equal(sections.featuredLeads?.[0]?.id, "today-only");
+    assert.equal(sections.featuredLeads?.[1]?.id, "yesterday");
+    const leadIds = sections.featuredLeads!.map((a) => a.id);
+    assert.equal(new Set(leadIds).size, leadIds.length);
+  });
+
+  it("prepareEditionHomeSections carryover keeps two featured leads from prior edition", () => {
+    const articles = [
+      card({
+        id: "yesterday-a",
+        published_at: nyDaysAgoAt(1, 8),
+        ai_recommend_grade: "best",
+        topic_key: "event-a",
+      }),
+      card({
+        id: "yesterday-b",
+        published_at: nyDaysAgoAt(1, 10),
+        ai_recommend_grade: "priority",
+        topic_key: "event-b",
+        title: "Second lead angle",
+      }),
+    ];
+    const sections = prepareEditionHomeSections(
+      articles,
+      "ko",
+      { leftTitle: "L", rightTitle: "R" },
+      { nowMs: NOW_AUG28_NOON_ET }
+    );
+    assert.equal(sections.todayEdition?.status, "carryover");
+    assert.equal(sections.featuredLeads?.length, 2);
+    assert.notEqual(sections.featuredLeads?.[0]?.id, sections.featuredLeads?.[1]?.id);
+  });
+
+  it("allows a single featured lead when only one eligible article exists", () => {
+    const articles = [
+      card({
+        id: "solo",
+        published_at: nyTodayAt(8),
+        ai_recommend_grade: "best",
+      }),
+    ];
+    const edition = buildTodayEdition(articles, { nowMs: NOW_AUG28_NOON_ET });
+    assert.equal(edition.todayCount, 1);
+    assert.equal(edition.featured?.id, "solo");
+    assert.equal(edition.secondaryFeatured, null);
+
+    const sections = prepareEditionHomeSections(
+      articles,
+      "ko",
+      { leftTitle: "L", rightTitle: "R" },
+      { nowMs: NOW_AUG28_NOON_ET }
+    );
+    assert.equal(sections.featuredLeads?.length, 1);
+  });
+
+  it("KO and EN featured leads share article ids", () => {
+    const articles = [
+      card({
+        id: "today-a",
+        published_at: nyTodayAt(7),
+        ai_recommend_grade: "best",
+        topic_key: "event-a",
+      }),
+      card({
+        id: "today-b",
+        published_at: nyTodayAt(9),
+        ai_recommend_grade: "priority",
+        topic_key: "event-b",
+      }),
+    ];
+    const ko = prepareEditionHomeSections(
+      articles,
+      "ko",
+      { leftTitle: "L", rightTitle: "R" },
+      { nowMs: NOW_AUG28_NOON_ET }
+    );
+    const en = prepareEditionHomeSections(
+      articles,
+      "en",
+      { leftTitle: "L", rightTitle: "R" },
+      { nowMs: NOW_AUG28_NOON_ET }
+    );
+    assert.deepEqual(
+      ko.featuredLeads?.map((a) => a.id),
+      en.featuredLeads?.map((a) => a.id)
+    );
+  });
+
+  it("spotlight backfills from 7-day eligible pool when 24h rail is thin", () => {
+    const articles = [
+      card({
+        id: "today-featured",
+        published_at: nyTodayAt(8),
+        ai_recommend_grade: "best",
+      }),
+      card({
+        id: "three-days-ago",
+        published_at: nyDaysAgoAt(3, 10),
+        ai_recommend_grade: "normal",
+      }),
+      card({
+        id: "five-days-ago",
+        published_at: nyDaysAgoAt(5, 10),
+        ai_recommend_grade: "normal",
+      }),
+    ];
+    const edition = buildTodayEdition(articles, { nowMs: NOW_AUG28_NOON_ET });
+    const sidebarIds = edition.spotlight.map((a) => a.id);
+    assert.ok(sidebarIds.includes("three-days-ago") || sidebarIds.includes("five-days-ago"));
+    const featuredKeys = new Set(
+      [edition.featured, edition.secondaryFeatured]
+        .filter(Boolean)
+        .map((a) => a!.id)
+    );
+    assert.ok(sidebarIds.every((id) => !featuredKeys.has(id)));
+  });
+
   it("prepareEditionHomeSections wires today edition meta", () => {
     const articles = [card({ id: "t1", published_at: nyTodayAt(8, 24) })];
     const sections = prepareEditionHomeSections(articles, "ko", {
@@ -546,6 +684,7 @@ describe("todayEdition", () => {
     assert.ok(sections.todayEdition);
     assert.equal(sections.todayEdition?.todayCount, 1);
     assert.equal(sections.featured?.id, "t1");
+    assert.equal(sections.featuredLeads?.length, 1);
     assert.equal(sections.topStories, null);
   });
 
@@ -576,8 +715,10 @@ describe("home layout — today edition mobile order", () => {
     assert.match(view, /PreviousHighlightsSection/);
     assert.match(view, /TodayEditionPreparing/);
     assert.match(view, /id="featured"[\s\S]*order-1/);
-    assert.match(view, /order-2 min-w-0 xl:order-none xl:col-start-3/);
-    assert.match(view, /order-3 min-w-0 xl:order-none xl:col-start-1/);
+    assert.match(view, /order-2 min-w-0 xl:order-none xl:row-start-2 xl:row-span-2/);
+    assert.match(view, /homeRightRailColClass/);
+    assert.match(view, /order-3 min-w-0 xl:order-none xl:row-start-2/);
+    assert.match(view, /homeLeftRailColClass/);
     assert.match(view, /order-4 min-w-0 scroll-mt-6/);
     assert.match(view, /order-5 min-w-0 scroll-mt-6/);
     assert.match(view, /order-6 min-w-0 scroll-mt-6/);

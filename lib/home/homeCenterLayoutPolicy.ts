@@ -33,3 +33,26 @@ export function isGlobalHomeFilterMode(input: {
 }): boolean {
   return Boolean(input.sourceFromUrl || input.categoryFromUrl);
 }
+
+/** Desktop home always keeps the newspaper 3-column grid when edition content is shown. */
+export function shouldUseNewspaperThreeColGrid(input: {
+  showEditionHome: boolean;
+}): boolean {
+  return input.showEditionHome;
+}
+
+export function homeLeftRailColClass(): string {
+  return "xl:col-start-1";
+}
+
+export function homeFeaturedCenterColClass(): string {
+  return "xl:col-start-2";
+}
+
+export function homeRightRailColClass(): string {
+  return "xl:col-start-3";
+}
+
+export function centerBandGridColClass(): string {
+  return "xl:col-span-2 xl:col-start-1";
+}

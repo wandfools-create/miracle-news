@@ -262,6 +262,62 @@ function pickTodayEditionSpotlight(
   });
 }
 
+/** Secondary featured when today has only one story — prior eligible major article (1–7d). */
+export function pickFeaturedSecondaryBackfill(
+  articles: HomeArticleCard[],
+  editionDateKey: string,
+  nowMs: number,
+  options?: { excludeKeys?: Set<string> }
+): HomeArticleCard | null {
+  const picks = pickPreviousHighlights(articles, editionDateKey, nowMs, options);
+  return picks[0] ?? null;
+}
+
+function pickSpotlightWithBackfill(
+  articles: HomeArticleCard[],
+  editionDateKey: string,
+  nowMs: number,
+  options: {
+    excludeKeys?: Set<string>;
+    reservedCoreArticles?: HomeArticleCard[];
+    limit?: number;
+  } = {}
+): HomeArticleCard[] {
+  const limit = options.limit ?? 5;
+  const spotlight = pickTodayEditionSpotlight(articles, editionDateKey, nowMs, {
+    ...options,
+    limit,
+  });
+  if (spotlight.length >= limit) return spotlight;
+
+  const usedKeys = new Set(options.excludeKeys ?? []);
+  for (const article of spotlight) usedKeys.add(articleKey(article));
+
+  const backfillPool = filterHomeCoreEligible(
+    articles.filter((a) => !usedKeys.has(articleKey(a))),
+    nowMs
+  );
+  const sorted = [...backfillPool].sort((a, b) =>
+    compareTodayFirst(a, b, editionDateKey, nowMs)
+  );
+  const leaders = filterEventFamilyLeaders(
+    withInheritedEventFamilyGrades(sorted)
+  );
+  const need = limit - spotlight.length;
+  if (need <= 0 || leaders.length === 0) return spotlight;
+
+  const backfill = pickDiversifiedByEditorialScore(leaders, {
+    ...homeCoreSpotlightPickOptions(
+      options.reservedCoreArticles ?? [],
+      usedKeys
+    ),
+    limit: need,
+    nowMs,
+  });
+
+  return [...spotlight, ...backfill];
+}
+
 function isOngoingIssueBucket(items: HomeArticleCard[]): boolean {
   if (items.length >= 2) {
     const cluster = normalizeTopicClusterKey({
@@ -474,10 +530,28 @@ export function buildTodayEdition(
     }
   } else {
     featured = pickFeaturedArticle(todayCore, nowMs);
-    if (todayCount >= 2 && featured) {
+    if (featured && todayCount >= 2) {
       const hub = pickFeaturedHubArticles(todayCore, featured, { nowMs });
       secondaryFeatured = hub.leads[1] ?? null;
       featuredRelated = hub.related;
+    } else if (featured && todayCount === 1) {
+      secondaryFeatured = pickFeaturedSecondaryBackfill(
+        articles,
+        editionDateKey,
+        nowMs,
+        { excludeKeys: new Set([articleKey(featured)]) }
+      );
+      if (secondaryFeatured) {
+        const combined = filterHomeCoreEligible(
+          [featured, secondaryFeatured],
+          nowMs
+        );
+        const hub = pickFeaturedHubArticles(combined, featured, { nowMs });
+        const secondaryKey = articleKey(secondaryFeatured);
+        featuredRelated = hub.related.filter(
+          (a) => articleKey(a) !== secondaryKey
+        );
+      }
     }
   }
 
@@ -488,7 +562,7 @@ export function buildTodayEdition(
   const coreExclude = new Set<string>();
   for (const a of reservedCore) coreExclude.add(articleKey(a));
 
-  const spotlight = pickTodayEditionSpotlight(articles, editionDateKey, nowMs, {
+  const spotlight = pickSpotlightWithBackfill(articles, editionDateKey, nowMs, {
     excludeKeys: coreExclude,
     reservedCoreArticles: reservedCore,
     limit: 5,

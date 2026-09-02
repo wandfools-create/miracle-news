@@ -21,8 +21,6 @@ import NewsThumbnail, {
   type NewsThumbVariant,
 } from "@/components/home/NewsThumbnail";
 import {
-  newsHomeLeftOnlyGrid,
-  newsHomeRightOnlyGrid,
   newsHomeThreeColGrid,
   newsPageShell,
   type NewsPageRole,
@@ -35,10 +33,15 @@ import {
 } from "@/lib/home/buildHomeFilterHref";
 import { buildHomeFilterResults } from "@/lib/home/homeFilterResults";
 import {
+  centerBandGridColClass,
   centerBandGridRowClass,
+  homeFeaturedCenterColClass,
+  homeLeftRailColClass,
+  homeRightRailColClass,
   isGlobalHomeFilterMode,
   shouldShowLatestFallbackSection,
   shouldShowTopStoriesBand,
+  shouldUseNewspaperThreeColGrid,
 } from "@/lib/home/homeCenterLayoutPolicy";
 import {
   displaySourceTabLabel,
@@ -569,7 +572,7 @@ function FeaturedWithRelated({
           className={
             secondary
               ? "grid gap-5 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,0.85fr)] sm:gap-0 sm:items-start"
-              : undefined
+              : "max-w-3xl"
           }
         >
           <FeaturedHero
@@ -958,8 +961,7 @@ export default function HomeNewsView({
     topStories,
   ]);
   const useFeaturedComboLayout =
-    showFeatured &&
-    (featuredHub.leads.length >= 2 || featuredHub.related.length > 0);
+    showFeatured && featuredHub.leads.length > 0;
   const showTopStoriesBand = shouldShowTopStoriesBand({
     showTopStories,
     isCarryover,
@@ -976,16 +978,6 @@ export default function HomeNewsView({
     trendingIssues &&
       (trendingIssues.us.length > 0 || trendingIssues.kr.length > 0)
   );
-  /** Desktop newspaper rails: left spotlight, right trending (no sticky). */
-  const showLeftRail = showSidebar;
-  const showRightRail = showTrending;
-  const homeGridClass = showLeftRail && showRightRail
-    ? newsHomeThreeColGrid
-    : showLeftRail
-      ? newsHomeLeftOnlyGrid
-      : showRightRail
-        ? newsHomeRightOnlyGrid
-        : "min-w-0";
   const sourceFromUrl = parseHomeSourceFilter(searchParams.get("source"));
   const categoryFromUrl = parseHomeCategoryFilter(searchParams.get("category"));
 
@@ -1140,6 +1132,12 @@ export default function HomeNewsView({
       showSidebar ||
       showTrending ||
       showPreviousHighlights);
+
+  const homeGridClass = shouldUseNewspaperThreeColGrid({ showEditionHome })
+    ? newsHomeThreeColGrid
+    : "min-w-0";
+  const showLeftRailContent = showSidebar;
+  const showRightRail = showTrending;
 
   const trendingPanel = showTrending && trendingIssues && !isFilterResultMode ? (
     <TrendingIssuesPanel
@@ -1357,16 +1355,20 @@ export default function HomeNewsView({
               <TodayEditionHeader meta={todayEditionMeta} locale={locale} />
             ) : null}
 
-            {/* Left rail — mobile after trending */}
-            {showLeftRail && !isFilterResultMode ? (
-              <aside className="order-3 min-w-0 xl:order-none xl:col-start-1 xl:row-start-2">
-                <SpotlightRail
-                  articles={displaySections.sidebar}
-                  locale={locale}
-                  labels={labels}
-                  articleHrefPrefix={articleHrefPrefix}
-                  articleHrefFor={articleHrefFor}
-                />
+            {/* Left rail — mobile after trending; column always reserved on desktop */}
+            {!isFilterResultMode ? (
+              <aside
+                className={`order-3 min-w-0 xl:order-none xl:row-start-2 ${homeLeftRailColClass()}`}
+              >
+                {showLeftRailContent ? (
+                  <SpotlightRail
+                    articles={displaySections.sidebar}
+                    locale={locale}
+                    labels={labels}
+                    articleHrefPrefix={articleHrefPrefix}
+                    articleHrefFor={articleHrefFor}
+                  />
+                ) : null}
               </aside>
             ) : null}
 
@@ -1374,9 +1376,7 @@ export default function HomeNewsView({
             {showFeaturedSection && !isFilterResultMode ? (
               <section
                 id="featured"
-                className={`order-1 min-w-0 scroll-mt-6 xl:order-none xl:row-start-2 ${
-                  showLeftRail ? "xl:col-start-2" : "xl:col-start-1"
-                }`}
+                className={`order-1 min-w-0 scroll-mt-6 xl:order-none xl:row-start-2 ${homeFeaturedCenterColClass()}`}
                 aria-labelledby="home-featured"
               >
                 <SectionHeading
@@ -1406,16 +1406,12 @@ export default function HomeNewsView({
               </section>
             ) : null}
 
-            {/* Right rail */}
-            {showRightRail && trendingPanel && !isFilterResultMode ? (
+            {/* Right rail — column always reserved on desktop */}
+            {!isFilterResultMode ? (
               <aside
-                className={
-                  showLeftRail
-                    ? "order-2 min-w-0 xl:order-none xl:col-start-3 xl:row-start-2 xl:row-span-2"
-                    : "order-2 min-w-0 xl:order-none xl:col-start-2 xl:row-start-2 xl:row-span-2"
-                }
+                className={`order-2 min-w-0 xl:order-none xl:row-start-2 xl:row-span-2 ${homeRightRailColClass()}`}
               >
-                {trendingPanel}
+                {showRightRail && trendingPanel ? trendingPanel : null}
               </aside>
             ) : null}
 
@@ -1423,15 +1419,7 @@ export default function HomeNewsView({
             {showTopStoriesBand && topStories && !isFilterResultMode ? (
               <section
                 id="latest"
-                className={`order-1 min-w-0 scroll-mt-6 xl:order-none ${centerBandRowClass} ${
-                  showLeftRail && showRightRail
-                    ? "xl:col-span-2 xl:col-start-1"
-                    : showLeftRail
-                      ? "xl:col-span-2 xl:col-start-1"
-                      : showRightRail
-                        ? "xl:col-start-1"
-                        : ""
-                }`}
+                className={`order-1 min-w-0 scroll-mt-6 xl:order-none ${centerBandRowClass} ${centerBandGridColClass()}`}
               >
                 <SectionHeading
                   eyebrow={labels.latestEyebrow}
@@ -1480,15 +1468,7 @@ export default function HomeNewsView({
             {showLatestFallbackSection && !isFilterResultMode ? (
               <section
                 id="latest"
-                className={`order-1 min-w-0 scroll-mt-6 xl:order-none ${centerBandRowClass} ${
-                  showLeftRail && showRightRail
-                    ? "xl:col-span-2 xl:col-start-1"
-                    : showLeftRail
-                      ? "xl:col-span-2 xl:col-start-1"
-                      : showRightRail
-                        ? "xl:col-start-1"
-                        : ""
-                }`}
+                className={`order-1 min-w-0 scroll-mt-6 xl:order-none ${centerBandRowClass} ${centerBandGridColClass()}`}
               >
                 <SectionHeading
                   eyebrow={labels.latestEyebrow}

@@ -3,12 +3,8 @@ import { sortArticlesForCategorySection } from "@/lib/article/sourcePolicy";
 import { featuredSourceConfigs, normalizeSource } from "@/lib/koreanArticleDisplay";
 import { sortSourceLeadCards } from "@/lib/sourceLeadOrder";
 import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
+import { sortHomeArticlesForDisplay } from "./featuredSelection";
 import {
-  pickFeaturedHubArticles,
-  sortHomeArticlesForDisplay,
-} from "./featuredSelection";
-import {
-  filterHomeCoreEligible,
   sortArticlesByEditorialScore,
 } from "./editorialRanking";
 import {
@@ -57,20 +53,12 @@ export function prepareEditionHomeSections(
   let featuredLeads: HomeArticleCard[] = [];
   let featuredRelated: HomeArticleCard[] = [];
 
-  if (todayEdition.status === "carryover" && featured) {
-    featuredLeads = secondaryFeatured ? [featured, secondaryFeatured] : [featured];
-    featuredRelated = todayEdition.featuredRelated ?? [];
-  } else if (todayEdition.todayCount === 0) {
-    featuredLeads = [];
-    featuredRelated = [];
-  } else if (todayEdition.todayCount === 1 && featured) {
+  if (featured && todayEdition.status !== "preparing") {
     featuredLeads = [featured];
-    featuredRelated = [];
-  } else if (featured) {
-    const todayCore = filterHomeCoreEligible(todayEdition.todayArticles, nowMs);
-    const hub = pickFeaturedHubArticles(todayCore, featured, { nowMs });
-    featuredLeads = hub.leads;
-    featuredRelated = hub.related;
+    if (secondaryFeatured) {
+      featuredLeads.push(secondaryFeatured);
+    }
+    featuredRelated = todayEdition.featuredRelated;
   }
 
   const featuredExclude = new Set<string>();

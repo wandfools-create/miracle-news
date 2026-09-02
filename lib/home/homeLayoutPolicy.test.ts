@@ -76,8 +76,11 @@ describe("home sidebar layout and category nav (fixture)", () => {
     );
     assert.match(view, /SpotlightRail/);
     assert.match(view, /newsHomeThreeColGrid/);
-    assert.match(view, /showLeftRail/);
+    assert.match(view, /showLeftRailContent/);
+    assert.match(view, /shouldUseNewspaperThreeColGrid/);
     assert.match(view, /showRightRail/);
+    assert.doesNotMatch(view, /newsHomeRightOnlyGrid/);
+    assert.doesNotMatch(view, /newsHomeLeftOnlyGrid/);
     assert.match(view, /xl:col-span-full/);
     assert.match(view, /xl:row-span-2/);
     assert.doesNotMatch(view, /lg:sticky|sticky |fixed |position:\s*sticky/);
@@ -113,7 +116,7 @@ describe("home sidebar layout and category nav (fixture)", () => {
     assert.match(view, /PreviousHighlightsSection/);
     assert.match(view, /id="featured"[\s\S]*order-1/);
     assert.match(view, /order-2 min-w-0 xl:order-none/);
-    assert.match(view, /order-3 min-w-0 xl:order-none xl:col-start-1/);
+    assert.match(view, /order-3 min-w-0 xl:order-none xl:row-start-2/);
     assert.match(view, /order-5 min-w-0 scroll-mt-6/);
     assert.match(view, /order-6 min-w-0 scroll-mt-6/);
     assert.match(view, /topStoriesHasLeft && topStoriesHasRight/);
