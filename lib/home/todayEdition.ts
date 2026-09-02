@@ -273,6 +273,72 @@ export function pickFeaturedSecondaryBackfill(
   return picks[0] ?? null;
 }
 
+/**
+ * Ensure a second featured card whenever the eligible pool has another article.
+ * Selection order: today core → today published → 7-day core.
+ * Angle/grade constraints may prefer a better pair, but must not leave the
+ * second slot empty when another eligible article_id exists.
+ */
+export function pickSecondaryFeaturedFallback(
+  articles: HomeArticleCard[],
+  featured: HomeArticleCard,
+  options: {
+    nowMs: number;
+    editionDateKey: string;
+    todayArticles?: HomeArticleCard[];
+  }
+): HomeArticleCard | null {
+  const nowMs = options.nowMs;
+  const featuredKey = articleKey(featured);
+  const exclude = new Set<string>([featuredKey]);
+
+  const pickFrom = (pool: HomeArticleCard[]): HomeArticleCard | null => {
+    const eligible = filterHomeCoreEligible(
+      pool.filter((a) => articleKey(a) !== featuredKey && a.id !== featured.id),
+      nowMs
+    );
+    if (eligible.length === 0) return null;
+
+    const hub = pickFeaturedHubArticles([...eligible, featured], featured, {
+      nowMs,
+    });
+    if (hub.leads[1] && articleKey(hub.leads[1]) !== featuredKey) {
+      return hub.leads[1];
+    }
+
+    const leaders = filterEventFamilyLeaders(
+      withInheritedEventFamilyGrades(eligible)
+    );
+    const rankedPool = leaders.length > 0 ? leaders : eligible;
+    return (
+      pickDiversifiedByEditorialScore(rankedPool, {
+        limit: 1,
+        nowMs,
+        sourceCap: 2,
+        balanceRegions: false,
+        suppressTopicClusters: false,
+        excludeKeys: exclude,
+        reservedCoreArticles: [featured],
+      })[0] ??
+      [...rankedPool].sort((a, b) =>
+        compareArticlesByEditorialScore(a, b, nowMs)
+      )[0] ??
+      null
+    );
+  };
+
+  const todayArticles = options.todayArticles ?? [];
+  const todayCore = filterHomeCoreEligible(todayArticles, nowMs);
+  return (
+    pickFrom(todayCore) ??
+    pickFrom(todayArticles) ??
+    pickFeaturedSecondaryBackfill(articles, options.editionDateKey, nowMs, {
+      excludeKeys: exclude,
+    }) ??
+    pickFrom(articles)
+  );
+}
+
 function pickSpotlightWithBackfill(
   articles: HomeArticleCard[],
   editionDateKey: string,
@@ -534,24 +600,25 @@ export function buildTodayEdition(
       const hub = pickFeaturedHubArticles(todayCore, featured, { nowMs });
       secondaryFeatured = hub.leads[1] ?? null;
       featuredRelated = hub.related;
-    } else if (featured && todayCount === 1) {
-      secondaryFeatured = pickFeaturedSecondaryBackfill(
-        articles,
-        editionDateKey,
-        nowMs,
-        { excludeKeys: new Set([articleKey(featured)]) }
+    }
+  }
+
+  if (featured && !secondaryFeatured) {
+    secondaryFeatured = pickSecondaryFeaturedFallback(articles, featured, {
+      nowMs,
+      editionDateKey,
+      todayArticles,
+    });
+    if (secondaryFeatured && featuredRelated.length === 0) {
+      const combined = filterHomeCoreEligible(
+        [featured, secondaryFeatured, ...todayArticles],
+        nowMs
       );
-      if (secondaryFeatured) {
-        const combined = filterHomeCoreEligible(
-          [featured, secondaryFeatured],
-          nowMs
-        );
-        const hub = pickFeaturedHubArticles(combined, featured, { nowMs });
-        const secondaryKey = articleKey(secondaryFeatured);
-        featuredRelated = hub.related.filter(
-          (a) => articleKey(a) !== secondaryKey
-        );
-      }
+      const hub = pickFeaturedHubArticles(combined, featured, { nowMs });
+      const secondaryKey = articleKey(secondaryFeatured);
+      featuredRelated = hub.related.filter(
+        (a) => articleKey(a) !== secondaryKey
+      );
     }
   }
 
@@ -562,18 +629,21 @@ export function buildTodayEdition(
   const coreExclude = new Set<string>();
   for (const a of reservedCore) coreExclude.add(articleKey(a));
 
-  const spotlight = pickSpotlightWithBackfill(articles, editionDateKey, nowMs, {
-    excludeKeys: coreExclude,
-    reservedCoreArticles: reservedCore,
-    limit: 5,
-  });
-
   const trending = pickTodayEditionTrendingIssues(
     articles,
     options.locale ?? "ko",
     nowMs,
     3
   );
+
+  const trendingKeys = collectTrendingArticleKeys(trending, articles);
+  for (const k of trendingKeys) coreExclude.add(k);
+
+  const spotlight = pickSpotlightWithBackfill(articles, editionDateKey, nowMs, {
+    excludeKeys: coreExclude,
+    reservedCoreArticles: reservedCore,
+    limit: 5,
+  });
 
   const usedSurfaceKeys = collectUsedSurfaceArticleKeys({
     featured,
