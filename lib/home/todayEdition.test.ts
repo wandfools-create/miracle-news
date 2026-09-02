@@ -273,6 +273,59 @@ describe("todayEdition", () => {
     assert.ok(!allIssueSlugs.includes("ancient"));
   });
 
+  it("EN and KO both keep US trending for topic-keyed issues older than 24h", () => {
+    const published = new Date(NOW_AUG28_NOON_ET - 40 * 3600_000).toISOString();
+    const base = {
+      id: "congo-us",
+      article_id: "congo-us",
+      topic_key: "congo-ebola-outbreak",
+      topic_label: "콩고 에볼라 발병",
+      source: "ap",
+      source_country: "US",
+      category: "society",
+      published_at: published,
+      source_published_at: published,
+      title_original: "Congo authorities report more than 6000 cases and nearly 3000 deaths",
+    } as const;
+
+    const koArticles = [
+      card({
+        ...base,
+        title: "콩고, 에볼라 확진 6,000건 초과 및 사망 2,911명 보고",
+        summary: "공식 집계가 발표됐다",
+        slug: "congo-ko",
+      }),
+    ];
+    const enArticles = [
+      card({
+        ...base,
+        title: "Congo authorities report more than 6000 cases and nearly 3000 deaths",
+        summary: "Officials reported rising figures",
+        slug: "congo-en",
+      }),
+    ];
+
+    const ko = buildTodayEdition(koArticles, {
+      nowMs: NOW_AUG28_NOON_ET,
+      locale: "ko",
+    });
+    const en = buildTodayEdition(enArticles, {
+      nowMs: NOW_AUG28_NOON_ET,
+      locale: "en",
+    });
+
+    assert.ok((ko.trending?.us.length ?? 0) > 0, "KO US trending missing");
+    assert.ok((en.trending?.us.length ?? 0) > 0, "EN US trending missing");
+    assert.equal(
+      ko.trending?.us[0]?.id.startsWith("topic:"),
+      true
+    );
+    assert.equal(
+      en.trending?.us[0]?.id.startsWith("topic:"),
+      true
+    );
+  });
+
   it("previous highlights include yesterday through 7 NY days ago", () => {
     const editionKey = getEditionDateKey(NOW_AUG28_NOON_ET);
     const range = previousHighlightsDateKeyRange(editionKey);

@@ -427,6 +427,16 @@ function enrichTrendingWithContinuingFlag(
     const isOlderThan24h = ageMs > SPOTLIGHT_MAX_MS;
 
     if (isOlderThan24h) {
+      /**
+       * Topic-keyed issues already share a locale-stable topic_key identity.
+       * Do not drop them based on localized title/summary lifecycle text
+       * (e.g. KO "사망 2,911" → official_toll while EN "deaths" → unknown),
+       * which would erase an entire US/KR Trending block on one language only.
+       */
+      if (issue.id.startsWith("topic:") && lead.topic_key?.trim()) {
+        return { ...issue, continuingIssue: true };
+      }
+
       const bucketArticles = articles.filter((a) => {
         const cluster = normalizeTopicClusterKey({
           topic_key: a.topic_key,
