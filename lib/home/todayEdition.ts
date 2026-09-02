@@ -29,7 +29,8 @@ import type {
 import { getArticleRegion } from "./articleRegion";
 
 export const SPOTLIGHT_MAX_MS = 24 * 60 * 60 * 1000;
-export const TRENDING_MAX_MS = 24 * 60 * 60 * 1000;
+/** Outer age bound for Trending candidates. Fresher stories rank first; no continuing pin. */
+export const TRENDING_MAX_MS = 48 * 60 * 60 * 1000;
 export const PREVIOUS_HIGHLIGHTS_MIN_DAYS = 1;
 export const PREVIOUS_HIGHLIGHTS_MAX_DAYS = 7;
 export const PREVIOUS_HIGHLIGHTS_LIMIT = 5;
@@ -387,8 +388,14 @@ export function pickTodayEditionTrendingIssues(
   nowMs: number,
   maxPerRegion = 3
 ): TrendingIssuesBlock | null {
-  const within24h = filterBySitePublishAge(articles, nowMs, TRENDING_MAX_MS);
-  const block = pickTrendingIssues(within24h, pageLocale, maxPerRegion, nowMs);
+  // Prefer the last 24h; if that pool is empty, allow up to 48h so the rail
+  // still fills with the newest available stories (no continuing-issue pin).
+  const within24h = filterBySitePublishAge(articles, nowMs, SPOTLIGHT_MAX_MS);
+  const pool =
+    within24h.length > 0
+      ? within24h
+      : filterBySitePublishAge(articles, nowMs, TRENDING_MAX_MS);
+  const block = pickTrendingIssues(pool, pageLocale, maxPerRegion, nowMs);
 
   if (block.us.length === 0 && block.kr.length === 0) return null;
   return block;

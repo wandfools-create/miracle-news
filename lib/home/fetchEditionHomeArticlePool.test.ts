@@ -117,22 +117,46 @@ describe("homePublishedArticleSort", () => {
     assert.equal(new Set(ids).size, 200);
   });
 
-  it("orders selected ids by source_published_at then published_at then id", () => {
+  it("orders selected ids by published_at then source_published_at then id", () => {
     const ordered = selectHomePublishedArticleIds(
       [
         articleSortRow("id-001", "2026-08-20T00:00:00.000Z"),
-        articleSortRow("id-002", "2026-08-25T00:00:00.000Z", "2026-08-24T00:00:00.000Z"),
+        // Older source date, but newest site publish — must win.
+        articleSortRow("id-002", "2026-08-20T00:00:00.000Z", "2026-08-28T00:00:00.000Z"),
         articleSortRow("id-003", "2026-08-25T00:00:00.000Z", "2026-08-26T00:00:00.000Z"),
       ],
       3
     );
-    assert.deepEqual(ordered, ["id-003", "id-002", "id-001"]);
+    assert.deepEqual(ordered, ["id-002", "id-003", "id-001"]);
     assert.ok(
       compareHomePublishedArticles(
-        articleSortRow("id-003", "2026-08-25T00:00:00.000Z", "2026-08-26T00:00:00.000Z"),
-        articleSortRow("id-002", "2026-08-25T00:00:00.000Z", "2026-08-24T00:00:00.000Z")
+        articleSortRow("id-002", "2026-08-20T00:00:00.000Z", "2026-08-28T00:00:00.000Z"),
+        articleSortRow("id-003", "2026-08-25T00:00:00.000Z", "2026-08-26T00:00:00.000Z")
       ) < 0
     );
+  });
+
+  it("keeps newest published_at inside the 200 limit when source dates are older", () => {
+    const olderBatch = Array.from({ length: 200 }, (_, index) => {
+      const hex = index.toString(16).padStart(12, "0");
+      return articleSortRow(
+        `aa${String(index).padStart(6, "0")}-4000-8000-${hex}`,
+        `2026-08-30T${String(index % 24).padStart(2, "0")}:00:00.000Z`,
+        `2026-08-20T${String(index % 24).padStart(2, "0")}:00:00.000Z`
+      );
+    });
+    const recentPublish = articleSortRow(
+      "bb000001-4000-8000-000000000001",
+      "2026-08-01T00:00:00.000Z", // old source
+      "2026-09-01T12:00:00.000Z" // newest site publish
+    );
+    const ids = selectHomePublishedArticleIds(
+      [...olderBatch, recentPublish],
+      HOME_PUBLISHED_FETCH_LIMIT
+    );
+    assert.equal(ids.length, 200);
+    assert.equal(ids[0], recentPublish.id);
+    assert.ok(ids.includes(recentPublish.id));
   });
 });
 

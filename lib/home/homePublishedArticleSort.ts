@@ -18,19 +18,22 @@ function compareTimestampDesc(
   return left > right ? -1 : 1;
 }
 
-/** Stable ordering for the shared home article pool. */
+/** Stable ordering for the shared home article pool.
+ * Prefer Hannoon published_at so recently published stories are not dropped
+ * when source_published_at is older and HOME_PUBLISHED_FETCH_LIMIT truncates.
+ */
 export function compareHomePublishedArticles(
   a: HomePublishedArticleSortRow,
   b: HomePublishedArticleSortRow
 ): number {
+  const publishedCmp = compareTimestampDesc(a.published_at, b.published_at);
+  if (publishedCmp !== 0) return publishedCmp;
+
   const sourceCmp = compareTimestampDesc(
     a.source_published_at,
     b.source_published_at
   );
   if (sourceCmp !== 0) return sourceCmp;
-
-  const publishedCmp = compareTimestampDesc(a.published_at, b.published_at);
-  if (publishedCmp !== 0) return publishedCmp;
 
   if (a.id === b.id) return 0;
   return a.id > b.id ? -1 : 1;

@@ -68,6 +68,18 @@ describe("production-shaped home two-card regression", () => {
         ai_recommend_grade: "best",
         is_top_story: true,
       }),
+      card({
+        id: "rail-fill-a",
+        published_at: "2026-08-31T12:00:00.000Z",
+        source: "ap",
+        category: "world",
+      }),
+      card({
+        id: "rail-fill-b",
+        published_at: "2026-08-31T10:00:00.000Z",
+        source: "bbc",
+        category: "world",
+      }),
     ];
 
     const edition = buildTodayEdition(articles, { nowMs: NOW, locale: "ko" });

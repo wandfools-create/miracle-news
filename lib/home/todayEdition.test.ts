@@ -234,7 +234,7 @@ describe("todayEdition", () => {
     assert.ok(!ids.includes("week-old"));
   });
 
-  it("trending excludes articles older than 24h", () => {
+  it("trending prefers 24h pool and excludes articles older than 48h", () => {
     const articles = [
       card({
         id: "recent-topic-a",
@@ -251,6 +251,11 @@ describe("todayEdition", () => {
         title: "update on missing",
         summary: "search ongoing",
         published_at: new Date(NOW_AUG28_NOON_ET - 18 * 3600_000).toISOString(),
+      }),
+      card({
+        id: "stale-40h",
+        topic_key: "stale",
+        published_at: new Date(NOW_AUG28_NOON_ET - 40 * 3600_000).toISOString(),
       }),
       card({
         id: "ancient",
@@ -271,9 +276,10 @@ describe("todayEdition", () => {
       ...i.relatedArticles.map((r) => r.slug),
     ]);
     assert.ok(!allIssueSlugs.includes("ancient"));
+    assert.ok(!allIssueSlugs.includes("stale-40h"));
   });
 
-  it("EN and KO both drop topic-keyed trending older than 24h", () => {
+  it("when 24h pool is empty, KO/EN trending fallback uses newest ≤48h stories", () => {
     const published = new Date(NOW_AUG28_NOON_ET - 40 * 3600_000).toISOString();
     const base = {
       id: "congo-us",
@@ -314,8 +320,8 @@ describe("todayEdition", () => {
       locale: "en",
     });
 
-    assert.equal(ko.trending, null);
-    assert.equal(en.trending, null);
+    assert.ok((ko.trending?.us.length ?? 0) > 0);
+    assert.ok((en.trending?.us.length ?? 0) > 0);
   });
 
   it("previous highlights include yesterday through 7 NY days ago", () => {
