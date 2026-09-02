@@ -1,16 +1,11 @@
 import { categoryOrder } from "@/lib/koreanArticleDisplay";
-import { sortArticlesForCategorySection } from "@/lib/article/sourcePolicy";
-import { featuredSourceConfigs, normalizeSource } from "@/lib/koreanArticleDisplay";
+import { featuredSourceConfigs } from "@/lib/koreanArticleDisplay";
 import { sortSourceLeadCards } from "@/lib/sourceLeadOrder";
 import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
 import {
-  pickFeaturedHubArticles,
-  sortHomeArticlesForDisplay,
-} from "./featuredSelection";
-import {
-  filterHomeCoreEligible,
-  sortArticlesByEditorialScore,
-} from "./editorialRanking";
+  pickHomeSourceLeadMap,
+  sortHomeCategoryArticlesForDisplay,
+} from "./homeArchiveDisplay";
 import {
   buildTodayEdition,
   pickTodayTopStoriesColumns,
@@ -57,20 +52,12 @@ export function prepareEditionHomeSections(
   let featuredLeads: HomeArticleCard[] = [];
   let featuredRelated: HomeArticleCard[] = [];
 
-  if (todayEdition.status === "carryover" && featured) {
-    featuredLeads = secondaryFeatured ? [featured, secondaryFeatured] : [featured];
-    featuredRelated = todayEdition.featuredRelated ?? [];
-  } else if (todayEdition.todayCount === 0) {
-    featuredLeads = [];
-    featuredRelated = [];
-  } else if (todayEdition.todayCount === 1 && featured) {
+  if (featured && todayEdition.status !== "preparing") {
     featuredLeads = [featured];
-    featuredRelated = [];
-  } else if (featured) {
-    const todayCore = filterHomeCoreEligible(todayEdition.todayArticles, nowMs);
-    const hub = pickFeaturedHubArticles(todayCore, featured, { nowMs });
-    featuredLeads = hub.leads;
-    featuredRelated = hub.related;
+    if (secondaryFeatured) {
+      featuredLeads.push(secondaryFeatured);
+    }
+    featuredRelated = todayEdition.featuredRelated;
   }
 
   const featuredExclude = new Set<string>();
@@ -85,13 +72,7 @@ export function prepareEditionHomeSections(
     { excludeKeys: featuredExclude }
   );
 
-  const sourceLeadMap: Record<string, HomeArticleCard> = {};
-  for (const article of sortArticlesByEditorialScore(allArticles, nowMs)) {
-    const sourceKey = normalizeSource(article.source);
-    if (!sourceLeadMap[sourceKey]) {
-      sourceLeadMap[sourceKey] = article;
-    }
-  }
+  const sourceLeadMap = pickHomeSourceLeadMap(allArticles, nowMs);
 
   const sourceLeadCards = sortSourceLeadCards(
     featuredSourceConfigs
@@ -110,17 +91,17 @@ export function prepareEditionHomeSections(
   );
 
   const groupedByCategory: Record<string, HomeArticleCard[]> = {};
-  for (const article of sortHomeArticlesForDisplay(allArticles, nowMs)) {
+  for (const article of allArticles) {
     const key = article.category ?? "other";
     if (!groupedByCategory[key]) groupedByCategory[key] = [];
     groupedByCategory[key].push(article);
   }
   for (const key of Object.keys(groupedByCategory)) {
-    const scored = sortArticlesByEditorialScore(
+    groupedByCategory[key] = sortHomeCategoryArticlesForDisplay(
       groupedByCategory[key],
+      key,
       nowMs
     );
-    groupedByCategory[key] = sortArticlesForCategorySection(scored, key);
   }
 
   const visibleCategories = categoryOrder.filter(

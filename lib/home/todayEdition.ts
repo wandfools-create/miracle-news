@@ -15,7 +15,6 @@ import {
   pickDiversifiedByEditorialScore,
 } from "./editorialRanking";
 import {
-  detectEventLifecycleStage,
   filterEventFamilyLeaders,
   withInheritedEventFamilyGrades,
 } from "./eventFamilyUpdate";
@@ -23,15 +22,14 @@ import { formatEditionLastUpdated } from "./homeRelativeTime";
 import { offsetNyDateKey, nyDateKeyDiff } from "./homeRelativeTime";
 import { pickTrendingIssues } from "./pickTrendingIssues";
 import { pickPreviousEditionFeatured } from "./pickPreviousEditionFeatured";
-import { normalizeTopicClusterKey } from "./topicClusterKey";
 import type {
   HomeArticleCard,
-  TrendingIssue,
   TrendingIssuesBlock,
 } from "./types";
 import { getArticleRegion } from "./articleRegion";
 
 export const SPOTLIGHT_MAX_MS = 24 * 60 * 60 * 1000;
+/** Outer age bound for Trending candidates. Fresher stories rank first; no continuing pin. */
 export const TRENDING_MAX_MS = 48 * 60 * 60 * 1000;
 export const PREVIOUS_HIGHLIGHTS_MIN_DAYS = 1;
 export const PREVIOUS_HIGHLIGHTS_MAX_DAYS = 7;
@@ -262,82 +260,126 @@ function pickTodayEditionSpotlight(
   });
 }
 
-function isOngoingIssueBucket(items: HomeArticleCard[]): boolean {
-  if (items.length >= 2) {
-    const cluster = normalizeTopicClusterKey({
-      topic_key: items[0]?.topic_key,
-      topic_label: items[0]?.topic_label,
-      title: items[0]?.title ?? "",
-    });
-    if (cluster) return true;
-
-    const families = new Set(
-      items.map((a) => a.topic_key ?? a.topic_label ?? "").filter(Boolean)
-    );
-    if (families.size >= 1 && items.length >= 2) return true;
-  }
-
-  const lead = items[0];
-  if (!lead) return false;
-  const stage = detectEventLifecycleStage(lead);
-  return stage === "active_crisis" || stage === "official_toll";
+/** Secondary featured when today has only one story — prior eligible major article (1–7d). */
+export function pickFeaturedSecondaryBackfill(
+  articles: HomeArticleCard[],
+  editionDateKey: string,
+  nowMs: number,
+  options?: { excludeKeys?: Set<string> }
+): HomeArticleCard | null {
+  const picks = pickPreviousHighlights(articles, editionDateKey, nowMs, options);
+  return picks[0] ?? null;
 }
 
-function enrichTrendingWithContinuingFlag(
-  block: TrendingIssuesBlock,
+/**
+ * Ensure a second featured card whenever the eligible pool has another article.
+ * Selection order: today core → today published → 7-day core.
+ * Angle/grade constraints may prefer a better pair, but must not leave the
+ * second slot empty when another eligible article_id exists.
+ */
+export function pickSecondaryFeaturedFallback(
   articles: HomeArticleCard[],
-  nowMs: number
-): TrendingIssuesBlock {
-  const articleBySlug = new Map(
-    articles.filter((a) => a.slug?.trim()).map((a) => [a.slug!.trim(), a])
-  );
+  featured: HomeArticleCard,
+  options: {
+    nowMs: number;
+    editionDateKey: string;
+    todayArticles?: HomeArticleCard[];
+  }
+): HomeArticleCard | null {
+  const nowMs = options.nowMs;
+  const featuredKey = articleKey(featured);
+  const exclude = new Set<string>([featuredKey]);
 
-  const enrich = (issue: TrendingIssue): TrendingIssue | null => {
-    const slug = issue.primaryArticle?.slug?.trim();
-    const lead = slug ? articleBySlug.get(slug) : undefined;
-    if (!lead) return issue;
+  const pickFrom = (pool: HomeArticleCard[]): HomeArticleCard | null => {
+    const eligible = filterHomeCoreEligible(
+      pool.filter((a) => articleKey(a) !== featuredKey && a.id !== featured.id),
+      nowMs
+    );
+    if (eligible.length === 0) return null;
 
-    const leadTs = getSitePublishedTimestamp(lead);
-    if (leadTs <= 0) return null;
-    if (nowMs - leadTs > TRENDING_MAX_MS) return null;
-
-    const ageMs = nowMs - leadTs;
-    const isOlderThan24h = ageMs > SPOTLIGHT_MAX_MS;
-
-    if (isOlderThan24h) {
-      const bucketArticles = articles.filter((a) => {
-        const cluster = normalizeTopicClusterKey({
-          topic_key: a.topic_key,
-          topic_label: a.topic_label,
-          title: a.title,
-        });
-        if (issue.id.startsWith("topic:") && cluster) {
-          return issue.id === `topic:${cluster}`;
-        }
-        if (issue.id.startsWith("category:")) {
-          const [, region, category] = issue.id.split(":");
-          return (
-            a.category === category &&
-            (region === "us" || region === "kr")
-          );
-        }
-        return false;
-      });
-
-      if (!isOngoingIssueBucket(bucketArticles.length ? bucketArticles : [lead])) {
-        return null;
-      }
-
-      return { ...issue, continuingIssue: true };
+    const hub = pickFeaturedHubArticles([...eligible, featured], featured, {
+      nowMs,
+    });
+    if (hub.leads[1] && articleKey(hub.leads[1]) !== featuredKey) {
+      return hub.leads[1];
     }
 
-    return issue;
+    const leaders = filterEventFamilyLeaders(
+      withInheritedEventFamilyGrades(eligible)
+    );
+    const rankedPool = leaders.length > 0 ? leaders : eligible;
+    return (
+      pickDiversifiedByEditorialScore(rankedPool, {
+        limit: 1,
+        nowMs,
+        sourceCap: 2,
+        balanceRegions: false,
+        suppressTopicClusters: false,
+        excludeKeys: exclude,
+        reservedCoreArticles: [featured],
+      })[0] ??
+      [...rankedPool].sort((a, b) =>
+        compareArticlesByEditorialScore(a, b, nowMs)
+      )[0] ??
+      null
+    );
   };
 
-  return {
-    us: block.us.map(enrich).filter(Boolean) as TrendingIssue[],
-    kr: block.kr.map(enrich).filter(Boolean) as TrendingIssue[],
-  };
+  const todayArticles = options.todayArticles ?? [];
+  const todayCore = filterHomeCoreEligible(todayArticles, nowMs);
+  return (
+    pickFrom(todayCore) ??
+    pickFrom(todayArticles) ??
+    pickFeaturedSecondaryBackfill(articles, options.editionDateKey, nowMs, {
+      excludeKeys: exclude,
+    }) ??
+    pickFrom(articles)
+  );
+}
+
+function pickSpotlightWithBackfill(
+  articles: HomeArticleCard[],
+  editionDateKey: string,
+  nowMs: number,
+  options: {
+    excludeKeys?: Set<string>;
+    reservedCoreArticles?: HomeArticleCard[];
+    limit?: number;
+  } = {}
+): HomeArticleCard[] {
+  const limit = options.limit ?? 5;
+  const spotlight = pickTodayEditionSpotlight(articles, editionDateKey, nowMs, {
+    ...options,
+    limit,
+  });
+  if (spotlight.length >= limit) return spotlight;
+
+  const usedKeys = new Set(options.excludeKeys ?? []);
+  for (const article of spotlight) usedKeys.add(articleKey(article));
+
+  const backfillPool = filterHomeCoreEligible(
+    articles.filter((a) => !usedKeys.has(articleKey(a))),
+    nowMs
+  );
+  const sorted = [...backfillPool].sort((a, b) =>
+    compareTodayFirst(a, b, editionDateKey, nowMs)
+  );
+  const leaders = filterEventFamilyLeaders(
+    withInheritedEventFamilyGrades(sorted)
+  );
+  const need = limit - spotlight.length;
+  if (need <= 0 || leaders.length === 0) return spotlight;
+
+  const backfill = pickDiversifiedByEditorialScore(leaders, {
+    ...homeCoreSpotlightPickOptions(
+      options.reservedCoreArticles ?? [],
+      usedKeys
+    ),
+    limit: need,
+    nowMs,
+  });
+
+  return [...spotlight, ...backfill];
 }
 
 export function pickTodayEditionTrendingIssues(
@@ -346,14 +388,17 @@ export function pickTodayEditionTrendingIssues(
   nowMs: number,
   maxPerRegion = 3
 ): TrendingIssuesBlock | null {
-  const within48h = filterBySitePublishAge(articles, nowMs, TRENDING_MAX_MS);
-  const raw = pickTrendingIssues(within48h, pageLocale, maxPerRegion, nowMs);
+  // Prefer the last 24h; if that pool is empty, allow up to 48h so the rail
+  // still fills with the newest available stories (no continuing-issue pin).
+  const within24h = filterBySitePublishAge(articles, nowMs, SPOTLIGHT_MAX_MS);
+  const pool =
+    within24h.length > 0
+      ? within24h
+      : filterBySitePublishAge(articles, nowMs, TRENDING_MAX_MS);
+  const block = pickTrendingIssues(pool, pageLocale, maxPerRegion, nowMs);
 
-  // Restrict pool to 48h — pickTrendingIssues may expand via filterArticlesForHomeSurface.
-  const filtered = enrichTrendingWithContinuingFlag(raw, within48h, nowMs);
-
-  if (filtered.us.length === 0 && filtered.kr.length === 0) return null;
-  return filtered;
+  if (block.us.length === 0 && block.kr.length === 0) return null;
+  return block;
 }
 
 export function pickPreviousHighlights(
@@ -474,10 +519,29 @@ export function buildTodayEdition(
     }
   } else {
     featured = pickFeaturedArticle(todayCore, nowMs);
-    if (todayCount >= 2 && featured) {
+    if (featured && todayCount >= 2) {
       const hub = pickFeaturedHubArticles(todayCore, featured, { nowMs });
       secondaryFeatured = hub.leads[1] ?? null;
       featuredRelated = hub.related;
+    }
+  }
+
+  if (featured && !secondaryFeatured) {
+    secondaryFeatured = pickSecondaryFeaturedFallback(articles, featured, {
+      nowMs,
+      editionDateKey,
+      todayArticles,
+    });
+    if (secondaryFeatured && featuredRelated.length === 0) {
+      const combined = filterHomeCoreEligible(
+        [featured, secondaryFeatured, ...todayArticles],
+        nowMs
+      );
+      const hub = pickFeaturedHubArticles(combined, featured, { nowMs });
+      const secondaryKey = articleKey(secondaryFeatured);
+      featuredRelated = hub.related.filter(
+        (a) => articleKey(a) !== secondaryKey
+      );
     }
   }
 
@@ -488,18 +552,21 @@ export function buildTodayEdition(
   const coreExclude = new Set<string>();
   for (const a of reservedCore) coreExclude.add(articleKey(a));
 
-  const spotlight = pickTodayEditionSpotlight(articles, editionDateKey, nowMs, {
-    excludeKeys: coreExclude,
-    reservedCoreArticles: reservedCore,
-    limit: 5,
-  });
-
   const trending = pickTodayEditionTrendingIssues(
     articles,
     options.locale ?? "ko",
     nowMs,
     3
   );
+
+  const trendingKeys = collectTrendingArticleKeys(trending, articles);
+  for (const k of trendingKeys) coreExclude.add(k);
+
+  const spotlight = pickSpotlightWithBackfill(articles, editionDateKey, nowMs, {
+    excludeKeys: coreExclude,
+    reservedCoreArticles: reservedCore,
+    limit: 5,
+  });
 
   const usedSurfaceKeys = collectUsedSurfaceArticleKeys({
     featured,

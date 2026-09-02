@@ -83,8 +83,8 @@ export async function fetchHomePublishedArticleIds(
     .eq("review_status", "approved")
     .eq("is_published", true)
     .eq("status", "published")
-    .order("source_published_at", { ascending: false, nullsFirst: false })
     .order("published_at", { ascending: false, nullsFirst: false })
+    .order("source_published_at", { ascending: false, nullsFirst: false })
     .order("id", { ascending: false })
     .limit(limit);
 

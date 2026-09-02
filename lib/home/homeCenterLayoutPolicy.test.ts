@@ -3,10 +3,15 @@ import { describe, it } from "node:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  centerBandGridColClass,
   centerBandGridRowClass,
+  homeFeaturedCenterColClass,
+  homeLeftRailColClass,
+  homeRightRailColClass,
   isGlobalHomeFilterMode,
   shouldShowLatestFallbackSection,
   shouldShowTopStoriesBand,
+  shouldUseNewspaperThreeColGrid,
 } from "./homeCenterLayoutPolicy";
 
 describe("homeCenterLayoutPolicy", () => {
@@ -84,6 +89,18 @@ describe("homeCenterLayoutPolicy", () => {
     );
   });
 
+  it("always uses newspaper 3-col grid when edition home is visible", () => {
+    assert.equal(shouldUseNewspaperThreeColGrid({ showEditionHome: true }), true);
+    assert.equal(shouldUseNewspaperThreeColGrid({ showEditionHome: false }), false);
+  });
+
+  it("pins center and rails to fixed grid columns on desktop", () => {
+    assert.equal(homeLeftRailColClass(), "xl:col-start-1");
+    assert.equal(homeFeaturedCenterColClass(), "xl:col-start-2");
+    assert.equal(homeRightRailColClass(), "xl:col-start-3");
+    assert.equal(centerBandGridColClass(), "xl:col-span-2 xl:col-start-1");
+  });
+
   it("HomeNewsView keeps bottom tabs local and URL params global-only", () => {
     const view = readFileSync(
       join(process.cwd(), "components/home/HomeNewsView.tsx"),
@@ -95,6 +112,12 @@ describe("homeCenterLayoutPolicy", () => {
     assert.match(view, /setLocalSourceTabKey/);
     assert.match(view, /selectLocalCategory/);
     assert.match(view, /isGlobalHomeFilterMode/);
+    assert.match(view, /shouldUseNewspaperThreeColGrid/);
+    assert.match(view, /homeLeftRailColClass/);
+    assert.match(view, /homeFeaturedCenterColClass/);
+    assert.match(view, /homeRightRailColClass/);
+    assert.doesNotMatch(view, /newsHomeRightOnlyGrid/);
+    assert.doesNotMatch(view, /newsHomeLeftOnlyGrid/);
     assert.match(view, /shouldShowLatestFallbackSection/);
     assert.doesNotMatch(view, /onClick=\{\(\) => selectSource\(/);
     assert.doesNotMatch(view, /onClick=\{\(\) => selectCategory\(/);
