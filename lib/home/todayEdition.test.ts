@@ -234,7 +234,7 @@ describe("todayEdition", () => {
     assert.ok(!ids.includes("week-old"));
   });
 
-  it("trending excludes articles older than 48h", () => {
+  it("trending excludes articles older than 24h", () => {
     const articles = [
       card({
         id: "recent-topic-a",
@@ -242,7 +242,7 @@ describe("todayEdition", () => {
         topic_label: "진행 위기",
         title: "missing persons search continues",
         summary: "officials say search for missing continues",
-        published_at: new Date(NOW_AUG28_NOON_ET - 40 * 3600_000).toISOString(),
+        published_at: new Date(NOW_AUG28_NOON_ET - 20 * 3600_000).toISOString(),
       }),
       card({
         id: "recent-topic-b",
@@ -250,7 +250,7 @@ describe("todayEdition", () => {
         topic_label: "진행 위기",
         title: "update on missing",
         summary: "search ongoing",
-        published_at: new Date(NOW_AUG28_NOON_ET - 36 * 3600_000).toISOString(),
+        published_at: new Date(NOW_AUG28_NOON_ET - 18 * 3600_000).toISOString(),
       }),
       card({
         id: "ancient",
@@ -273,7 +273,7 @@ describe("todayEdition", () => {
     assert.ok(!allIssueSlugs.includes("ancient"));
   });
 
-  it("EN and KO both keep US trending for topic-keyed issues older than 24h", () => {
+  it("EN and KO both drop topic-keyed trending older than 24h", () => {
     const published = new Date(NOW_AUG28_NOON_ET - 40 * 3600_000).toISOString();
     const base = {
       id: "congo-us",
@@ -314,16 +314,8 @@ describe("todayEdition", () => {
       locale: "en",
     });
 
-    assert.ok((ko.trending?.us.length ?? 0) > 0, "KO US trending missing");
-    assert.ok((en.trending?.us.length ?? 0) > 0, "EN US trending missing");
-    assert.equal(
-      ko.trending?.us[0]?.id.startsWith("topic:"),
-      true
-    );
-    assert.equal(
-      en.trending?.us[0]?.id.startsWith("topic:"),
-      true
-    );
+    assert.equal(ko.trending, null);
+    assert.equal(en.trending, null);
   });
 
   it("previous highlights include yesterday through 7 NY days ago", () => {

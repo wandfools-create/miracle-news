@@ -15,7 +15,6 @@ import {
   pickDiversifiedByEditorialScore,
 } from "./editorialRanking";
 import {
-  detectEventLifecycleStage,
   filterEventFamilyLeaders,
   withInheritedEventFamilyGrades,
 } from "./eventFamilyUpdate";
@@ -23,16 +22,14 @@ import { formatEditionLastUpdated } from "./homeRelativeTime";
 import { offsetNyDateKey, nyDateKeyDiff } from "./homeRelativeTime";
 import { pickTrendingIssues } from "./pickTrendingIssues";
 import { pickPreviousEditionFeatured } from "./pickPreviousEditionFeatured";
-import { normalizeTopicClusterKey } from "./topicClusterKey";
 import type {
   HomeArticleCard,
-  TrendingIssue,
   TrendingIssuesBlock,
 } from "./types";
 import { getArticleRegion } from "./articleRegion";
 
 export const SPOTLIGHT_MAX_MS = 24 * 60 * 60 * 1000;
-export const TRENDING_MAX_MS = 48 * 60 * 60 * 1000;
+export const TRENDING_MAX_MS = 24 * 60 * 60 * 1000;
 export const PREVIOUS_HIGHLIGHTS_MIN_DAYS = 1;
 export const PREVIOUS_HIGHLIGHTS_MAX_DAYS = 7;
 export const PREVIOUS_HIGHLIGHTS_LIMIT = 5;
@@ -384,108 +381,17 @@ function pickSpotlightWithBackfill(
   return [...spotlight, ...backfill];
 }
 
-function isOngoingIssueBucket(items: HomeArticleCard[]): boolean {
-  if (items.length >= 2) {
-    const cluster = normalizeTopicClusterKey({
-      topic_key: items[0]?.topic_key,
-      topic_label: items[0]?.topic_label,
-      title: items[0]?.title ?? "",
-    });
-    if (cluster) return true;
-
-    const families = new Set(
-      items.map((a) => a.topic_key ?? a.topic_label ?? "").filter(Boolean)
-    );
-    if (families.size >= 1 && items.length >= 2) return true;
-  }
-
-  const lead = items[0];
-  if (!lead) return false;
-  const stage = detectEventLifecycleStage(lead);
-  return stage === "active_crisis" || stage === "official_toll";
-}
-
-function enrichTrendingWithContinuingFlag(
-  block: TrendingIssuesBlock,
-  articles: HomeArticleCard[],
-  nowMs: number
-): TrendingIssuesBlock {
-  const articleBySlug = new Map(
-    articles.filter((a) => a.slug?.trim()).map((a) => [a.slug!.trim(), a])
-  );
-
-  const enrich = (issue: TrendingIssue): TrendingIssue | null => {
-    const slug = issue.primaryArticle?.slug?.trim();
-    const lead = slug ? articleBySlug.get(slug) : undefined;
-    if (!lead) return issue;
-
-    const leadTs = getSitePublishedTimestamp(lead);
-    if (leadTs <= 0) return null;
-    if (nowMs - leadTs > TRENDING_MAX_MS) return null;
-
-    const ageMs = nowMs - leadTs;
-    const isOlderThan24h = ageMs > SPOTLIGHT_MAX_MS;
-
-    if (isOlderThan24h) {
-      /**
-       * Topic-keyed issues already share a locale-stable topic_key identity.
-       * Do not drop them based on localized title/summary lifecycle text
-       * (e.g. KO "사망 2,911" → official_toll while EN "deaths" → unknown),
-       * which would erase an entire US/KR Trending block on one language only.
-       */
-      if (issue.id.startsWith("topic:") && lead.topic_key?.trim()) {
-        return { ...issue, continuingIssue: true };
-      }
-
-      const bucketArticles = articles.filter((a) => {
-        const cluster = normalizeTopicClusterKey({
-          topic_key: a.topic_key,
-          topic_label: a.topic_label,
-          title: a.title,
-        });
-        if (issue.id.startsWith("topic:") && cluster) {
-          return issue.id === `topic:${cluster}`;
-        }
-        if (issue.id.startsWith("category:")) {
-          const [, region, category] = issue.id.split(":");
-          return (
-            a.category === category &&
-            (region === "us" || region === "kr")
-          );
-        }
-        return false;
-      });
-
-      if (!isOngoingIssueBucket(bucketArticles.length ? bucketArticles : [lead])) {
-        return null;
-      }
-
-      return { ...issue, continuingIssue: true };
-    }
-
-    return issue;
-  };
-
-  return {
-    us: block.us.map(enrich).filter(Boolean) as TrendingIssue[],
-    kr: block.kr.map(enrich).filter(Boolean) as TrendingIssue[],
-  };
-}
-
 export function pickTodayEditionTrendingIssues(
   articles: HomeArticleCard[],
   pageLocale: ArticleLocale,
   nowMs: number,
   maxPerRegion = 3
 ): TrendingIssuesBlock | null {
-  const within48h = filterBySitePublishAge(articles, nowMs, TRENDING_MAX_MS);
-  const raw = pickTrendingIssues(within48h, pageLocale, maxPerRegion, nowMs);
+  const within24h = filterBySitePublishAge(articles, nowMs, TRENDING_MAX_MS);
+  const block = pickTrendingIssues(within24h, pageLocale, maxPerRegion, nowMs);
 
-  // Restrict pool to 48h — pickTrendingIssues may expand via filterArticlesForHomeSurface.
-  const filtered = enrichTrendingWithContinuingFlag(raw, within48h, nowMs);
-
-  if (filtered.us.length === 0 && filtered.kr.length === 0) return null;
-  return filtered;
+  if (block.us.length === 0 && block.kr.length === 0) return null;
+  return block;
 }
 
 export function pickPreviousHighlights(

@@ -168,6 +168,33 @@ describe("production-shaped home two-card regression", () => {
     assert.equal(ranked[0]?.id, "new-batch");
   });
 
+  it("newer same-day article wins category lead despite source and editorial rank", () => {
+    const articles = [
+      card({
+        id: "older-preferred",
+        published_at: "2026-09-01T18:00:00.000Z",
+        source: "chosun",
+        category: "politics",
+        ai_recommend_grade: "best",
+        is_top_story: true,
+      }),
+      card({
+        id: "newer-normal",
+        published_at: "2026-09-01T18:30:00.000Z",
+        source: "ap",
+        category: "politics",
+        ai_recommend_grade: "normal",
+      }),
+    ];
+    const sections = prepareEditionHomeSections(
+      articles,
+      "ko",
+      { leftTitle: "L", rightTitle: "R" },
+      { nowMs: NOW }
+    );
+    assert.equal(sections.groupedByCategory.politics?.[0]?.id, "newer-normal");
+  });
+
   it("same source: today publish beats 2-day-old as source lead", () => {
     const articles = [
       card({
