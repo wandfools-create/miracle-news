@@ -13,7 +13,6 @@ import { normalizeEditorialPriority } from "@/lib/admin/editorialPriority";
 import { setEditorialPriorityFromForm } from "@/lib/admin/setEditorialPriority";
 import { supabase } from "../../../../../lib/supabase";
 import {
-  approveArticleDetailFromForm,
   clearMainTopStoryFromForm,
   rejectArticleFromForm,
   setMainTopStoryFromForm,
@@ -423,25 +422,6 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
               >
                 모바일 검토 화면
               </Link>
-            </form>
-          </div>
-
-          <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 sm:mt-8 sm:p-5">
-            <h4 className="text-base font-semibold text-neutral-800">
-              이전 승인 보관함 흐름
-            </h4>
-            <p className="mt-2 text-sm text-neutral-600">
-              공개 없이 승인만 기록하려면 아래 버튼을 사용하세요.
-            </p>
-
-            <form className="mt-4" action={approveArticleDetailFromForm}>
-              <input type="hidden" name="articleId" value={article.id} />
-              <button
-                type="submit"
-                className="w-full rounded-xl border border-neutral-300 bg-white px-5 py-3 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-100 sm:w-auto"
-              >
-                승인 완료로 이동 (공개 없음)
-              </button>
             </form>
           </div>
 
