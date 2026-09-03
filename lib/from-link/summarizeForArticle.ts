@@ -18,6 +18,8 @@ import {
 import {
   formatManualPrimaryMaterialBlock,
   manualBodyClearsExtractionGate,
+  MIN_VERIFIED_MANUAL_SOURCE_CHARS,
+  shouldRetryVerifiedManualAiDecision,
 } from "./adminManualPromote";
 import { KOREAN_EDITOR_JSON_SYSTEM_PROMPT } from "@/lib/articles/ai/editorPrompt";
 import { parseEditorTaxonomy } from "@/lib/articles/articleTaxonomy";
@@ -173,6 +175,8 @@ async function summarizeWithOpenAi(input: {
   sourceBodyLength: number;
   sourceParagraphCount: number;
   extractMethod: string | null;
+  verifiedManualSourceBody: boolean;
+  manualSourceBodyChars: number;
 }): Promise<SummarizeForArticleResult | null> {
   const env = checkOpenAiEnv();
   if (!env.ok) {
@@ -261,7 +265,10 @@ async function summarizeWithOpenAi(input: {
     };
   };
 
-  const logDraft = (attempt: "first", draft: ParsedDraft): void => {
+  const logDraft = (
+    attempt: "first" | "verified_manual_retry",
+    draft: ParsedDraft
+  ): void => {
     console.info("[from-link/summarize] OpenAI 응답", {
       url: input.pageUrl,
       attempt,
@@ -321,16 +328,22 @@ async function summarizeWithOpenAi(input: {
     materialPreview300: material.slice(0, 300),
   });
 
+  const requestPayload = {
+    linkType: input.linkTypeLabel,
+    source_url: input.pageUrl,
+    isVideoContext: input.isVideoContext,
+    usedTranscript: input.usedTranscript,
+    material,
+    source_material_status: input.verifiedManualSourceBody
+      ? "admin_verified_manual_full_text"
+      : "automatic_or_supplemental",
+    manual_source_body_chars: input.manualSourceBodyChars,
+  };
+
   const firstCompletion = await chatCompletionJson<Record<string, unknown>>({
     step: "from_link_summarize",
     system: KOREAN_EDITOR_JSON_SYSTEM_PROMPT,
-    user: JSON.stringify({
-      linkType: input.linkTypeLabel,
-      source_url: input.pageUrl,
-      isVideoContext: input.isVideoContext,
-      usedTranscript: input.usedTranscript,
-      material,
-    }),
+    user: JSON.stringify(requestPayload),
   });
 
   if (!firstCompletion.ok) {
@@ -349,6 +362,34 @@ async function summarizeWithOpenAi(input: {
 
   let draft = parseCompletion(firstCompletion.data, material);
   logDraft("first", draft);
+
+  if (
+    shouldRetryVerifiedManualAiDecision({
+      manualBodyChars: input.manualSourceBodyChars,
+      preferManualSourceBody: input.verifiedManualSourceBody,
+      usable: draft.usable,
+      reason: draft.reason_ko,
+    })
+  ) {
+    const retryCompletion = await chatCompletionJson<Record<string, unknown>>({
+      step: "from_link_summarize_verified_manual_retry",
+      system: `${KOREAN_EDITOR_JSON_SYSTEM_PROMPT}\nThe administrator pasted at least 400 characters of verified article body. The automatic extractor's empty body is irrelevant. Re-evaluate the pasted body itself and do not return usable=false merely for insufficient length. Still reject non-article, promotional, unrelated, or factually unusable material.`,
+      user: JSON.stringify({
+        ...requestPayload,
+        retry_reason: draft.reason_ko,
+      }),
+    });
+    if (!retryCompletion.ok) {
+      console.error("[summarizeForArticle] verified manual retry failed", {
+        url: input.pageUrl,
+        error: retryCompletion.error,
+        step: retryCompletion.step,
+      });
+      return null;
+    }
+    draft = parseCompletion(retryCompletion.data, material);
+    logDraft("verified_manual_retry", draft);
+  }
 
   if (!draft.usable) {
     return fail(
@@ -559,6 +600,10 @@ export async function summarizeForArticle(
     sourceBodyLength: extracted.articleBodyPlain?.length ?? 0,
     sourceParagraphCount: articleBodyParagraphs,
     extractMethod: extracted.articleBodyExtractMethod ?? null,
+    verifiedManualSourceBody:
+      preferManualSourceBody &&
+      (supplementalText?.length ?? 0) >= MIN_VERIFIED_MANUAL_SOURCE_CHARS,
+    manualSourceBodyChars: supplementalText?.length ?? 0,
   };
 
   const openAiHint = checkOpenAiEnv();

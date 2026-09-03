@@ -15,6 +15,7 @@ import {
   notesIndicateAdminForceCreate,
   notesIndicateManualSourceBody,
   parseAdminForceCreateFlag,
+  shouldRetryVerifiedManualAiDecision,
 } from "@/lib/from-link/adminManualPromote";
 import { MIN_USABLE_BODY_CHARS } from "@/lib/from-link/constants";
 import {
@@ -37,6 +38,35 @@ const briefItem: MorningBriefItem = {
 };
 
 describe("admin manual promote (fixture only)", () => {
+  it("retries an insufficient-material AI decision for verified manual body", () => {
+    assert.equal(
+      shouldRetryVerifiedManualAiDecision({
+        manualBodyChars: 4_940,
+        preferManualSourceBody: true,
+        usable: false,
+        reason: "본문 추출 실패: 자료 부족",
+      }),
+      true
+    );
+    assert.equal(
+      shouldRetryVerifiedManualAiDecision({
+        manualBodyChars: 4_940,
+        preferManualSourceBody: true,
+        usable: false,
+        reason: "광고성 콘텐츠",
+      }),
+      false
+    );
+    assert.equal(
+      shouldRetryVerifiedManualAiDecision({
+        manualBodyChars: 399,
+        preferManualSourceBody: true,
+        usable: false,
+        reason: "자료 부족",
+      }),
+      false
+    );
+  });
   it("extraction failure + manual body ≥400 clears gate without force", () => {
     assert.equal(
       manualBodyClearsExtractionGate({
@@ -163,6 +193,13 @@ describe("admin manual promote (fixture only)", () => {
       "utf8"
     );
     assert.doesNotMatch(rss, /adminForceCreate:\s*true/);
+    assert.match(summarize, /admin_verified_manual_full_text/);
+    assert.match(summarize, /from_link_summarize_verified_manual_retry/);
+    assert.equal(
+      (summarize.match(/from_link_summarize_verified_manual_retry/g) ?? [])
+        .length,
+      1
+    );
     assert.equal(ARTICLE_WORKFLOW.quickReview.review_status, "quick_review");
   });
 
