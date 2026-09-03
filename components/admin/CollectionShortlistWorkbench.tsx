@@ -51,6 +51,9 @@ export type ShortlistCard = {
   aiRecommendGrade: AiRecommendGrade | null;
   aiRecommendScore: number | null;
   aiRecommendReason: string | null;
+  enrichError: string | null;
+  enrichStep: string | null;
+  enrichCategory: string | null;
 };
 
 function saveScroll() {
@@ -308,6 +311,14 @@ export default function CollectionShortlistWorkbench({
                       {c.rssSummary}
                     </p>
                   ) : null}
+                  {c.enrichError ? (
+                    <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-800">
+                      <span className="font-semibold">기사 만들기 실패</span>
+                      {c.enrichCategory ? ` · ${c.enrichCategory}` : ""}
+                      {c.enrichStep ? ` · ${c.enrichStep}` : ""}
+                      <span className="mt-1 block">{c.enrichError}</span>
+                    </div>
+                  ) : null}
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     <a
                       href={c.originalUrl}
@@ -324,6 +335,8 @@ export default function CollectionShortlistWorkbench({
                       source="all"
                       date="all"
                       compact
+                      retry={Boolean(c.enrichError)}
+                      showManualByDefault={Boolean(c.enrichError)}
                       formActionOverride={shortlistEnrichAction}
                     />
                     <form action={unshortlistFromShortlistAction} className="inline-flex">

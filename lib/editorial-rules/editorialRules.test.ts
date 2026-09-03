@@ -75,4 +75,8 @@ test("migration keeps rule data admin-only and audit body-free", () => {
   assert.match(migration, /REVOKE ALL ON public\.editorial_collection_audit FROM PUBLIC, anon, authenticated/);
   assert.doesNotMatch(migration, /\bbody\b\s+text/i);
   assert.doesNotMatch(migration, /\bsummary\b\s+text/i);
+  assert.match(migration, /운세·점성술 제외/);
+  assert.match(migration, /좋은 글·명언 제외/);
+  assert.match(migration, /생활형 지역 행사 제외/);
+  assert.match(migration, /WHERE NOT EXISTS/g);
 });

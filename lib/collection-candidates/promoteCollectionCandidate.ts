@@ -7,6 +7,7 @@ import {
   type RssEnrichFailureCategory,
 } from "@/lib/rss/enrichFailure";
 import { RSS_AI_REVIEW_NOTE_CANDIDATE } from "@/lib/rss/feedSources";
+import { candidateStatusAfterEnrichFailure } from "@/lib/collection-candidates/candidateFailureStatus";
 import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
@@ -33,6 +34,7 @@ export type PromoteCollectionCandidateResult =
 
 async function markCandidateFailed(input: {
   candidateId: string;
+  status: "shortlisted" | "enrich_failed";
   step: string;
   error: string;
   category?: RssEnrichFailureCategory;
@@ -50,12 +52,13 @@ async function markCandidateFailed(input: {
   await client
     .from("collection_candidates")
     .update({
-      status: "enrich_failed",
+      status: input.status,
       enrich_step: input.step,
       enrich_error: `${classified.categoryLabel}: ${input.error}`.slice(0, 2000),
       enrich_category: classified.category,
     })
-    .eq("id", input.candidateId);
+    .eq("id", input.candidateId)
+    .eq("status", "enriching");
 }
 
 /** Admin-selected enrich: from-link pipeline then review-queue insert. OpenAI only here. */
@@ -97,6 +100,7 @@ export async function promoteCollectionCandidate(input: {
   if (!row) {
     return { ok: false, error: "후보를 찾을 수 없습니다.", step: "fetch_candidate" };
   }
+  const failureStatus = candidateStatusAfterEnrichFailure(row.status);
 
   // Block clear same-event before OpenAI enrich (Discord quick make + admin).
   {
@@ -217,6 +221,7 @@ export async function promoteCollectionCandidate(input: {
   if (!pipeline.ok) {
     await markCandidateFailed({
       candidateId,
+      status: failureStatus,
       step: pipeline.step,
       error: pipeline.error,
       category: pipeline.category,
@@ -294,6 +299,7 @@ export async function promoteCollectionCandidate(input: {
 
     await markCandidateFailed({
       candidateId,
+      status: failureStatus,
       step: inserted.step,
       error: inserted.error,
     });

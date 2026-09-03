@@ -55,6 +55,9 @@ export default async function CollectionShortlistPage({
     aiRecommendScore:
       typeof c.ai_recommend_score === "number" ? c.ai_recommend_score : null,
     aiRecommendReason: c.ai_recommend_reason,
+    enrichError: c.enrich_error,
+    enrichStep: c.enrich_step,
+    enrichCategory: c.enrich_category,
   }));
 
   return (
