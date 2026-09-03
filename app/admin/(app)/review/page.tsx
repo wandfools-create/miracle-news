@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { bulkHoldArticles } from "./[id]/actions";
+import { bulkReviewCompleteAndPublishFromForm } from "./publishActions";
 import SelectAllReviewCheckbox from "./SelectAllReviewCheckbox";
 import AdminListPager from "@/components/admin/AdminListPager";
+import ApprovedBulkPublishResult from "@/components/admin/ApprovedBulkPublishResult";
 import ReviewArticleCard from "@/components/admin/ReviewArticleCard";
+import { decodeApprovedBulkPublishPayload } from "@/lib/admin/approvedBulkPublish";
 import {
   fetchReviewQueueArticles,
   parseReviewQueueListQuery,
@@ -18,7 +21,13 @@ export const revalidate = 0;
 export const dynamic = "force-dynamic";
 
 type PageProps = {
-  searchParams: Promise<{ page?: string; q?: string }>;
+  searchParams: Promise<{
+    page?: string;
+    q?: string;
+    batchPublish?: string;
+    batchPayload?: string;
+    error?: string;
+  }>;
 };
 
 function ReviewPageContent(props: {
@@ -33,6 +42,7 @@ function ReviewPageContent(props: {
   isEmpty: boolean;
   pager: ReactNode;
   searchForm: ReactNode;
+  bulkResult: ReactNode;
 }) {
   const {
     queryError,
@@ -42,6 +52,7 @@ function ReviewPageContent(props: {
     isEmpty,
     pager,
     searchForm,
+    bulkResult,
   } = props;
 
   return (
@@ -67,6 +78,7 @@ function ReviewPageContent(props: {
         ) : null}
 
         {searchForm}
+        {bulkResult}
 
         {queryError ? (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:mt-8">
@@ -122,6 +134,10 @@ export default async function AdminReviewPage({ searchParams }: PageProps) {
 
   try {
     const params = await searchParams;
+    const batchSummary =
+      params.batchPublish === "1" && params.batchPayload
+        ? decodeApprovedBulkPublishPayload(params.batchPayload)
+        : null;
     const listQuery = parseReviewQueueListQuery(params);
     const {
       articles,
@@ -202,6 +218,14 @@ export default async function AdminReviewPage({ searchParams }: PageProps) {
 
               <button
                 type="submit"
+                formAction={bulkReviewCompleteAndPublishFromForm}
+                className="rounded-xl bg-green-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-800"
+              >
+                선택 기사 일괄 공개
+              </button>
+
+              <button
+                type="submit"
                 formAction={bulkHoldArticles}
                 className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
               >
@@ -239,6 +263,18 @@ export default async function AdminReviewPage({ searchParams }: PageProps) {
         isEmpty={displayArticles.length === 0}
         pager={pager}
         searchForm={searchForm}
+        bulkResult={
+          <>
+            {params.error === "no_selection" ? (
+              <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                공개할 기사를 한 건 이상 선택해 주세요.
+              </div>
+            ) : null}
+            {batchSummary ? (
+              <ApprovedBulkPublishResult summary={batchSummary} />
+            ) : null}
+          </>
+        }
       />
     );
   } catch (err) {

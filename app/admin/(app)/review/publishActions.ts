@@ -3,6 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import {
+  encodeApprovedBulkPublishPayload,
+  summarizeApprovedBulkPublish,
+  type ApprovedBulkPublishItemResult,
+} from "@/lib/admin/approvedBulkPublish";
+import { parseApprovedPublishArticleIds } from "@/lib/admin/approvedPublishIds";
 import { reviewCompleteAndPublishArticle } from "@/lib/articles/publishArticle";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isAllowedAdminEmail } from "@/lib/admin/adminEmails";
@@ -107,6 +113,82 @@ export async function reviewCompleteAndPublishFromForm(formData: FormData) {
     redirect(mobileReviewUrl(nextArticleId, { published: articleId }));
   }
   redirect("/admin/review/mobile?published=1");
+}
+
+/** Selected pending-review articles: validate and publish each through the atomic RPC. */
+export async function bulkReviewCompleteAndPublishFromForm(formData: FormData) {
+  const user = await requireAdmin();
+  if (!user) redirect("/admin/login?next=/admin/review");
+
+  const { ids, invalidCount, truncatedCount } =
+    parseApprovedPublishArticleIds(formData);
+  if (ids.length === 0 && invalidCount === 0) {
+    redirect("/admin/review?error=no_selection");
+  }
+
+  const results: ApprovedBulkPublishItemResult[] = [];
+  if (invalidCount > 0) {
+    results.push({
+      id: "invalid",
+      ok: false,
+      step: "excluded",
+      error: `유효하지 않은 ID ${invalidCount}건`,
+      excluded: true,
+    });
+  }
+  if (truncatedCount > 0) {
+    results.push({
+      id: "limit",
+      ok: false,
+      step: "excluded",
+      error: `상한 초과로 ${truncatedCount}건 미처리`,
+      excluded: true,
+    });
+  }
+
+  for (const articleId of ids) {
+    const result = await reviewCompleteAndPublishArticle(articleId, {
+      approvedBy: user.email ?? "admin",
+    });
+    if (result.ok) {
+      results.push({
+        id: articleId,
+        ok: true,
+        title: articleId,
+        alreadyPublished: !result.firstPublish,
+      });
+    } else {
+      results.push({
+        id: articleId,
+        ok: false,
+        step: result.step,
+        error: result.error.slice(0, 200),
+        excluded: result.step === "status_guard",
+      });
+    }
+  }
+
+  const authClient = await createSupabaseServerClient();
+  const { data: rows } = await authClient
+    .from("articles")
+    .select("id, title_ko, title_translated, title_original")
+    .in("id", ids);
+  const titleById = new Map(
+    (rows ?? []).map((row) => [
+      row.id as string,
+      row.title_ko || row.title_translated || row.title_original || row.id,
+    ])
+  );
+  for (const item of results) {
+    const title = titleById.get(item.id);
+    if (title) item.title = title;
+  }
+
+  revalidateReviewPaths();
+  const payload = encodeApprovedBulkPublishPayload(
+    summarizeApprovedBulkPublish(results)
+  );
+  redirect(`/admin/review?batchPublish=1&batchPayload=${payload}`);
 }
 
 export async function mobileHoldFromForm(formData: FormData) {

@@ -671,5 +671,20 @@ describe("review complete and publish — RPC helpers / wiring", () => {
     assert.doesNotMatch(card, /approveArticleFromForm|빠른 승인/);
     assert.doesNotMatch(detail, /approveArticleDetailFromForm|공개 없음/);
     assert.doesNotMatch(list, /bulkApproveArticles|선택 기사 일괄 승인/);
+    assert.match(list, /bulkReviewCompleteAndPublishFromForm/);
+    assert.match(list, /선택 기사 일괄 공개/);
+    const actions = readFileSync(
+      join(process.cwd(), "app/admin/(app)/review/publishActions.ts"),
+      "utf8"
+    );
+    const bulkFn = actions.slice(
+      actions.indexOf(
+        "export async function bulkReviewCompleteAndPublishFromForm"
+      ),
+      actions.indexOf("export async function mobileHoldFromForm")
+    );
+    assert.match(bulkFn, /for \(const articleId of ids\)/);
+    assert.match(bulkFn, /reviewCompleteAndPublishArticle/);
+    assert.doesNotMatch(bulkFn, /approveArticle|publishArticleToLive/);
   });
 });
