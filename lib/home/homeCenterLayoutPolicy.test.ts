@@ -119,6 +119,12 @@ describe("homeCenterLayoutPolicy", () => {
     assert.doesNotMatch(view, /newsHomeRightOnlyGrid/);
     assert.doesNotMatch(view, /newsHomeLeftOnlyGrid/);
     assert.match(view, /shouldShowLatestFallbackSection/);
+    assert.match(
+      view,
+      /showPreviousHighlightsInRightRail[\s\S]*!showTrending && showPreviousHighlights/
+    );
+    assert.match(view, /trendingPanel \?\? previousHighlightsRail/);
+    assert.match(view, /showPreviousHighlightsBelow/);
     assert.doesNotMatch(view, /onClick=\{\(\) => selectSource\(/);
     assert.doesNotMatch(view, /onClick=\{\(\) => selectCategory\(/);
   });
