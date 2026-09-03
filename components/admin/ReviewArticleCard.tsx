@@ -2,10 +2,8 @@ import Link from "next/link";
 import type { ReviewArticleDisplay } from "@/lib/admin/reviewArticleDisplay";
 import { truncateText } from "@/lib/admin/reviewArticleDisplay";
 import EditorialPriorityBadge from "@/components/admin/EditorialPriorityBadge";
-import {
-  approveArticleFromForm,
-  holdArticleFromForm,
-} from "@/app/admin/(app)/review/[id]/actions";
+import { holdArticleFromForm } from "@/app/admin/(app)/review/[id]/actions";
+import { reviewCompleteAndPublishFromForm } from "@/app/admin/(app)/review/publishActions";
 
 type Props = {
   display: ReviewArticleDisplay;
@@ -150,13 +148,14 @@ export default function ReviewArticleCard({ display }: Props) {
               </Link>
             ) : null}
 
-            <form action={approveArticleFromForm}>
+            <form action={reviewCompleteAndPublishFromForm}>
               <input type="hidden" name="articleId" value={display.id} />
+              <input type="hidden" name="returnTo" value="detail" />
               <button
                 type="submit"
-                className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                className="rounded-xl bg-green-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-800"
               >
-                빠른 승인
+                검토 완료 및 공개
               </button>
             </form>
 

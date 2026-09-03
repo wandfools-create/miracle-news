@@ -651,4 +651,25 @@ describe("review complete and publish — RPC helpers / wiring", () => {
     assert.match(nav, /secondaryNavItems/);
     assert.doesNotMatch(nav, /primaryNavItems[\s\S]*label: "승인 완료"/);
   });
+
+  it("review UI exposes publish, not legacy approve-only actions", () => {
+    const card = readFileSync(
+      join(process.cwd(), "components/admin/ReviewArticleCard.tsx"),
+      "utf8"
+    );
+    const detail = readFileSync(
+      join(process.cwd(), "app/admin/(app)/review/[id]/page.tsx"),
+      "utf8"
+    );
+    const list = readFileSync(
+      join(process.cwd(), "app/admin/(app)/review/page.tsx"),
+      "utf8"
+    );
+
+    assert.match(card, /reviewCompleteAndPublishFromForm/);
+    assert.match(card, /검토 완료 및 공개/);
+    assert.doesNotMatch(card, /approveArticleFromForm|빠른 승인/);
+    assert.doesNotMatch(detail, /approveArticleDetailFromForm|공개 없음/);
+    assert.doesNotMatch(list, /bulkApproveArticles|선택 기사 일괄 승인/);
+  });
 });
