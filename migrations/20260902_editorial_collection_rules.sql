@@ -19,48 +19,6 @@ CREATE TABLE IF NOT EXISTS public.editorial_collection_rules (
 CREATE INDEX IF NOT EXISTS editorial_collection_rules_active_priority_idx
   ON public.editorial_collection_rules (is_active, priority DESC);
 
--- Conservative starter rules requested by the newsroom. These are editable
--- and can be disabled in Admin > collection rules. Important-event exception
--- signals are evaluated by the application before an exclusion is accepted.
-INSERT INTO public.editorial_collection_rules
-  (name, action, keywords, content_description, priority, is_active)
-SELECT
-  '운세·점성술 제외',
-  'exclude',
-  ARRAY['오늘의 운세', '오늘 운세', '띠별 운세', '별자리 운세', 'daily horoscope', 'horoscope', 'zodiac forecast'],
-  '정책·사회적 파급력이 없는 일일 운세와 점성술 콘텐츠',
-  90,
-  true
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.editorial_collection_rules WHERE name = '운세·점성술 제외'
-);
-
-INSERT INTO public.editorial_collection_rules
-  (name, action, keywords, content_description, priority, is_active)
-SELECT
-  '좋은 글·명언 제외',
-  'exclude',
-  ARRAY['오늘의 명언', '좋은 글', '하루 한마디', 'quote of the day', 'daily inspiration', 'inspirational quote'],
-  '보도 가치가 없는 일일 명언·격려 문구 콘텐츠',
-  85,
-  true
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.editorial_collection_rules WHERE name = '좋은 글·명언 제외'
-);
-
-INSERT INTO public.editorial_collection_rules
-  (name, action, keywords, content_description, priority, is_active)
-SELECT
-  '생활형 지역 행사 제외',
-  'exclude',
-  ARRAY['지역 행사 안내', '주말 가볼만한 곳', 'community calendar', 'things to do this weekend', 'local festival'],
-  '국가적·국제적 영향이 없는 생활형 지역 행사·주말 안내',
-  80,
-  true
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.editorial_collection_rules WHERE name = '생활형 지역 행사 제외'
-);
-
 CREATE TABLE IF NOT EXISTS public.editorial_collection_audit (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   rule_id uuid REFERENCES public.editorial_collection_rules(id) ON DELETE SET NULL,
