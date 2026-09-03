@@ -11,6 +11,7 @@ import { normalizeSupplementalText } from "@/lib/from-link/supplementalText";
 
 /** Soft floor for force+manual paste to pass extraction gates (not empty junk). */
 export const MIN_ADMIN_FORCE_MANUAL_CHARS = 50;
+export const MIN_VERIFIED_MANUAL_SOURCE_CHARS = 400;
 
 export const MANUAL_SOURCE_BODY_NOTE = "관리자 수동 원문 사용";
 export const ADMIN_FORCE_CREATE_NOTE = "관리자 강제 기사화";
@@ -99,6 +100,24 @@ export function manualBodyClearsExtractionGate(input: {
   return (
     input.adminForceCreate &&
     input.manualBodyChars >= MIN_ADMIN_FORCE_MANUAL_CHARS
+  );
+}
+
+/**
+ * A verified admin paste may get one AI retry when the first response mistakes
+ * failed automatic extraction for insufficient source material.
+ */
+export function shouldRetryVerifiedManualAiDecision(input: {
+  manualBodyChars: number;
+  preferManualSourceBody: boolean;
+  usable: boolean;
+  reason: string | null | undefined;
+}): boolean {
+  if (input.usable || !input.preferManualSourceBody) return false;
+  if (input.manualBodyChars < MIN_VERIFIED_MANUAL_SOURCE_CHARS) return false;
+  const reason = (input.reason ?? "").toLowerCase();
+  return /자료\s*부족|본문\s*부족|원문\s*부족|insufficient|too\s*(?:short|thin)|not\s*enough/.test(
+    reason
   );
 }
 
