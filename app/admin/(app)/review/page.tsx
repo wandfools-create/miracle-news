@@ -1,9 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import {
-  bulkApproveArticles,
-  bulkHoldArticles,
-} from "./[id]/actions";
+import { bulkHoldArticles } from "./[id]/actions";
 import SelectAllReviewCheckbox from "./SelectAllReviewCheckbox";
 import AdminListPager from "@/components/admin/AdminListPager";
 import ReviewArticleCard from "@/components/admin/ReviewArticleCard";
@@ -202,14 +199,6 @@ export default async function AdminReviewPage({ searchParams }: PageProps) {
                 targetName="articleIds"
                 label="현재 페이지 전체 선택"
               />
-
-              <button
-                type="submit"
-                formAction={bulkApproveArticles}
-                className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                선택 기사 일괄 승인
-              </button>
 
               <button
                 type="submit"
