@@ -27,6 +27,7 @@ const primaryNavItems = [
     label: "수집 후보",
     key: "collection-candidates",
   },
+  { href: "/admin/collection-rules", label: "수집 기준", key: "collection-rules" },
   {
     href: "/admin/collection-shortlist",
     label: "편집 보관함",

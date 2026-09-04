@@ -59,6 +59,12 @@ import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/serviceRole";
+import {
+  fetchEditorialCollectionRules,
+  recordEditorialExclusion,
+} from "@/lib/editorial-rules/editorialRuleStore";
+import { evaluateEditorialRules } from "@/lib/editorial-rules/evaluateEditorialRules";
+import type { EditorialCollectionRule } from "@/lib/editorial-rules/types";
 
 export type FeedCollectStats = {
   sourceKey: string;
@@ -103,6 +109,7 @@ type CollectRunContext = {
   seenTitles: string[];
   recentSameEventCandidates: SameEventCandidateRow[];
   collectionRunId: string | null;
+  editorialRules: EditorialCollectionRule[];
 };
 
 async function loadRecentCandidateTitles(): Promise<string[]> {
@@ -454,7 +461,9 @@ async function prefilterRssFeedItems(
   items: ParsedRssItem[],
   ctx: CollectRunContext
 ): Promise<{ toProcess: ParsedRssItem[]; skipped: number }> {
-  const toProcess: ParsedRssItem[] = [];
+  const prioritized: ParsedRssItem[] = [];
+  const review: ParsedRssItem[] = [];
+  const normal: ParsedRssItem[] = [];
   let skipped = 0;
 
   for (const item of items) {
@@ -482,10 +491,49 @@ async function prefilterRssFeedItems(
       continue;
     }
 
-    toProcess.push(item);
+    const decision = evaluateEditorialRules(
+      {
+        title: item.title,
+        summary: item.summary,
+        sourceKey: feed.sourceKey,
+        categories: item.categories,
+      },
+      ctx.editorialRules
+    );
+
+    if (decision.action === "exclude" && decision.ruleId) {
+      // Never silently lose a candidate. In save mode, exclusion is effective only
+      // after its minimal audit record succeeds. Missing migration therefore fails open.
+      const audited =
+        !ctx.options.save || ctx.options.testMode
+          ? true
+          : await recordEditorialExclusion({
+              ruleId: decision.ruleId,
+              source: feed.sourceKey,
+              originalUrl: resolved.href,
+              title: item.title,
+              reason: decision.reason,
+              collectionRunId: ctx.collectionRunId,
+            });
+      if (audited) {
+        skipped += 1;
+        if (ctx.options.save && !ctx.options.testMode) ctx.recordDbWrite();
+        continue;
+      }
+      console.warn("[collectRss] exclusion audit failed; keeping candidate", {
+        source: feed.sourceKey,
+        ruleId: decision.ruleId,
+      });
+      review.push(item);
+      continue;
+    }
+
+    if (decision.action === "prioritize") prioritized.push(item);
+    else if (decision.action === "review") review.push(item);
+    else normal.push(item);
   }
 
-  return { toProcess, skipped };
+  return { toProcess: [...prioritized, ...review, ...normal], skipped };
 }
 
 type PreparedFeed = {
@@ -743,6 +791,7 @@ export async function collectRssToReviewQueue(
   const seenUrls = new Set<string>();
   const seenTitles = await loadRecentCandidateTitles();
   const recentSameEventCandidates = await loadRecentCandidatesForSameEvent();
+  const editorialRuleResult = await fetchEditorialCollectionRules({ activeOnly: true });
 
   // Fail-open: if collection_runs migration is missing, runId stays null.
   let collectionRunId: string | null = null;
@@ -763,6 +812,7 @@ export async function collectRssToReviewQueue(
     seenTitles,
     recentSameEventCandidates,
     collectionRunId,
+    editorialRules: editorialRuleResult.rules,
   };
 
   if (!options.save) {
