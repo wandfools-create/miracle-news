@@ -11,6 +11,9 @@ import {
 } from "@/lib/admin/reviewArticleDisplay";
 import { normalizeEditorialPriority } from "@/lib/admin/editorialPriority";
 import { setEditorialPriorityFromForm } from "@/lib/admin/setEditorialPriority";
+import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
+import { formatDateTimeKo } from "@/lib/articleWorkflow";
+import { previewPublishedSameEventForArticle } from "@/lib/same-event/previewPublishedSameEvent";
 import { supabase } from "../../../../../lib/supabase";
 import {
   clearMainTopStoryFromForm,
@@ -25,10 +28,22 @@ type PageProps = {
   params: Promise<{
     id: string;
   }>;
+  searchParams: Promise<{
+    error?: string;
+    sameEvent?: string;
+    matchId?: string;
+    matchTitle?: string;
+    matchSource?: string;
+    matchPublishedAt?: string;
+  }>;
 };
 
-export default async function AdminReviewDetailPage({ params }: PageProps) {
+export default async function AdminReviewDetailPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { id } = await params;
+  const search = await searchParams;
 
   const baseSelect = `
       id,
@@ -136,6 +151,31 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
   const bodyOriginal = safeTrimmed(article.body_original);
   const isRss = isRssCollectArticle(article.source_section);
 
+  const sameEventPreview = await previewPublishedSameEventForArticle(id);
+  const sameEventFromRedirect =
+    search.sameEvent === "1" && search.matchId
+      ? {
+          id: search.matchId,
+          title: search.matchTitle || "(제목 없음)",
+          source: search.matchSource || "?",
+          publishedAt: search.matchPublishedAt || null,
+        }
+      : null;
+  const sameEventBlock =
+    sameEventFromRedirect ||
+    (sameEventPreview.blocked && sameEventPreview.match
+      ? {
+          id: sameEventPreview.match.id,
+          title: sameEventPreview.match.title,
+          source: sameEventPreview.match.source,
+          publishedAt: sameEventPreview.match.publishedAt,
+        }
+      : null);
+  const publishError =
+    search.error?.trim() && search.sameEvent !== "1"
+      ? decodeURIComponent(search.error)
+      : null;
+
   return (
     <main className="min-h-screen bg-white text-black">
       <section className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
@@ -146,6 +186,36 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
         <h1 className="mt-3 text-2xl font-bold tracking-tight sm:mt-4 sm:text-3xl">
           기사 상세 검토
         </h1>
+
+        {publishError ? (
+          <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+            <p className="font-semibold">공개 실패</p>
+            <p className="mt-2 leading-6">{publishError}</p>
+          </div>
+        ) : null}
+
+        {sameEventBlock ? (
+          <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-950">
+            <p className="font-semibold">유사한 공개 기사가 있습니다</p>
+            <p className="mt-2">{sameEventBlock.title}</p>
+            <p className="mt-1 text-xs text-orange-900/80">
+              {getArticleSourceLabel({ source: sameEventBlock.source })}
+              {sameEventBlock.publishedAt
+                ? ` · ${formatDateTimeKo(sameEventBlock.publishedAt)}`
+                : ""}
+            </p>
+            <Link
+              href={`/admin/review/${sameEventBlock.id}`}
+              className="mt-2 inline-block text-xs font-medium underline"
+            >
+              유사 기사 보기
+            </Link>
+            <p className="mt-3 text-xs leading-5 text-orange-900/90">
+              SAME EVENT는 참고용 유사도 규칙입니다. 관리자가 명시적으로 공개를
+              선택하면 공개를 진행할 수 있습니다.
+            </p>
+          </div>
+        ) : null}
 
         {display.enrichFailure ? (
           <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
@@ -402,27 +472,40 @@ export default async function AdminReviewDetailPage({ params }: PageProps) {
               검토 완료 및 공개
             </h4>
             <p className="mt-2 text-sm text-green-900/90">
-              승인 보관함을 거치지 않고 한 번에 공개합니다. 내용·중복 검증을
-              통과해야 합니다.
+              승인 보관함을 거치지 않고 한 번에 공개합니다. 본문·제목·요약 품질
+              검증을 통과해야 합니다. SAME EVENT는 참고용이며, 관리자 결정으로
+              공개할 수 있습니다.
             </p>
-            <form
-              className="mt-4 flex flex-wrap gap-3"
-              action={reviewCompleteAndPublishDetailFromForm}
-            >
-              <input type="hidden" name="articleId" value={article.id} />
-              <button
-                type="submit"
-                className="rounded-xl bg-green-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-800"
-              >
-                검토 완료 및 공개
-              </button>
+            <div className="mt-4 flex flex-wrap gap-3">
+              {!sameEventBlock ? (
+                <form action={reviewCompleteAndPublishDetailFromForm}>
+                  <input type="hidden" name="articleId" value={article.id} />
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-green-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-800"
+                  >
+                    검토 완료 및 공개
+                  </button>
+                </form>
+              ) : (
+                <form action={reviewCompleteAndPublishDetailFromForm}>
+                  <input type="hidden" name="articleId" value={article.id} />
+                  <input type="hidden" name="allowSameEventOverride" value="1" />
+                  <button
+                    type="submit"
+                    className="rounded-xl border border-amber-700 bg-amber-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-amber-700"
+                  >
+                    그래도 공개 (관리자 결정)
+                  </button>
+                </form>
+              )}
               <Link
                 href={`/admin/review/mobile/${article.id}`}
                 className="rounded-xl border border-green-300 bg-white px-5 py-3 text-sm font-semibold text-green-900"
               >
                 모바일 검토 화면
               </Link>
-            </form>
+            </div>
           </div>
 
           <div className="mt-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 sm:mt-8 sm:p-5">

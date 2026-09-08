@@ -315,6 +315,10 @@ describe("review complete and publish — core orchestration", () => {
     );
     assert.equal(result.ok, true);
     assert.equal(rpcCalls, 1);
+    if (result.ok) {
+      assert.equal(result.sameEventPublishResultMetadata?.wouldHaveBlocked, true);
+      assert.equal(result.sameEventPublishResultMetadata?.match?.id, "pub-1");
+    }
   });
 
   it("non-pending / approved holding status is rejected before RPC", async () => {
@@ -685,6 +689,13 @@ describe("review complete and publish — RPC helpers / wiring", () => {
     );
     assert.match(bulkFn, /for \(const articleId of ids\)/);
     assert.match(bulkFn, /reviewCompleteAndPublishArticle/);
+    assert.match(bulkFn, /allowSameEventOverride:\s*true/);
+    assert.match(bulkFn, /sameEventNote/);
     assert.doesNotMatch(bulkFn, /approveArticle|publishArticleToLive/);
+
+    assert.match(detail, /searchParams/);
+    assert.match(detail, /allowSameEventOverride/);
+    assert.match(detail, /그래도 공개 \(관리자 결정\)/);
+    assert.match(detail, /sameEvent/);
   });
 });

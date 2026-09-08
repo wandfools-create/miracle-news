@@ -154,7 +154,7 @@ describe("approved human publish wiring (fixture only)", () => {
 
     const page = read("app/admin/(app)/approved/page.tsx");
     assert.match(page, /ApprovedBulkPublishResult/);
-    assert.doesNotMatch(page, /그래도 공개 \(관리자 override\)/);
+    assert.doesNotMatch(page, /그래도 공개 \(관리자 결정\)/);
     assert.doesNotMatch(page, /allowSameEventOverride/);
   });
 

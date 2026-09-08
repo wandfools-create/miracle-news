@@ -34,6 +34,12 @@ export type ReviewCompletePublishCoreResult =
       publishedAt: string;
       firstPublish: boolean;
       softSameEventWarning?: SameEventGuardMatch;
+      /** Advisory only — set when override skipped a hard SAME EVENT block. */
+      sameEventPublishResultMetadata?: {
+        wouldHaveBlocked: boolean;
+        match?: SameEventGuardMatch;
+        reason?: string;
+      };
     }
   | {
       ok: false;
@@ -51,12 +57,12 @@ export type ReviewCompletePublishCoreDeps = {
     | { ok: true; article: ReviewCompletePublishArticleRow }
     | { ok: false; error: string }
   >;
-  /** Return blocked match or soft warning. Called only when override is false. */
+  /** Advisory similarity check — hard-blocks only when override is false. */
   evaluateSameEvent: (input: {
     article: ReviewCompletePublishArticleRow;
     copy: ReturnType<typeof resolvePublishCopy>;
   }) => Promise<
-    | { blocked: true; match: SameEventGuardMatch }
+    | { blocked: true; match: SameEventGuardMatch; reason?: string }
     | { blocked: false; softWarning?: SameEventGuardMatch }
   >;
   rpc: ReviewCompletePublishRpcPort;
@@ -168,9 +174,16 @@ export async function runReviewCompleteAndPublish(
 
   const copy = resolvePublishCopy(article);
   let softSameEventWarning: SameEventGuardMatch | undefined;
+  let sameEventPublishResultMetadata:
+    | {
+        wouldHaveBlocked: boolean;
+        match?: SameEventGuardMatch;
+        reason?: string;
+      }
+    | undefined;
 
+  const guard = await deps.evaluateSameEvent({ article, copy });
   if (options.allowSameEventOverride !== true) {
-    const guard = await deps.evaluateSameEvent({ article, copy });
     if (guard.blocked) {
       return {
         ok: false,
@@ -180,6 +193,14 @@ export async function runReviewCompleteAndPublish(
       };
     }
     if (guard.softWarning) softSameEventWarning = guard.softWarning;
+  } else if (guard.blocked) {
+    sameEventPublishResultMetadata = {
+      wouldHaveBlocked: true,
+      match: guard.match,
+      ...(guard.reason ? { reason: guard.reason } : {}),
+    };
+  } else if (guard.softWarning) {
+    softSameEventWarning = guard.softWarning;
   }
 
   const localizations = buildReviewCompleteLocalizationPayloads(article);
@@ -221,5 +242,8 @@ export async function runReviewCompleteAndPublish(
     publishedAt: outcome.result.published_at,
     firstPublish: outcome.result.first_publish,
     ...(softSameEventWarning ? { softSameEventWarning } : {}),
+    ...(sameEventPublishResultMetadata
+      ? { sameEventPublishResultMetadata }
+      : {}),
   };
 }

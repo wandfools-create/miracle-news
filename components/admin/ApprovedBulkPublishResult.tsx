@@ -22,7 +22,7 @@ export default function ApprovedBulkPublishResult({ summary }: Props) {
       <ul className="mt-3 grid gap-1 sm:grid-cols-2">
         <li>공개 성공: {summary.successCount}건</li>
         <li>
-          SAME EVENT 경고 있었으나 사람 승인으로 공개:{" "}
+          SAME EVENT 경고가 있었으나 관리자 결정으로 공개:{" "}
           {summary.sameEventPublishedCount}건
         </li>
         <li>제외: {summary.excludedCount}건</li>
@@ -44,7 +44,7 @@ export default function ApprovedBulkPublishResult({ summary }: Props) {
                   </Link>
                   {r.sameEventNote ? (
                     <span className="ml-2 text-xs text-amber-800">
-                      (SAME EVENT 유사 — 사람 승인 공개)
+                      (SAME EVENT 경고가 있었으나 관리자 결정으로 공개)
                     </span>
                   ) : null}
                   {r.alreadyPublished ? (
