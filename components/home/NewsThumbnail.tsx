@@ -92,6 +92,8 @@ export default function NewsThumbnail({
     : "h-auto max-h-full w-auto max-w-full object-contain object-center";
   const imgStyle = { objectPosition: "center center" as const };
 
+  // Bypass Vercel Image Optimization (/_next/image → 402 when quota exceeded).
+  // Keep next/image layout (fill / width / object-fit); serve original thumbnail_url.
   let media: ReactNode;
   if (useNextImage && isCover) {
     media = (
@@ -103,6 +105,7 @@ export default function NewsThumbnail({
         className={imgClass}
         priority={priority}
         style={imgStyle}
+        unoptimized
       />
     );
   } else if (useNextImage) {
@@ -116,6 +119,7 @@ export default function NewsThumbnail({
         className={imgClass}
         priority={priority}
         style={imgStyle}
+        unoptimized
       />
     );
   } else {
