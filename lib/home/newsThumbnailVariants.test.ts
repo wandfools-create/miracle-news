@@ -43,4 +43,16 @@ describe("NewsThumbnail home variants (fixture only)", () => {
     assert.match(view, /StoryListRow/);
     assert.match(view, /CategoryLead/);
   });
+
+  it("NewsThumbnail next/image paths use unoptimized to avoid /_next/image", () => {
+    const src = readFileSync(
+      join(process.cwd(), "components/home/NewsThumbnail.tsx"),
+      "utf8"
+    );
+    const nextImageBlocks = src.match(/<Image[\s\S]*?\/>/g) ?? [];
+    assert.ok(nextImageBlocks.length >= 2);
+    for (const block of nextImageBlocks) {
+      assert.match(block, /\bunoptimized\b/);
+    }
+  });
 });
