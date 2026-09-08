@@ -304,7 +304,7 @@ export default async function AdminQuickReviewDetailPage({
                 disabled={!contentCheck.ok}
                 className="w-full rounded-xl border border-amber-600 bg-amber-600 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-300 sm:w-auto"
               >
-                그래도 공개 (관리자 override)
+                그래도 공개 (관리자 결정)
               </button>
             </form>
           )}

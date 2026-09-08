@@ -260,7 +260,7 @@ export default function MobileReviewDetail({
                 onChange={(e) => setOverrideSameEvent(e.target.checked)}
                 className="mt-1"
               />
-              <span>그래도 검토 완료 및 공개 (관리자 override)</span>
+              <span>그래도 공개 (관리자 결정)</span>
             </label>
           </div>
         ) : null}

@@ -24,7 +24,7 @@ describe("approved publish SAME EVENT UX (fixture only)", () => {
     const page = read("app/admin/(app)/approved/page.tsx");
     assert.match(page, /ApprovedBulkPublishResult/);
     assert.match(page, /최종 사람 결정/);
-    assert.doesNotMatch(page, /그래도 공개 \(관리자 override\)/);
+    assert.doesNotMatch(page, /그래도 공개 \(관리자 결정\)/);
     assert.doesNotMatch(page, /allowSameEventOverride/);
   });
 
@@ -48,5 +48,12 @@ describe("approved publish SAME EVENT UX (fixture only)", () => {
     ]) {
       assert.match(quick, new RegExp(key));
     }
+  });
+
+  it("desktop review detail reads SAME EVENT searchParams for override", () => {
+    const detail = read("app/admin/(app)/review/[id]/page.tsx");
+    assert.match(detail, /searchParams/);
+    assert.match(detail, /allowSameEventOverride/);
+    assert.match(detail, /그래도 공개 \(관리자 결정\)/);
   });
 });

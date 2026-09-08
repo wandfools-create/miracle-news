@@ -567,6 +567,25 @@ export async function reviewCompleteAndPublishArticle(
     ...(result.softSameEventWarning
       ? { softSameEventWarning: result.softSameEventWarning }
       : {}),
+    ...(result.sameEventPublishResultMetadata
+      ? {
+          sameEventPublishResultMetadata: {
+            wouldHaveBlocked:
+              result.sameEventPublishResultMetadata.wouldHaveBlocked,
+            ...(result.sameEventPublishResultMetadata.match
+              ? {
+                  match: {
+                    ...result.sameEventPublishResultMetadata.match,
+                    relation: "same_event" as const,
+                  },
+                }
+              : {}),
+            ...(result.sameEventPublishResultMetadata.reason
+              ? { reason: result.sameEventPublishResultMetadata.reason }
+              : {}),
+          },
+        }
+      : {}),
   };
 }
 

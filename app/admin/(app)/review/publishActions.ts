@@ -146,8 +146,10 @@ export async function bulkReviewCompleteAndPublishFromForm(formData: FormData) {
     });
   }
 
+  // Selecting “일괄 공개” is the admin’s final publish decision — SAME EVENT is advisory.
   for (const articleId of ids) {
     const result = await reviewCompleteAndPublishArticle(articleId, {
+      allowSameEventOverride: true,
       approvedBy: user.email ?? "admin",
     });
     if (result.ok) {
@@ -156,6 +158,9 @@ export async function bulkReviewCompleteAndPublishFromForm(formData: FormData) {
         ok: true,
         title: articleId,
         alreadyPublished: !result.firstPublish,
+        sameEventNote: result.sameEventPublishResultMetadata?.wouldHaveBlocked
+          ? result.sameEventPublishResultMetadata.match
+          : undefined,
       });
     } else {
       results.push({
