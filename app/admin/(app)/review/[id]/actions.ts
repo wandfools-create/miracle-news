@@ -73,13 +73,16 @@ export async function clearMainTopStory(articleId: string) {
   revalidateAdminPages(articleId);
 }
 
+/**
+ * Legacy export name retained for stale clients.
+ * Must NOT approve-hold — delegates to atomic review-complete-and-publish.
+ */
 export async function approveArticleFromForm(formData: FormData) {
-  const articleId = String(formData.get("articleId") ?? "").trim();
-  if (!articleId) {
-    console.error("[approveArticleFromForm] missing articleId");
-    return;
+  if (!formData.get("returnTo")) {
+    formData.set("returnTo", "detail");
   }
-  await approveArticle(articleId);
+  const { reviewCompleteAndPublishFromForm } = await import("../publishActions");
+  return reviewCompleteAndPublishFromForm(formData);
 }
 
 export async function holdArticleFromForm(formData: FormData) {
@@ -91,6 +94,7 @@ export async function holdArticleFromForm(formData: FormData) {
   await holdArticle(articleId);
 }
 
+/** @deprecated Same as approveArticleFromForm — atomic publish, not approve-hold. */
 export async function approveArticleDetailFromForm(formData: FormData) {
   await approveArticleFromForm(formData);
 }
@@ -124,50 +128,26 @@ export async function clearMainTopStoryFromForm(formData: FormData) {
   await clearMainTopStory(articleId);
 }
 
-export async function approveArticle(articleId: string) {
-  const { error } = await supabase
-    .from("articles")
-    .update({
-      status: "approved",
-      review_status: "approved",
-      revision_status: "none",
-      is_published: false,
-      approved_at: new Date().toISOString(),
-      approved_by: "admin",
-      rejected_reason: null,
-    })
-    .eq("id", articleId);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidateAdminPages(articleId);
+/**
+ * Programmatic approve-hold removed. Use reviewCompleteAndPublishArticle
+ * (pending → live) or publishApprovedArticleToLive (approved archive → live).
+ */
+export async function approveArticle(_articleId: string) {
+  throw new Error(
+    "approveArticle(승인 보관만)은 제거되었습니다. 검토 완료 및 공개(reviewCompleteAndPublishArticle)를 사용하세요."
+  );
 }
 
+/**
+ * Legacy export name retained for stale clients that still post to
+ * “일괄 승인”. Delegates to atomic bulk review-complete-and-publish —
+ * never writes approved + is_published=false holding state.
+ */
 export async function bulkApproveArticles(formData: FormData) {
-  const articleIds = getArticleIdsFromFormData(formData);
-
-  if (articleIds.length === 0) return;
-
-  const { error } = await supabase
-    .from("articles")
-    .update({
-      status: "approved",
-      review_status: "approved",
-      revision_status: "none",
-      is_published: false,
-      approved_at: new Date().toISOString(),
-      approved_by: "admin",
-      rejected_reason: null,
-    })
-    .in("id", articleIds);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidateAdminPages();
+  const { bulkReviewCompleteAndPublishFromForm } = await import(
+    "../publishActions"
+  );
+  return bulkReviewCompleteAndPublishFromForm(formData);
 }
 
 export async function holdArticle(articleId: string) {
