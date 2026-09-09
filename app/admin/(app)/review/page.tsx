@@ -209,7 +209,11 @@ export default async function AdminReviewPage({ searchParams }: PageProps) {
     const cards =
       displayArticles.length > 0 ? (
         <>
-          <form id="bulk-review-form" className="mt-6 sm:mt-8">
+          <form
+            id="bulk-review-form"
+            className="mt-6 sm:mt-8"
+            action={bulkReviewCompleteAndPublishFromForm}
+          >
             <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border bg-gray-50 p-4">
               <SelectAllReviewCheckbox
                 targetName="articleIds"

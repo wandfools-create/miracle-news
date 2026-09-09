@@ -677,6 +677,10 @@ describe("review complete and publish — RPC helpers / wiring", () => {
     assert.doesNotMatch(list, /bulkApproveArticles|선택 기사 일괄 승인/);
     assert.match(list, /bulkReviewCompleteAndPublishFromForm/);
     assert.match(list, /선택 기사 일괄 공개/);
+    assert.match(
+      list,
+      /<form[\s\S]*action=\{bulkReviewCompleteAndPublishFromForm\}/
+    );
     const actions = readFileSync(
       join(process.cwd(), "app/admin/(app)/review/publishActions.ts"),
       "utf8"
@@ -697,5 +701,43 @@ describe("review complete and publish — RPC helpers / wiring", () => {
     assert.match(detail, /allowSameEventOverride/);
     assert.match(detail, /그래도 공개 \(관리자 결정\)/);
     assert.match(detail, /sameEvent/);
+  });
+
+  it("legacy approveArticle exports never write approved holding without publish", () => {
+    const reviewActions = readFileSync(
+      join(process.cwd(), "app/admin/(app)/review/[id]/actions.ts"),
+      "utf8"
+    );
+    const approveArticleFn = reviewActions.slice(
+      reviewActions.indexOf("export async function approveArticle("),
+      reviewActions.indexOf("export async function bulkApproveArticles")
+    );
+    assert.match(approveArticleFn, /제거되었습니다/);
+    assert.doesNotMatch(approveArticleFn, /\.update\(/);
+    assert.doesNotMatch(approveArticleFn, /is_published:\s*false/);
+    assert.doesNotMatch(approveArticleFn, /approved_by:\s*"admin"/);
+
+    const bulkApproveFn = reviewActions.slice(
+      reviewActions.indexOf("export async function bulkApproveArticles"),
+      reviewActions.indexOf("export async function holdArticle(")
+    );
+    assert.match(bulkApproveFn, /bulkReviewCompleteAndPublishFromForm/);
+    assert.doesNotMatch(bulkApproveFn, /\.update\(/);
+    assert.doesNotMatch(bulkApproveFn, /is_published:\s*false/);
+    assert.doesNotMatch(bulkApproveFn, /approved_by:\s*"admin"/);
+
+    const approveFromFormFn = reviewActions.slice(
+      reviewActions.indexOf("export async function approveArticleFromForm"),
+      reviewActions.indexOf("export async function holdArticleFromForm")
+    );
+    assert.match(approveFromFormFn, /reviewCompleteAndPublishFromForm/);
+    assert.doesNotMatch(approveFromFormFn, /approveArticle\(/);
+
+    const approvedActions = readFileSync(
+      join(process.cwd(), "app/admin/(app)/approved/actions.ts"),
+      "utf8"
+    );
+    assert.match(approvedActions, /publishApprovedArticleToLive/);
+    assert.match(approvedActions, /bulkPublishArticles/);
   });
 });
