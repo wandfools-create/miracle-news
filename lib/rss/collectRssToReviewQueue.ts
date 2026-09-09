@@ -10,6 +10,15 @@ import {
   findCollectionCandidateByUrl,
   insertCollectionCandidate,
 } from "@/lib/collection-candidates/insertCollectionCandidate";
+import {
+  fetchEditorialCollectionRules,
+  recordEditorialExclusion,
+} from "@/lib/editorial-rules/editorialRuleStore";
+import {
+  evaluateEditorialRules,
+  shouldAutoExcludeEditorialDecision,
+} from "@/lib/editorial-rules/evaluateEditorialRules";
+import type { EditorialCollectionRule } from "@/lib/editorial-rules/types";
 import { findExistingArticleByOriginalUrl } from "@/lib/articles/findExistingArticleByOriginalUrl";
 import { resolveSubmittedUrl } from "@/lib/from-link/resolveSubmittedUrl";
 import { fetchApNewsFeedItems } from "@/lib/rss/fetchApNewsFeed";
@@ -103,6 +112,7 @@ type CollectRunContext = {
   seenTitles: string[];
   recentSameEventCandidates: SameEventCandidateRow[];
   collectionRunId: string | null;
+  editorialRules: EditorialCollectionRule[];
 };
 
 async function loadRecentCandidateTitles(): Promise<string[]> {
@@ -482,6 +492,54 @@ async function prefilterRssFeedItems(
       continue;
     }
 
+    // Free admin rules (before OpenAI / body extract). Fail-open on errors.
+    try {
+      const decision = evaluateEditorialRules(
+        {
+          title: item.title,
+          summary: item.summary,
+          sourceKey: feed.sourceKey,
+          categories: item.categories,
+          collectRegion: ctx.options.region,
+        },
+        ctx.editorialRules
+      );
+      if (shouldAutoExcludeEditorialDecision(decision) && decision.ruleId) {
+        const audited = await recordEditorialExclusion({
+          ruleId: decision.ruleId,
+          ruleName: decision.ruleName ?? decision.ruleId,
+          source: feed.sourceKey,
+          region: ctx.options.region ?? null,
+          originalUrl: resolved.href,
+          title: item.title,
+          reason: decision.reason,
+          collectionRunId: ctx.collectionRunId,
+        });
+        if (!audited) {
+          // Audit failure → do not exclude; continue existing candidate flow.
+          console.warn("[collectRss] editorial exclude audit failed; fail-open", {
+            source: feed.sourceKey,
+            ruleId: decision.ruleId,
+          });
+        } else {
+          skipped += 1;
+          await logRssCollectItemSkipped({
+            sourceLabel: feed.label,
+            originalUrl: resolved.href,
+            rssTitle: item.title,
+            reason: `editorial_rule:${decision.reason}`,
+            persistLogs: false,
+          });
+          continue;
+        }
+      }
+    } catch (err) {
+      console.warn("[collectRss] editorial rule evaluation failed; fail-open", {
+        source: feed.sourceKey,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     toProcess.push(item);
   }
 
@@ -744,6 +802,16 @@ export async function collectRssToReviewQueue(
   const seenTitles = await loadRecentCandidateTitles();
   const recentSameEventCandidates = await loadRecentCandidatesForSameEvent();
 
+  // Fail-open: missing rules table → empty list → existing prefilter only.
+  const editorialRuleResult = await fetchEditorialCollectionRules({
+    activeOnly: true,
+  });
+  if (editorialRuleResult.error) {
+    console.warn("[collectRss] editorial rules fetch error; fail-open", {
+      error: editorialRuleResult.error,
+    });
+  }
+
   // Fail-open: if collection_runs migration is missing, runId stays null.
   let collectionRunId: string | null = null;
   if (options.save && !options.testMode && options.region) {
@@ -763,6 +831,7 @@ export async function collectRssToReviewQueue(
     seenTitles,
     recentSameEventCandidates,
     collectionRunId,
+    editorialRules: editorialRuleResult.rules,
   };
 
   if (!options.save) {
