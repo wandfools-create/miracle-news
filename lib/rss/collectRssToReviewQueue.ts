@@ -18,6 +18,12 @@ import {
   evaluateEditorialRules,
   shouldAutoExcludeEditorialDecision,
 } from "@/lib/editorial-rules/evaluateEditorialRules";
+import {
+  evaluateCollectionFieldProfile,
+  shouldAutoExcludeFieldDecision,
+} from "@/lib/editorial-rules/evaluateCollectionFieldProfile";
+import { fetchCollectionFieldProfile } from "@/lib/editorial-rules/collectionProfileStore";
+import type { CollectionFieldProfile } from "@/lib/editorial-rules/collectionProfileTypes";
 import type { EditorialCollectionRule } from "@/lib/editorial-rules/types";
 import { findExistingArticleByOriginalUrl } from "@/lib/articles/findExistingArticleByOriginalUrl";
 import { resolveSubmittedUrl } from "@/lib/from-link/resolveSubmittedUrl";
@@ -113,6 +119,8 @@ type CollectRunContext = {
   recentSameEventCandidates: SameEventCandidateRow[];
   collectionRunId: string | null;
   editorialRules: EditorialCollectionRule[];
+  /** Field checkbox profile. schemaReady=false → skip field excludes (fail-open). */
+  fieldProfile: CollectionFieldProfile;
 };
 
 async function loadRecentCandidateTitles(): Promise<string[]> {
@@ -492,6 +500,55 @@ async function prefilterRssFeedItems(
       continue;
     }
 
+    // Field/country allowlist (before OpenAI / body extract). Fail-open when
+    // profile schema missing — do not suddenly drop all intake.
+    try {
+      if (ctx.fieldProfile.schemaReady) {
+        const fieldDecision = evaluateCollectionFieldProfile(
+          {
+            title: item.title,
+            summary: item.summary,
+            categories: item.categories,
+            collectRegion: ctx.options.region,
+          },
+          ctx.fieldProfile
+        );
+        if (shouldAutoExcludeFieldDecision(fieldDecision)) {
+          const audited = await recordEditorialExclusion({
+            ruleId: null,
+            ruleName: fieldDecision.decisionKey.slice(0, 120),
+            source: feed.sourceKey,
+            region: ctx.options.region ?? null,
+            originalUrl: resolved.href,
+            title: item.title,
+            reason: fieldDecision.reason,
+            collectionRunId: ctx.collectionRunId,
+          });
+          if (!audited) {
+            console.warn(
+              "[collectRss] field-profile exclude audit failed; fail-open",
+              { source: feed.sourceKey, key: fieldDecision.decisionKey }
+            );
+          } else {
+            skipped += 1;
+            await logRssCollectItemSkipped({
+              sourceLabel: feed.label,
+              originalUrl: resolved.href,
+              rssTitle: item.title,
+              reason: `field_profile:${fieldDecision.reason}`,
+              persistLogs: false,
+            });
+            continue;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[collectRss] field-profile evaluation failed; fail-open", {
+        source: feed.sourceKey,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     // Free admin rules (before OpenAI / body extract). Fail-open on errors.
     try {
       const decision = evaluateEditorialRules(
@@ -812,6 +869,14 @@ export async function collectRssToReviewQueue(
     });
   }
 
+  // Fail-open: missing field profile table → schemaReady=false → skip field excludes.
+  const fieldProfileResult = await fetchCollectionFieldProfile();
+  if (fieldProfileResult.error) {
+    console.warn("[collectRss] field profile fetch error; fail-open", {
+      error: fieldProfileResult.error,
+    });
+  }
+
   // Fail-open: if collection_runs migration is missing, runId stays null.
   let collectionRunId: string | null = null;
   if (options.save && !options.testMode && options.region) {
@@ -832,6 +897,7 @@ export async function collectRssToReviewQueue(
     recentSameEventCandidates,
     collectionRunId,
     editorialRules: editorialRuleResult.rules,
+    fieldProfile: fieldProfileResult.profile,
   };
 
   if (!options.save) {

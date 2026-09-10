@@ -234,7 +234,7 @@ export async function setEditorialCollectionRuleActive(input: {
 }
 
 export async function recordEditorialExclusion(input: {
-  ruleId: string;
+  ruleId: string | null;
   ruleName: string;
   source: string;
   region: string | null;

@@ -298,6 +298,8 @@ describe("editorial rules wiring (fixture)", () => {
     assert.match(src, /evaluateEditorialRules/);
     assert.match(src, /recordEditorialExclusion/);
     assert.match(src, /shouldAutoExcludeEditorialDecision/);
+    assert.match(src, /fetchCollectionFieldProfile/);
+    assert.match(src, /evaluateCollectionFieldProfile/);
   });
 
   it("admin page exists for collection-rules", () => {
@@ -305,7 +307,7 @@ describe("editorial rules wiring (fixture)", () => {
       join(process.cwd(), "app/admin/(app)/collection-rules/page.tsx"),
       "utf8"
     );
-    assert.match(page, /수집 기준/);
+    assert.match(page, /수집 기준|수집할 분야/);
     assert.match(page, /미리보기/);
     assert.doesNotMatch(page, /OpenAI/);
   });
