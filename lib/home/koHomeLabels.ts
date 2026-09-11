@@ -40,4 +40,6 @@ export const koHomeLabels: HomeNewsLabels = {
     "어제와 최근 7일 사이 놓치면 안 될 기사입니다.",
   editionHeaderTodayLabel: "오늘의 한눈",
   continuingIssueLabel: "계속되는 이슈",
+  newsWireTitle: "수집 뉴스",
+  newsWireMore: "+ 더보기",
 };

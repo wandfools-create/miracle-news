@@ -4,13 +4,17 @@ import { fetchEditionHomeArticles } from "@/lib/home/fetchEditionHomeArticles";
 import { enHomeLabels } from "@/lib/home/enHomeLabels";
 import { prepareEditionHomeSections } from "@/lib/home/prepareEditionHomeSections";
 import { enHomeSearchLabels } from "@/lib/home/enSearchLabels";
+import { fetchHomeNewsWireItems } from "@/lib/news-wire/fetchNewsWire";
 import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
 export default async function EnglishHomePage() {
   const nowMs = Date.now();
-  const { articles: rawArticles, error } = await fetchEditionHomeArticles("en");
+  const [{ articles: rawArticles, error }, wire] = await Promise.all([
+    fetchEditionHomeArticles("en"),
+    fetchHomeNewsWireItems({ locale: "en", nowMs }),
+  ]);
   const articles = enrichHomeArticlesWithRelativeDates(rawArticles, nowMs);
 
   const sections = prepareEditionHomeSections(
@@ -48,6 +52,8 @@ export default async function EnglishHomePage() {
         searchArticles={articles}
         searchPath="/en/search"
         searchLabels={enHomeSearchLabels}
+        newsWireItems={wire.items}
+        newsWireMoreHref="/en/wire"
       />
     </Suspense>
   );

@@ -1015,6 +1015,20 @@ export async function collectRssToReviewQueue(
 
   console.info("[collectRss] run done", { totals, costs, collectionRunId });
 
+  // Async title prep for public News Wire — never blocks / fails collect.
+  if (options.save && !options.testMode && totals.inserted > 0) {
+    try {
+      const { scheduleWireTitleLocalizationAfterCollect } = await import(
+        "@/lib/news-wire/localizeWireTitles"
+      );
+      scheduleWireTitleLocalizationAfterCollect();
+    } catch (err) {
+      console.warn("[collectRss] wire localize schedule skipped", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   return {
     ok: feeds.every(
       (f) => !f.error || f.inserted > 0 || (f.wouldInsert ?? 0) > 0
