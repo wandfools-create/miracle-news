@@ -76,7 +76,7 @@ describe("home sidebar layout and category nav (fixture)", () => {
     );
     assert.match(view, /SpotlightRail/);
     assert.match(view, /newsHomeThreeColGrid/);
-    assert.match(view, /showLeftRailContent/);
+    assert.match(view, /newsWireItems\.length\s*>\s*0/);
     assert.match(view, /shouldUseNewspaperThreeColGrid/);
     assert.match(view, /showRightRail/);
     assert.doesNotMatch(view, /newsHomeRightOnlyGrid/);

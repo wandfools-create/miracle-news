@@ -19,7 +19,8 @@ import {
 } from "@/lib/supabase/serviceRole";
 
 export const WIRE_LOCALIZE_BATCH_SIZE = 40;
-export const WIRE_LOCALIZE_MAX_PER_COLLECT = 100;
+/** Cap per collect run — one awaited batch only. */
+export const WIRE_LOCALIZE_MAX_PER_COLLECT = 40;
 
 const SYSTEM_PROMPT =
   "You are a news headline translator. Output JSON only: " +
@@ -260,18 +261,4 @@ export async function localizeWireCandidateTitles(options?: {
     skippedReady,
     schemaReady: true,
   };
-}
-
-/** Fire-and-forget after collect — never fails the RSS run. */
-export function scheduleWireTitleLocalizationAfterCollect(limit = WIRE_LOCALIZE_BATCH_SIZE): void {
-  void localizeWireCandidateTitles({ limit }).then(
-    (result) => {
-      console.info("[news-wire] localize after collect", result);
-    },
-    (err) => {
-      console.warn("[news-wire] localize after collect failed", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  );
 }

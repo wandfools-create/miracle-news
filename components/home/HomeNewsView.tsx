@@ -1145,7 +1145,6 @@ export default function HomeNewsView({
   const homeGridClass = shouldUseNewspaperThreeColGrid({ showEditionHome })
     ? newsHomeThreeColGrid
     : "min-w-0";
-  const showLeftRailContent = showSidebar;
   const showRightRail = showTrending;
 
   const trendingPanel = showTrending && trendingIssues && !isFilterResultMode ? (
@@ -1369,26 +1368,26 @@ export default function HomeNewsView({
               <aside
                 className={`order-3 min-w-0 xl:order-none xl:row-start-2 ${homeLeftRailColClass()}`}
               >
-                {showLeftRailContent ? (
-                  <>
-                    <SpotlightRail
-                      articles={displaySections.sidebar}
-                      locale={locale}
-                      labels={labels}
-                      articleHrefPrefix={articleHrefPrefix}
-                      articleHrefFor={articleHrefFor}
-                    />
-                    <NewsWireRail
-                      items={newsWireItems}
-                      locale={locale}
-                      title={labels.newsWireTitle}
-                      moreLabel={labels.newsWireMore}
-                      moreHref={
-                        newsWireMoreHref ??
-                        (locale === "ko" ? "/ko/wire" : "/en/wire")
-                      }
-                    />
-                  </>
+                {showSidebar && displaySections.sidebar.length > 0 ? (
+                  <SpotlightRail
+                    articles={displaySections.sidebar}
+                    locale={locale}
+                    labels={labels}
+                    articleHrefPrefix={articleHrefPrefix}
+                    articleHrefFor={articleHrefFor}
+                  />
+                ) : null}
+                {newsWireItems.length > 0 ? (
+                  <NewsWireRail
+                    items={newsWireItems}
+                    locale={locale}
+                    title={labels.newsWireTitle}
+                    moreLabel={labels.newsWireMore}
+                    moreHref={
+                      newsWireMoreHref ??
+                      (locale === "ko" ? "/ko/wire" : "/en/wire")
+                    }
+                  />
                 ) : null}
               </aside>
             ) : null}

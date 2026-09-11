@@ -7,10 +7,10 @@
  *   npx tsx scripts/newsWireTitleBackfillDryRun.ts --days=7
  *   npx tsx scripts/newsWireTitleBackfillDryRun.ts --all
  */
+import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
-import fs from "node:fs";
-import path from "node:path";
 
+import { collectRowsByRangePagination } from "../lib/collection-candidates/candidateFetchPagination";
 import { NEWS_WIRE_INCLUDE_STATUSES } from "../lib/news-wire/types";
 import {
   isWireEnTitleReady,
@@ -18,24 +18,9 @@ import {
   isWireTitlesReady,
 } from "../lib/news-wire/wireTitles";
 
-function loadEnv(): Record<string, string> {
-  const envPath = path.join(process.cwd(), ".env.local");
-  const raw = fs.readFileSync(envPath, "utf8");
-  const env: Record<string, string> = {};
-  for (const line of raw.split("\n")) {
-    const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-    if (!m) continue;
-    let v = m[2] ?? "";
-    if (
-      (v.startsWith('"') && v.endsWith('"')) ||
-      (v.startsWith("'") && v.endsWith("'"))
-    ) {
-      v = v.slice(1, -1);
-    }
-    env[m[1]!] = v;
-  }
-  return env;
-}
+loadEnvConfig(process.cwd());
+
+const PAGE_SIZE = 50;
 
 function parseArgs(argv: string[]) {
   let days: number | null = 7;
@@ -51,39 +36,33 @@ function parseArgs(argv: string[]) {
   return { days, all };
 }
 
+type Row = {
+  id: string;
+  rss_title: string;
+  rss_title_ko: string | null;
+  rss_title_en?: string | null;
+  wire_titles_ready_at?: string | null;
+  status: string;
+  created_at: string;
+};
+
+function createDryRunClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) {
+    throw new Error(
+      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY (via loadEnvConfig)"
+    );
+  }
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
 async function main() {
   const { days, all } = parseArgs(process.argv.slice(2));
-  const env = loadEnv();
-  const sb = createClient(
-    env.NEXT_PUBLIC_SUPABASE_URL!,
-    env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  );
+  const client = createDryRunClient();
 
-  let query = sb
-    .from("collection_candidates")
-    .select(
-      "id, rss_title, rss_title_ko, status, created_at",
-      { count: "exact" }
-    )
-    .in("status", NEWS_WIRE_INCLUDE_STATUSES)
-    .order("created_at", { ascending: false })
-    .limit(5000);
-
-  if (!all && days != null) {
-    const since = new Date(Date.now() - days * 86400_000).toISOString();
-    query = query.gte("created_at", since);
-  }
-
-  const { data, error, count } = await query;
-  if (error) {
-    console.error("query failed", error.message);
-    process.exit(1);
-  }
-
-  // Probe new columns without failing the dry-run.
   let schemaReady = true;
-  const { error: probeErr } = await sb
+  const { error: probeErr } = await client
     .from("collection_candidates")
     .select("rss_title_en, wire_titles_ready_at")
     .limit(1);
@@ -95,29 +74,88 @@ async function main() {
     schemaReady = false;
   }
 
-  const rows = data ?? [];
+  const selectCols = schemaReady
+    ? "id, rss_title, rss_title_ko, rss_title_en, wire_titles_ready_at, status, created_at"
+    : "id, rss_title, rss_title_ko, status, created_at";
+
+  let countQuery = client
+    .from("collection_candidates")
+    .select("id", { count: "exact", head: true })
+    .in("status", NEWS_WIRE_INCLUDE_STATUSES);
+  if (!all && days != null) {
+    const since = new Date(Date.now() - days * 86400_000).toISOString();
+    countQuery = countQuery.gte("created_at", since);
+  }
+  const { count: countExact, error: countErr } = await countQuery;
+  if (countErr) {
+    console.error("count failed", countErr.message);
+    process.exit(1);
+  }
+
+  const sinceIso =
+    !all && days != null
+      ? new Date(Date.now() - days * 86400_000).toISOString()
+      : null;
+
+  const fetched = await collectRowsByRangePagination<Row>(
+    async (from, to) => {
+      let q = client
+        .from("collection_candidates")
+        .select(selectCols)
+        .in("status", NEWS_WIRE_INCLUDE_STATUSES)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to);
+      if (sinceIso) q = q.gte("created_at", sinceIso);
+      const { data, error } = await q;
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, rows: (data ?? []) as unknown as Row[] };
+    },
+    PAGE_SIZE
+  );
+
+  if (!fetched.ok) {
+    console.error("scan failed", fetched.error);
+    process.exit(1);
+  }
+
+  const rows = fetched.rows;
   let needKo = 0;
   let needEn = 0;
   let needAny = 0;
   let alreadyReady = 0;
+
   for (const row of rows) {
-    const withEn = {
-      ...row,
-      rss_title_en: null as string | null,
-      wire_titles_ready_at: null as string | null,
-    };
-    const koReady = isWireKoTitleReady(withEn);
-    const enReady = isWireEnTitleReady(withEn);
-    if (koReady && enReady) {
+    const normalized = schemaReady
+      ? row
+      : {
+          ...row,
+          rss_title_en: null,
+          wire_titles_ready_at: null,
+        };
+
+    if (schemaReady && isWireTitlesReady(normalized)) {
       alreadyReady += 1;
       continue;
     }
+    if (!schemaReady) {
+      const koReady = isWireKoTitleReady(normalized);
+      const enReady = isWireEnTitleReady(normalized);
+      if (koReady && enReady) {
+        alreadyReady += 1;
+        continue;
+      }
+      needAny += 1;
+      if (!koReady) needKo += 1;
+      if (!enReady) needEn += 1;
+      continue;
+    }
+
     needAny += 1;
-    if (!koReady) needKo += 1;
-    if (!enReady) needEn += 1;
+    if (!isWireKoTitleReady(normalized)) needKo += 1;
+    if (!isWireEnTitleReady(normalized)) needEn += 1;
   }
 
-  // Rough nano cost: ~$0.0004 blended / 1K tokens; ~400 tokens/item.
   const estTokensPerItem = 400;
   const estUsdPer1kTokens = 0.0004;
   const estimatedUsd =
@@ -132,16 +170,17 @@ async function main() {
         schemaReady,
         scope: all ? "all_active" : `last_${days}_days`,
         activeCandidatesScanned: rows.length,
-        countExact: count,
-        alreadyWireReadyNative: alreadyReady,
+        countExact: countExact ?? null,
+        scannedMatchesCountExact: rows.length === (countExact ?? -1),
+        alreadyWireReady: alreadyReady,
         needingAnyTitleWork: needAny,
         needingKoTitle: needKo,
         needingEnTitle: needEn,
         estimatedOpenAiCallsBatchesOf40: Math.ceil(needAny / 40),
         estimatedUsdRough: estimatedUsd,
         note: schemaReady
-          ? "No OpenAI called. No DB writes. Approve separately to execute."
-          : "migration 20260911 not applied yet; estimate uses native-title heuristics only.",
+          ? "No OpenAI called. No DB writes. Ready titles excluded from cost."
+          : "migration 20260911 not applied; estimate uses native-title heuristics only.",
       },
       null,
       2

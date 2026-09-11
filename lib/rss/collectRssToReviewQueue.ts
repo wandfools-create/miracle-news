@@ -1015,15 +1015,17 @@ export async function collectRssToReviewQueue(
 
   console.info("[collectRss] run done", { totals, costs, collectionRunId });
 
-  // Async title prep for public News Wire — never blocks / fails collect.
+  // One awaited title-localize batch after successful save (max 40).
+  // Errors are swallowed so RSS insert success is preserved.
   if (options.save && !options.testMode && totals.inserted > 0) {
     try {
-      const { scheduleWireTitleLocalizationAfterCollect } = await import(
+      const { localizeWireCandidateTitles } = await import(
         "@/lib/news-wire/localizeWireTitles"
       );
-      scheduleWireTitleLocalizationAfterCollect();
+      const localizeResult = await localizeWireCandidateTitles({ limit: 40 });
+      console.info("[collectRss] wire title localize", localizeResult);
     } catch (err) {
-      console.warn("[collectRss] wire localize schedule skipped", {
+      console.warn("[collectRss] wire title localize failed; collect kept", {
         error: err instanceof Error ? err.message : String(err),
       });
     }

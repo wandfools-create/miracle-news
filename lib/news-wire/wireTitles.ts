@@ -29,16 +29,23 @@ export function isWireEnTitleReady(row: {
   return Boolean(raw) && !titleHasHangul(raw);
 }
 
+/**
+ * Both locales must actually be ready.
+ * Never trust wire_titles_ready_at alone (stale/wrong timestamps).
+ */
 export function isWireTitlesReady(row: {
   rss_title: string;
   rss_title_ko?: string | null;
   rss_title_en?: string | null;
   wire_titles_ready_at?: string | null;
 }): boolean {
-  if (row.wire_titles_ready_at) return true;
   return isWireKoTitleReady(row) && isWireEnTitleReady(row);
 }
 
+/**
+ * Locale title for public display.
+ * Returns null instead of falling back to the opposite language.
+ */
 export function displayWireTitle(
   row: {
     rss_title: string;
@@ -46,24 +53,23 @@ export function displayWireTitle(
     rss_title_en?: string | null;
   },
   locale: "ko" | "en"
-): string {
+): string | null {
   if (locale === "ko") {
-    return (
-      trimTitle(row.rss_title_ko) ||
-      (titleHasHangul(row.rss_title) ? trimTitle(row.rss_title) : "") ||
-      trimTitle(row.rss_title)
-    );
+    if (trimTitle(row.rss_title_ko)) return trimTitle(row.rss_title_ko);
+    if (titleHasHangul(row.rss_title)) return trimTitle(row.rss_title);
+    return null;
   }
-  return (
-    trimTitle(row.rss_title_en) ||
-    (!titleHasHangul(row.rss_title) ? trimTitle(row.rss_title) : "") ||
-    trimTitle(row.rss_title_en) ||
-    trimTitle(row.rss_title)
-  );
+  if (trimTitle(row.rss_title_en)) return trimTitle(row.rss_title_en);
+  if (!titleHasHangul(row.rss_title) && trimTitle(row.rss_title)) {
+    return trimTitle(row.rss_title);
+  }
+  return null;
 }
 
 /** Allow only http(s) absolute URLs for public outbound links. */
-export function sanitizeWireOutboundUrl(raw: string | null | undefined): string | null {
+export function sanitizeWireOutboundUrl(
+  raw: string | null | undefined
+): string | null {
   const value = (raw ?? "").trim();
   if (!value) return null;
   try {

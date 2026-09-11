@@ -1,4 +1,3 @@
-import type { AiRecommendGrade } from "@/lib/collection-candidates/candidateRecommend";
 import type { CollectionCandidateStatus } from "@/lib/collection-candidates/types";
 import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
 
@@ -21,8 +20,12 @@ export const NEWS_WIRE_HOME_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 /** Unevaluated items newer than this float above normal/low grades. */
 export const NEWS_WIRE_VERY_RECENT_MS = 3 * 60 * 60 * 1000;
 export const NEWS_WIRE_PAGE_SIZE = 50;
+/** Hard cap for page query param (finite positive integer). */
+export const NEWS_WIRE_MAX_PAGE = 200;
+export const NEWS_WIRE_FETCH_PAGE_SIZE = 50;
+export const NEWS_WIRE_FETCH_MAX_PAGES = 200;
 
-/** Lean columns only — never expose failure details, Discord fields, or summaries. */
+/** Server-only lean select — includes sort fields never sent to the client. */
 export const NEWS_WIRE_DB_SELECT = `
   id,
   source,
@@ -40,6 +43,7 @@ export const NEWS_WIRE_DB_SELECT = `
   wire_titles_ready_at
 `.replace(/\s+/g, " ").trim();
 
+/** Internal row used for filtering/ranking on the server only. */
 export type NewsWireDbRow = {
   id: string;
   source: string;
@@ -57,18 +61,17 @@ export type NewsWireDbRow = {
   wire_titles_ready_at?: string | null;
 };
 
-/** Public DTO — whitelist for page props. */
+/**
+ * Public DTO for RSC/client props — whitelist only.
+ * No AI grade/score, article_id, or translation-status fields.
+ */
 export type NewsWireItem = {
   id: string;
   title: string;
-  sourceKey: string;
   sourceLabel: string;
   publishedAt: string | null;
   collectedAt: string;
   originalUrl: string;
-  /** Internal sort only — not rendered. */
-  aiRecommendGrade: AiRecommendGrade | null;
-  aiRecommendScore: number | null;
 };
 
 export type NewsWireLocale = ArticleLocale;

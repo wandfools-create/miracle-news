@@ -2,9 +2,7 @@ import {
   normalizeAiRecommendGrade,
   type AiRecommendGrade,
 } from "@/lib/collection-candidates/candidateRecommend";
-import {
-  NEWS_WIRE_VERY_RECENT_MS,
-} from "@/lib/news-wire/types";
+import { NEWS_WIRE_VERY_RECENT_MS } from "@/lib/news-wire/types";
 
 /**
  * Public wire sort (locale-neutral):
@@ -35,21 +33,18 @@ export function newsWireRankBucket(
   return 3;
 }
 
+/** Sort key used only on the server before stripping grades from public DTOs. */
+export type NewsWireSortable = {
+  id: string;
+  aiRecommendGrade: AiRecommendGrade | null;
+  aiRecommendScore: number | null;
+  publishedAt: string | null;
+  collectedAt: string;
+};
+
 export function compareNewsWireItems(
-  a: {
-    id: string;
-    aiRecommendGrade: AiRecommendGrade | null;
-    aiRecommendScore: number | null;
-    publishedAt: string | null;
-    collectedAt: string;
-  },
-  b: {
-    id: string;
-    aiRecommendGrade: AiRecommendGrade | null;
-    aiRecommendScore: number | null;
-    publishedAt: string | null;
-    collectedAt: string;
-  },
+  a: NewsWireSortable,
+  b: NewsWireSortable,
   nowMs = Date.now()
 ): number {
   const bucketDiff =
@@ -79,6 +74,8 @@ export function compareNewsWireItems(
   return a.id.localeCompare(b.id);
 }
 
-export function parseWireGrade(raw: string | null | undefined): AiRecommendGrade | null {
+export function parseWireGrade(
+  raw: string | null | undefined
+): AiRecommendGrade | null {
   return normalizeAiRecommendGrade(raw);
 }

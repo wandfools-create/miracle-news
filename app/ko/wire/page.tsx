@@ -1,6 +1,7 @@
 import NewsWirePageView from "@/components/news-wire/NewsWirePageView";
 import {
   fetchNewsWireDayPage,
+  parseNewsWirePage,
   todayNyDateKey,
 } from "@/lib/news-wire/fetchNewsWire";
 
@@ -16,7 +17,7 @@ export default async function KoreanNewsWirePage({ searchParams }: PageProps) {
     params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date)
       ? params.date
       : todayNyDateKey();
-  const page = Math.max(1, Number(params.page ?? "1") || 1);
+  const page = parseNewsWirePage(params.page);
 
   const result = await fetchNewsWireDayPage({
     locale: "ko",
