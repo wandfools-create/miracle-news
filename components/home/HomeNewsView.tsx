@@ -237,6 +237,45 @@ function PreviousHighlightsSection({
   );
 }
 
+function PreviousHighlightsRail({
+  articles,
+  locale,
+  labels,
+  articleHrefPrefix,
+  articleHrefFor,
+}: {
+  articles: HomeArticleCard[];
+  locale: ArticleLocale;
+  labels: HomeNewsLabels;
+  articleHrefPrefix: string;
+  articleHrefFor?: (article: HomeArticleCard) => string;
+}) {
+  if (articles.length === 0) return null;
+
+  return (
+    <section
+      id="previous-highlights"
+      className="min-w-0 scroll-mt-6 border-t border-neutral-300 pt-3"
+    >
+      <h2 className="border-b border-neutral-200 pb-2 text-[15px] font-bold text-news-navy">
+        {labels.previousHighlightsTitle}
+      </h2>
+      <div className="mt-1">
+        {articles.map((article, index) => (
+          <SidebarItem
+            key={article.id}
+            article={article}
+            locale={locale}
+            articleHrefPrefix={articleHrefPrefix}
+            articleHrefFor={articleHrefFor}
+            index={index}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function NavPill({
   href,
   children,
@@ -978,6 +1017,10 @@ export default function HomeNewsView({
     trendingIssues &&
       (trendingIssues.us.length > 0 || trendingIssues.kr.length > 0)
   );
+  const showPreviousHighlightsInRightRail =
+    !showTrending && showPreviousHighlights;
+  const showPreviousHighlightsBelow =
+    showPreviousHighlights && !showPreviousHighlightsInRightRail;
   const sourceFromUrl = parseHomeSourceFilter(searchParams.get("source"));
   const categoryFromUrl = parseHomeCategoryFilter(searchParams.get("category"));
 
@@ -1137,7 +1180,7 @@ export default function HomeNewsView({
     ? newsHomeThreeColGrid
     : "min-w-0";
   const showLeftRailContent = showSidebar;
-  const showRightRail = showTrending;
+  const showRightRail = showTrending || showPreviousHighlightsInRightRail;
 
   const trendingPanel = showTrending && trendingIssues && !isFilterResultMode ? (
     <TrendingIssuesPanel
@@ -1154,6 +1197,18 @@ export default function HomeNewsView({
       }}
     />
   ) : null;
+  const previousHighlightsRail =
+    showPreviousHighlightsInRightRail &&
+    displaySections.previousHighlights &&
+    !isFilterResultMode ? (
+      <PreviousHighlightsRail
+        articles={displaySections.previousHighlights}
+        locale={locale}
+        labels={labels}
+        articleHrefPrefix={articleHrefPrefix}
+        articleHrefFor={articleHrefFor}
+      />
+    ) : null;
 
   const showSources =
     filteredSourceLeadCards.length > 0 || sourceFilterOptions.length > 0;
@@ -1411,7 +1466,7 @@ export default function HomeNewsView({
               <aside
                 className={`order-2 min-w-0 xl:order-none xl:row-start-2 xl:row-span-2 ${homeRightRailColClass()}`}
               >
-                {showRightRail && trendingPanel ? trendingPanel : null}
+                {showRightRail ? trendingPanel ?? previousHighlightsRail : null}
               </aside>
             ) : null}
 
@@ -1491,7 +1546,7 @@ export default function HomeNewsView({
               </section>
             ) : null}
 
-            {showPreviousHighlights && displaySections.previousHighlights && !isFilterResultMode ? (
+            {showPreviousHighlightsBelow && displaySections.previousHighlights && !isFilterResultMode ? (
               <PreviousHighlightsSection
                 articles={displaySections.previousHighlights}
                 locale={locale}
@@ -1506,7 +1561,7 @@ export default function HomeNewsView({
               <section
                 id="sources"
                 className={`order-5 min-w-0 scroll-mt-6 border-t border-neutral-300 pt-8 xl:order-none xl:col-span-full ${
-                  showPreviousHighlights ? "xl:row-start-4" : "xl:row-start-3"
+                  showPreviousHighlightsBelow ? "xl:row-start-4" : "xl:row-start-3"
                 }`}
               >
                 <SectionHeading
@@ -1606,7 +1661,7 @@ export default function HomeNewsView({
               <section
                 id="categories"
                 className={`order-6 min-w-0 scroll-mt-6 border-t border-neutral-300 pt-8 xl:order-none xl:col-span-full ${
-                  showPreviousHighlights ? "xl:row-start-5" : "xl:row-start-4"
+                  showPreviousHighlightsBelow ? "xl:row-start-5" : "xl:row-start-4"
                 }`}
               >
                 <SectionHeading
