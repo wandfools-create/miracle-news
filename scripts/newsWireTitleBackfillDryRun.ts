@@ -21,6 +21,8 @@ import {
 loadEnvConfig(process.cwd());
 
 const PAGE_SIZE = 50;
+/** Mirrors lib/openai/env.ts DEFAULT_CANDIDATE_MODEL (avoid server-only import). */
+const DEFAULT_CANDIDATE_MODEL = "gpt-5.4-nano";
 
 function parseArgs(argv: string[]) {
   let days: number | null = 7;
@@ -34,6 +36,11 @@ function parseArgs(argv: string[]) {
     if (m) days = Number(m[1]);
   }
   return { days, all };
+}
+
+/** Same resolution as getOpenAiCandidateModel() — model name only, never keys. */
+function resolveCandidateModelName(): string {
+  return process.env.OPENAI_CANDIDATE_MODEL?.trim() || DEFAULT_CANDIDATE_MODEL;
 }
 
 type Row = {
@@ -57,9 +64,30 @@ function createDryRunClient() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
+/**
+ * Rough token estimate for title-only batch localize (not billed usage).
+ * System ~120 tokens; per item ~title chars/4 + JSON wrapper; output ~2 titles.
+ */
+function estimateTokens(needAny: number): {
+  estimatedInputTokens: number;
+  estimatedOutputTokens: number;
+} {
+  const systemTokens = 120;
+  const avgTitleTokens = 28;
+  const perItemInput = avgTitleTokens + 12; // id + json framing
+  const perItemOutput = avgTitleTokens * 2 + 16; // ko + en + framing
+  const batches = Math.max(1, Math.ceil(needAny / 40));
+  const items = needAny;
+  return {
+    estimatedInputTokens: systemTokens * batches + perItemInput * items,
+    estimatedOutputTokens: perItemOutput * items,
+  };
+}
+
 async function main() {
   const { days, all } = parseArgs(process.argv.slice(2));
   const client = createDryRunClient();
+  const model = resolveCandidateModelName();
 
   let schemaReady = true;
   const { error: probeErr } = await client
@@ -156,12 +184,9 @@ async function main() {
     if (!isWireEnTitleReady(normalized)) needEn += 1;
   }
 
-  const estTokensPerItem = 400;
-  const estUsdPer1kTokens = 0.0004;
-  const estimatedUsd =
-    Math.round(
-      ((needAny * estTokensPerItem) / 1000) * estUsdPer1kTokens * 10000
-    ) / 10000;
+  const tokens = estimateTokens(needAny);
+  // gpt-5.4-nano has no confirmed official public price we can cite here.
+  const pricingStatus = "pricing_unverified" as const;
 
   console.log(
     JSON.stringify(
@@ -169,6 +194,8 @@ async function main() {
         dryRun: true,
         schemaReady,
         scope: all ? "all_active" : `last_${days}_days`,
+        model,
+        pricingStatus,
         activeCandidatesScanned: rows.length,
         countExact: countExact ?? null,
         scannedMatchesCountExact: rows.length === (countExact ?? -1),
@@ -176,11 +203,16 @@ async function main() {
         needingAnyTitleWork: needAny,
         needingKoTitle: needKo,
         needingEnTitle: needEn,
-        estimatedOpenAiCallsBatchesOf40: Math.ceil(needAny / 40),
-        estimatedUsdRough: estimatedUsd,
-        note: schemaReady
-          ? "No OpenAI called. No DB writes. Ready titles excluded from cost."
-          : "migration 20260911 not applied; estimate uses native-title heuristics only.",
+        estimatedOpenAiCallsBatchesOf40: Math.ceil(needAny / 40) || 0,
+        estimatedInputTokens: tokens.estimatedInputTokens,
+        estimatedOutputTokens: tokens.estimatedOutputTokens,
+        estimatedUsd: null,
+        note:
+          pricingStatus === "pricing_unverified"
+            ? "Token counts are rough estimates only. Official USD pricing for this model was not verified — do not treat as a confirmed cost. No OpenAI called. No DB writes."
+            : schemaReady
+              ? "No OpenAI called. No DB writes. Ready titles excluded from cost."
+              : "migration 20260911 not applied; estimate uses native-title heuristics only.",
       },
       null,
       2

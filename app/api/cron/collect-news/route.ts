@@ -5,6 +5,7 @@ import {
   cronUnauthorizedResponse,
   isCronAuthorized,
 } from "@/lib/cron/cronAuth";
+import { scheduleWireTitleLocalizeAfterResponse } from "@/lib/news-wire/scheduleWireTitleLocalizeAfter";
 import { collectRssToReviewQueue } from "@/lib/rss/collectRssToReviewQueue";
 import { resolveCollectRssOptions } from "@/lib/rss/rssCollectConfig";
 
@@ -15,10 +16,17 @@ export const maxDuration = 300;
  * Legacy manual/compat collect endpoint.
  * Prefer /api/cron/collect-news-us and /api/cron/collect-news-kr for Production crons.
  * Pass ?region=us-intl|korea for a regional run (no ET hour gate).
+ *
+ * Bypasses runRegionalCollect, so after() is registered here once per request
+ * (regional paths register only inside runRegionalCollect).
  */
 async function runCollect(request: NextRequest) {
   const options = resolveCollectRssOptions(request.nextUrl.searchParams);
   const result = await collectRssToReviewQueue(options);
+
+  if (result.save && !result.testMode) {
+    scheduleWireTitleLocalizeAfterResponse();
+  }
 
   const hint = result.testMode
     ? "Test mode: counts only, no DB writes."

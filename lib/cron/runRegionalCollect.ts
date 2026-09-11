@@ -1,19 +1,29 @@
 import type { NextRequest } from "next/server";
 
 import { resolveCollectionTriggerType } from "@/lib/collection-candidates/collectionRunsCore";
+import { scheduleWireTitleLocalizeAfterResponse } from "@/lib/news-wire/scheduleWireTitleLocalizeAfter";
 import { collectRssToReviewQueue } from "@/lib/rss/collectRssToReviewQueue";
 import type { CollectRssResult } from "@/lib/rss/collectRssToReviewQueue";
 import type { CollectRegion } from "@/lib/rss/collectRegions";
 import { resolveCollectRssOptionsForRegion } from "@/lib/rss/rssCollectConfig";
 
-/** Core regional RSS collect (candidates only, no OpenAI). */
+/**
+ * Core regional RSS collect (candidates only during the request).
+ * Title localization is scheduled once via after() at this shared boundary
+ * (desk orchestrator + regional collect cron both enter here).
+ */
 export async function runRegionalCollect(
   region: CollectRegion,
   searchParams?: URLSearchParams | null
 ): Promise<CollectRssResult> {
   const options = resolveCollectRssOptionsForRegion(region, searchParams);
   options.triggerType = resolveCollectionTriggerType(searchParams);
-  return collectRssToReviewQueue(options);
+  const result = await collectRssToReviewQueue(options);
+  // Save runs only — including inserted=0 so backlog can drain next cycle.
+  if (result.save && !result.testMode) {
+    scheduleWireTitleLocalizeAfterResponse();
+  }
+  return result;
 }
 
 export function collectHintFromResult(result: CollectRssResult): string | undefined {

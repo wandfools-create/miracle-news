@@ -1015,21 +1015,8 @@ export async function collectRssToReviewQueue(
 
   console.info("[collectRss] run done", { totals, costs, collectionRunId });
 
-  // One awaited title-localize batch after successful save (max 40).
-  // Errors are swallowed so RSS insert success is preserved.
-  if (options.save && !options.testMode && totals.inserted > 0) {
-    try {
-      const { localizeWireCandidateTitles } = await import(
-        "@/lib/news-wire/localizeWireTitles"
-      );
-      const localizeResult = await localizeWireCandidateTitles({ limit: 40 });
-      console.info("[collectRss] wire title localize", localizeResult);
-    } catch (err) {
-      console.warn("[collectRss] wire title localize failed; collect kept", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
+  // Title localization is scheduled via after() at the Next.js request
+  // boundary (runRegionalCollect / legacy collect-news), not awaited here.
 
   return {
     ok: feeds.every(

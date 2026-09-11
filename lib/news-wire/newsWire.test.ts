@@ -415,7 +415,7 @@ describe("news wire public DTO + wiring", () => {
     assert.doesNotMatch(sql, /GRANT SELECT[\s\S]*TO anon/i);
   });
 
-  it("fetch uses range pagination; collect awaits one localize batch", () => {
+  it("schedules after() once at collect request boundary; never awaits inside collectRss", () => {
     const fetchSrc = readFileSync(
       join(process.cwd(), "lib/news-wire/fetchNewsWire.ts"),
       "utf8"
@@ -428,22 +428,62 @@ describe("news wire public DTO + wiring", () => {
       join(process.cwd(), "lib/news-wire/localizeWireTitles.ts"),
       "utf8"
     );
+    const schedule = readFileSync(
+      join(process.cwd(), "lib/news-wire/scheduleWireTitleLocalizeAfter.ts"),
+      "utf8"
+    );
+    const regional = readFileSync(
+      join(process.cwd(), "lib/cron/runRegionalCollect.ts"),
+      "utf8"
+    );
+    const desk = readFileSync(
+      join(process.cwd(), "lib/cron/runRegionalDeskOrchestrator.ts"),
+      "utf8"
+    );
+    const regionalCron = readFileSync(
+      join(process.cwd(), "lib/cron/runRegionalCollectCron.ts"),
+      "utf8"
+    );
+    const legacy = readFileSync(
+      join(process.cwd(), "app/api/cron/collect-news/route.ts"),
+      "utf8"
+    );
     const ko = readFileSync(join(process.cwd(), "app/ko/wire/page.tsx"), "utf8");
     const en = readFileSync(join(process.cwd(), "app/en/wire/page.tsx"), "utf8");
+
     assert.match(fetchSrc, /collectRowsByRangePagination/);
-    assert.doesNotMatch(fetchSrc, /\.limit\(\s*80\s*\)/);
-    assert.doesNotMatch(fetchSrc, /\.limit\(\s*51\s*\)/);
     assert.doesNotMatch(fetchSrc, /chatCompletion|localizeWireCandidateTitles/);
-    assert.match(collect, /await localizeWireCandidateTitles\(\{\s*limit:\s*40/);
-    assert.doesNotMatch(collect, /scheduleWireTitleLocalizationAfterCollect/);
-    assert.doesNotMatch(localize, /scheduleWireTitleLocalizationAfterCollect/);
+    assert.doesNotMatch(collect, /localizeWireCandidateTitles|scheduleWireTitle/);
+    assert.doesNotMatch(collect, /from ["']next\/server["']/);
+
+    assert.match(schedule, /from ["']next\/server["']/);
+    assert.match(schedule, /\bafter\s*\(/);
+    assert.match(schedule, /localizeWireCandidateTitles\(\{\s*limit:\s*40/);
+    assert.match(schedule, /collect unchanged/);
+
+    // Shared regional boundary: exactly one schedule call site.
+    assert.equal(
+      (regional.match(/scheduleWireTitleLocalizeAfterResponse\(\)/g) ?? []).length,
+      1
+    );
+    assert.match(regional, /result\.save && !result\.testMode/);
+    assert.doesNotMatch(regional, /inserted\s*[>!]=?\s*0|totals\.inserted/);
+    // Desk / regional cron must not double-register — they share runRegionalCollect.
+    assert.doesNotMatch(desk, /scheduleWireTitleLocalizeAfterResponse/);
+    assert.doesNotMatch(regionalCron, /scheduleWireTitleLocalizeAfterResponse/);
+    // Legacy path bypasses runRegionalCollect — one schedule there only.
+    assert.equal(
+      (legacy.match(/scheduleWireTitleLocalizeAfterResponse\(\)/g) ?? []).length,
+      1
+    );
+
+    // Backlog retry: localize selects by readiness, not this-run inserts.
+    assert.match(localize, /needsLocalization|!isWireTitlesReady/);
     assert.doesNotMatch(ko, /localizeWire|chatCompletion|OpenAI/);
     assert.doesNotMatch(en, /localizeWire|chatCompletion|OpenAI/);
-    assert.match(ko, /parseNewsWirePage/);
-    assert.match(en, /parseNewsWirePage/);
   });
 
-  it("dry-run script uses range pagination and safe env loader", () => {
+  it("dry-run script uses range pagination and unverified pricing shape", () => {
     const script = readFileSync(
       join(process.cwd(), "scripts/newsWireTitleBackfillDryRun.ts"),
       "utf8"
@@ -451,6 +491,10 @@ describe("news wire public DTO + wiring", () => {
     assert.match(script, /collectRowsByRangePagination/);
     assert.match(script, /loadEnvConfig/);
     assert.match(script, /createClient/);
+    assert.match(script, /pricing_unverified/);
+    assert.match(script, /estimatedInputTokens/);
+    assert.match(script, /estimatedOutputTokens/);
+    assert.match(script, /estimatedUsd:\s*null/);
     assert.doesNotMatch(script, /readFileSync\([^\n]*\.env\.local/);
     assert.doesNotMatch(script, /chatCompletion|OPENAI_API_KEY/);
     assert.match(script, /scannedMatchesCountExact/);
