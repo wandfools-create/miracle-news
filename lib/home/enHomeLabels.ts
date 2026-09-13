@@ -40,4 +40,6 @@ export const enHomeLabels: HomeNewsLabels = {
     "Important stories from yesterday and the past 7 days.",
   editionHeaderTodayLabel: "Today's Hannoon",
   continuingIssueLabel: "Ongoing issue",
+  newsWireTitle: "News Wire",
+  newsWireMore: "+ More",
 };

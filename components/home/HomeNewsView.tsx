@@ -15,6 +15,8 @@ import { getSourceLabel } from "@/lib/koreanArticleDisplay";
 import HomeNewsSearch, {
   type HomeNewsSearchLabels,
 } from "@/components/home/HomeNewsSearch";
+import NewsWireRail from "@/components/home/NewsWireRail";
+import type { NewsWireItem } from "@/lib/news-wire/types";
 import NewsThumbnail, {
   newsThumbFrameClass,
   newsThumbFrameForVariant,
@@ -94,6 +96,8 @@ export type HomeNewsLabels = {
   previousHighlightsDesc: string;
   editionHeaderTodayLabel: string;
   continuingIssueLabel: string;
+  newsWireTitle: string;
+  newsWireMore: string;
 };
 
 function formatCategoryCount(locale: ArticleLocale, n: number): string {
@@ -119,6 +123,9 @@ type HomeNewsViewProps = {
   searchArticles?: HomeArticleCard[];
   searchPath?: string;
   searchLabels?: HomeNewsSearchLabels;
+  /** Public News Wire teaser (server-fetched). Empty/undefined hides the section. */
+  newsWireItems?: NewsWireItem[];
+  newsWireMoreHref?: string;
 };
 
 function listDateText(article: HomeArticleCard, locale: ArticleLocale): string {
@@ -888,6 +895,8 @@ export default function HomeNewsView({
   searchArticles = [],
   searchPath,
   searchLabels,
+  newsWireItems = [],
+  newsWireMoreHref,
 }: HomeNewsViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [localSourceGroup, setLocalSourceGroup] =
@@ -1136,7 +1145,6 @@ export default function HomeNewsView({
   const homeGridClass = shouldUseNewspaperThreeColGrid({ showEditionHome })
     ? newsHomeThreeColGrid
     : "min-w-0";
-  const showLeftRailContent = showSidebar;
   const showRightRail = showTrending;
 
   const trendingPanel = showTrending && trendingIssues && !isFilterResultMode ? (
@@ -1360,13 +1368,25 @@ export default function HomeNewsView({
               <aside
                 className={`order-3 min-w-0 xl:order-none xl:row-start-2 ${homeLeftRailColClass()}`}
               >
-                {showLeftRailContent ? (
+                {showSidebar && displaySections.sidebar.length > 0 ? (
                   <SpotlightRail
                     articles={displaySections.sidebar}
                     locale={locale}
                     labels={labels}
                     articleHrefPrefix={articleHrefPrefix}
                     articleHrefFor={articleHrefFor}
+                  />
+                ) : null}
+                {newsWireItems.length > 0 ? (
+                  <NewsWireRail
+                    items={newsWireItems}
+                    locale={locale}
+                    title={labels.newsWireTitle}
+                    moreLabel={labels.newsWireMore}
+                    moreHref={
+                      newsWireMoreHref ??
+                      (locale === "ko" ? "/ko/wire" : "/en/wire")
+                    }
                   />
                 ) : null}
               </aside>

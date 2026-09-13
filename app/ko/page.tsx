@@ -4,13 +4,17 @@ import { fetchEditionHomeArticles } from "@/lib/home/fetchEditionHomeArticles";
 import { koHomeLabels } from "@/lib/home/koHomeLabels";
 import { prepareEditionHomeSections } from "@/lib/home/prepareEditionHomeSections";
 import { koHomeSearchLabels } from "@/lib/home/koSearchLabels";
+import { fetchHomeNewsWireItems } from "@/lib/news-wire/fetchNewsWire";
 import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
 export default async function KoreanHomePage() {
   const nowMs = Date.now();
-  const { articles: rawArticles, error } = await fetchEditionHomeArticles("ko");
+  const [{ articles: rawArticles, error }, wire] = await Promise.all([
+    fetchEditionHomeArticles("ko"),
+    fetchHomeNewsWireItems({ locale: "ko", nowMs }),
+  ]);
   const articles = enrichHomeArticlesWithRelativeDates(rawArticles, nowMs);
 
   const sections = prepareEditionHomeSections(
@@ -48,6 +52,8 @@ export default async function KoreanHomePage() {
         searchArticles={articles}
         searchPath="/ko/search"
         searchLabels={koHomeSearchLabels}
+        newsWireItems={wire.items}
+        newsWireMoreHref="/ko/wire"
       />
     </Suspense>
   );
