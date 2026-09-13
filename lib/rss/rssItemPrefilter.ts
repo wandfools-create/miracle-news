@@ -32,6 +32,12 @@ export const RSS_PREFILTER_SOURCE_KEYS = [
   "chosun",
   "tvchosun",
   "insight",
+  "nyt",
+  "wapo",
+  "the-hill",
+  "npr",
+  "cdc",
+  "who",
 ] as const;
 
 /** TV조선 broadcast / clip / sports-desk titles (not general news). */

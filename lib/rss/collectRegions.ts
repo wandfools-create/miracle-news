@@ -21,6 +21,12 @@ export const US_INTL_SOURCE_KEYS = [
   "sciencedaily",
   /** English KR outlet — morning intl desk (not native Korean evening). */
   "korea-herald",
+  "nyt",
+  "wapo",
+  "the-hill",
+  "npr",
+  "cdc",
+  "who",
 ] as const;
 
 /** Source keys for Korea evening desk (joongang reserved — not collected yet). */

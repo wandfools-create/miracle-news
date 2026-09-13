@@ -51,6 +51,7 @@ function parseRealm(value: string): CollectionFieldRealm {
     value === "politics" ||
     value === "economy" ||
     value === "society" ||
+    value === "public_health" ||
     value === "culture" ||
     value === "science" ||
     value === "lifestyle"
