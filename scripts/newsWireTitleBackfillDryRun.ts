@@ -1,14 +1,15 @@
 /**
- * Dry-run estimate for News Wire title localization backfill.
- * Default: dry-run only. Never calls OpenAI. Never writes DB.
+ * News Wire title localization backfill.
+ * Default: dry-run only (no OpenAI, no DB writes).
  *
  * Usage:
  *   npx tsx scripts/newsWireTitleBackfillDryRun.ts
  *   npx tsx scripts/newsWireTitleBackfillDryRun.ts --days=7
  *   npx tsx scripts/newsWireTitleBackfillDryRun.ts --all
+ *   npx tsx scripts/newsWireTitleBackfillDryRun.ts --execute --confirm=TRANSLATE_WIRE_TITLES --max-items=40
  */
 import { loadEnvConfig } from "@next/env";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { collectRowsByRangePagination } from "../lib/collection-candidates/candidateFetchPagination";
 import { NEWS_WIRE_INCLUDE_STATUSES } from "../lib/news-wire/types";
@@ -17,28 +18,39 @@ import {
   isWireKoTitleReady,
   isWireTitlesReady,
 } from "../lib/news-wire/wireTitles";
+import { runWireLocalizeBatch } from "../lib/news-wire/runWireLocalizeBatch";
+import { WIRE_LOCALIZE_BATCH_SIZE } from "../lib/news-wire/localizeWireTitlesLogic";
 
 loadEnvConfig(process.cwd());
 
 const PAGE_SIZE = 50;
-/** Mirrors lib/openai/env.ts DEFAULT_CANDIDATE_MODEL (avoid server-only import). */
 const DEFAULT_CANDIDATE_MODEL = "gpt-5.4-nano";
+const EXECUTE_CONFIRM = "TRANSLATE_WIRE_TITLES";
 
 function parseArgs(argv: string[]) {
   let days: number | null = 7;
   let all = false;
+  let execute = false;
+  let confirm: string | null = null;
+  let maxItems = WIRE_LOCALIZE_BATCH_SIZE;
   for (const arg of argv) {
     if (arg === "--all") {
       all = true;
       days = null;
     }
-    const m = arg.match(/^--days=(\d+)$/);
-    if (m) days = Number(m[1]);
+    if (arg === "--execute") execute = true;
+    const confirmMatch = arg.match(/^--confirm=(.+)$/);
+    if (confirmMatch) confirm = confirmMatch[1] ?? null;
+    const daysMatch = arg.match(/^--days=(\d+)$/);
+    if (daysMatch) days = Number(daysMatch[1]);
+    const maxMatch = arg.match(/^--max-items=(\d+)$/);
+    if (maxMatch) {
+      maxItems = Math.max(1, Number(maxMatch[1]));
+    }
   }
-  return { days, all };
+  return { days, all, execute, confirm, maxItems };
 }
 
-/** Same resolution as getOpenAiCandidateModel() — model name only, never keys. */
 function resolveCandidateModelName(): string {
   return process.env.OPENAI_CANDIDATE_MODEL?.trim() || DEFAULT_CANDIDATE_MODEL;
 }
@@ -53,7 +65,7 @@ type Row = {
   created_at: string;
 };
 
-function createDryRunClient() {
+function createScriptClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !key) {
@@ -64,32 +76,24 @@ function createDryRunClient() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
-/**
- * Rough token estimate for title-only batch localize (not billed usage).
- * System ~120 tokens; per item ~title chars/4 + JSON wrapper; output ~2 titles.
- */
 function estimateTokens(needAny: number): {
   estimatedInputTokens: number;
   estimatedOutputTokens: number;
 } {
   const systemTokens = 120;
   const avgTitleTokens = 28;
-  const perItemInput = avgTitleTokens + 12; // id + json framing
-  const perItemOutput = avgTitleTokens * 2 + 16; // ko + en + framing
+  const perItemInput = avgTitleTokens + 12;
+  const perItemOutput = avgTitleTokens * 2 + 16;
   const batches = Math.max(1, Math.ceil(needAny / 40));
-  const items = needAny;
   return {
-    estimatedInputTokens: systemTokens * batches + perItemInput * items,
-    estimatedOutputTokens: perItemOutput * items,
+    estimatedInputTokens: systemTokens * batches + perItemInput * needAny,
+    estimatedOutputTokens: perItemOutput * needAny,
   };
 }
 
-async function main() {
-  const { days, all } = parseArgs(process.argv.slice(2));
-  const client = createDryRunClient();
-  const model = resolveCandidateModelName();
-
-  let schemaReady = true;
+async function probeSchema(
+  client: SupabaseClient
+): Promise<{ schemaReady: boolean }> {
   const { error: probeErr } = await client
     .from("collection_candidates")
     .select("rss_title_en, wire_titles_ready_at")
@@ -99,10 +103,24 @@ async function main() {
     (`${probeErr.message} ${probeErr.code ?? ""}`.includes("rss_title_en") ||
       `${probeErr.message}`.includes("wire_titles_ready_at"))
   ) {
-    schemaReady = false;
+    return { schemaReady: false };
   }
+  if (probeErr) throw new Error(probeErr.message);
+  return { schemaReady: true };
+}
 
-  const selectCols = schemaReady
+async function countNeeding(
+  client: SupabaseClient,
+  options: { sinceIso: string | null; schemaReady: boolean }
+): Promise<{
+  scanned: number;
+  countExact: number | null;
+  needAny: number;
+  needKo: number;
+  needEn: number;
+  alreadyReady: number;
+}> {
+  const selectCols = options.schemaReady
     ? "id, rss_title, rss_title_ko, rss_title_en, wire_titles_ready_at, status, created_at"
     : "id, rss_title, rss_title_ko, status, created_at";
 
@@ -110,20 +128,9 @@ async function main() {
     .from("collection_candidates")
     .select("id", { count: "exact", head: true })
     .in("status", NEWS_WIRE_INCLUDE_STATUSES);
-  if (!all && days != null) {
-    const since = new Date(Date.now() - days * 86400_000).toISOString();
-    countQuery = countQuery.gte("created_at", since);
-  }
+  if (options.sinceIso) countQuery = countQuery.gte("created_at", options.sinceIso);
   const { count: countExact, error: countErr } = await countQuery;
-  if (countErr) {
-    console.error("count failed", countErr.message);
-    process.exit(1);
-  }
-
-  const sinceIso =
-    !all && days != null
-      ? new Date(Date.now() - days * 86400_000).toISOString()
-      : null;
+  if (countErr) throw new Error(countErr.message);
 
   const fetched = await collectRowsByRangePagination<Row>(
     async (from, to) => {
@@ -134,39 +141,28 @@ async function main() {
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
         .range(from, to);
-      if (sinceIso) q = q.gte("created_at", sinceIso);
+      if (options.sinceIso) q = q.gte("created_at", options.sinceIso);
       const { data, error } = await q;
       if (error) return { ok: false, error: error.message };
       return { ok: true, rows: (data ?? []) as unknown as Row[] };
     },
     PAGE_SIZE
   );
+  if (!fetched.ok) throw new Error(fetched.error);
 
-  if (!fetched.ok) {
-    console.error("scan failed", fetched.error);
-    process.exit(1);
-  }
-
-  const rows = fetched.rows;
   let needKo = 0;
   let needEn = 0;
   let needAny = 0;
   let alreadyReady = 0;
-
-  for (const row of rows) {
-    const normalized = schemaReady
+  for (const row of fetched.rows) {
+    const normalized = options.schemaReady
       ? row
-      : {
-          ...row,
-          rss_title_en: null,
-          wire_titles_ready_at: null,
-        };
-
-    if (schemaReady && isWireTitlesReady(normalized)) {
+      : { ...row, rss_title_en: null, wire_titles_ready_at: null };
+    if (options.schemaReady && isWireTitlesReady(normalized)) {
       alreadyReady += 1;
       continue;
     }
-    if (!schemaReady) {
+    if (!options.schemaReady) {
       const koReady = isWireKoTitleReady(normalized);
       const enReady = isWireEnTitleReady(normalized);
       if (koReady && enReady) {
@@ -178,46 +174,274 @@ async function main() {
       if (!enReady) needEn += 1;
       continue;
     }
-
     needAny += 1;
     if (!isWireKoTitleReady(normalized)) needKo += 1;
     if (!isWireEnTitleReady(normalized)) needEn += 1;
   }
 
-  const tokens = estimateTokens(needAny);
-  // gpt-5.4-nano has no confirmed official public price we can cite here.
-  const pricingStatus = "pricing_unverified" as const;
+  return {
+    scanned: fetched.rows.length,
+    countExact: countExact ?? null,
+    needAny,
+    needKo,
+    needEn,
+    alreadyReady,
+  };
+}
 
+async function scriptChatCompletionJson<T extends Record<string, unknown>>(input: {
+  step: string;
+  system: string;
+  user: string;
+  temperature?: number;
+  model?: string;
+}): Promise<{ ok: true; data: T } | { ok: false; error: string; step?: string }> {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    return { ok: false, error: "OPENAI_API_KEY missing", step: "openai_env_check" };
+  }
+  const model = input.model?.trim() || resolveCandidateModelName();
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: input.temperature ?? 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: input.system },
+        { role: "user", content: input.user },
+      ],
+    }),
+  });
+  const rawText = await res.text().catch(() => "");
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: `OpenAI HTTP ${res.status}`,
+      step: input.step,
+    };
+  }
+  try {
+    const envelope = JSON.parse(rawText) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const content = envelope.choices?.[0]?.message?.content;
+    if (!content?.trim()) {
+      return { ok: false, error: "empty_openai_content", step: input.step };
+    }
+    return { ok: true, data: JSON.parse(content) as T };
+  } catch {
+    return { ok: false, error: "openai_parse_failed", step: input.step };
+  }
+}
+
+async function runDryReport(options: {
+  client: SupabaseClient;
+  days: number | null;
+  all: boolean;
+  schemaReady: boolean;
+}) {
+  const sinceIso =
+    !options.all && options.days != null
+      ? new Date(Date.now() - options.days * 86400_000).toISOString()
+      : null;
+  const stats = await countNeeding(options.client, {
+    sinceIso,
+    schemaReady: options.schemaReady,
+  });
+  const tokens = estimateTokens(stats.needAny);
+  const model = resolveCandidateModelName();
   console.log(
     JSON.stringify(
       {
         dryRun: true,
-        schemaReady,
-        scope: all ? "all_active" : `last_${days}_days`,
+        schemaReady: options.schemaReady,
+        scope: options.all ? "all_active" : `last_${options.days}_days`,
         model,
-        pricingStatus,
-        activeCandidatesScanned: rows.length,
-        countExact: countExact ?? null,
-        scannedMatchesCountExact: rows.length === (countExact ?? -1),
-        alreadyWireReady: alreadyReady,
-        needingAnyTitleWork: needAny,
-        needingKoTitle: needKo,
-        needingEnTitle: needEn,
-        estimatedOpenAiCallsBatchesOf40: Math.ceil(needAny / 40) || 0,
+        pricingStatus: "pricing_unverified",
+        activeCandidatesScanned: stats.scanned,
+        countExact: stats.countExact,
+        scannedMatchesCountExact: stats.scanned === (stats.countExact ?? -1),
+        alreadyWireReady: stats.alreadyReady,
+        needingAnyTitleWork: stats.needAny,
+        needingKoTitle: stats.needKo,
+        needingEnTitle: stats.needEn,
+        estimatedOpenAiCallsBatchesOf40: Math.ceil(stats.needAny / 40) || 0,
         estimatedInputTokens: tokens.estimatedInputTokens,
         estimatedOutputTokens: tokens.estimatedOutputTokens,
         estimatedUsd: null,
-        note:
-          pricingStatus === "pricing_unverified"
-            ? "Token counts are rough estimates only. Official USD pricing for this model was not verified — do not treat as a confirmed cost. No OpenAI called. No DB writes."
-            : schemaReady
-              ? "No OpenAI called. No DB writes. Ready titles excluded from cost."
-              : "migration 20260911 not applied; estimate uses native-title heuristics only.",
+        note: "Token counts are rough estimates only. Official USD pricing for this model was not verified — do not treat as a confirmed cost. No OpenAI called. No DB writes.",
       },
       null,
       2
     )
   );
+}
+
+async function runExecute(options: {
+  client: SupabaseClient;
+  days: number | null;
+  all: boolean;
+  maxItems: number;
+}) {
+  const { schemaReady } = await probeSchema(options.client);
+  if (!schemaReady) {
+    console.log(
+      JSON.stringify({
+        dryRun: false,
+        ok: false,
+        error: "schema_not_ready",
+        targeted: 0,
+        succeeded: 0,
+        failed: 0,
+        remaining: 0,
+        openaiCalls: 0,
+      })
+    );
+    process.exit(1);
+  }
+
+  const sinceIso =
+    !options.all && options.days != null
+      ? new Date(Date.now() - options.days * 86400_000).toISOString()
+      : null;
+
+  // Remaining = active rows with ready_at null (and still needing after heuristics).
+  async function countRemaining(): Promise<number> {
+    let q = options.client
+      .from("collection_candidates")
+      .select("id", { count: "exact", head: true })
+      .in("status", NEWS_WIRE_INCLUDE_STATUSES)
+      .is("wire_titles_ready_at", null);
+    if (sinceIso) q = q.gte("created_at", sinceIso);
+    const { count, error } = await q;
+    if (error) throw new Error(error.message);
+    return count ?? 0;
+  }
+
+  let remainingBefore = await countRemaining();
+  const targeted = Math.min(options.maxItems, remainingBefore);
+  let succeeded = 0;
+  let failed = 0;
+  let openaiCalls = 0;
+  let processed = 0;
+
+  while (processed < targeted) {
+    const batchLimit = Math.min(
+      WIRE_LOCALIZE_BATCH_SIZE,
+      targeted - processed
+    );
+    const result = await runWireLocalizeBatch({
+      client: options.client,
+      chatCompletionJson: scriptChatCompletionJson,
+      getModel: resolveCandidateModelName,
+      checkOpenAiEnv: () => {
+        if (!process.env.OPENAI_API_KEY?.trim()) {
+          return {
+            ok: false,
+            error: "OPENAI_API_KEY missing",
+            step: "openai_env_check",
+          };
+        }
+        return { ok: true };
+      },
+      limit: batchLimit,
+      createdAtGte: sinceIso,
+    });
+
+    openaiCalls += result.openaiCalls;
+    if (!result.ok) {
+      failed += 1;
+      const remaining = await countRemaining();
+      console.log(
+        JSON.stringify({
+          dryRun: false,
+          ok: false,
+          error: result.error,
+          step: result.step,
+          targeted,
+          succeeded,
+          failed,
+          remaining,
+          openaiCalls,
+        })
+      );
+      process.exit(1);
+    }
+
+    if (result.updated === 0) {
+      const remaining = await countRemaining();
+      if (remaining > 0) {
+        console.log(
+          JSON.stringify({
+            dryRun: false,
+            ok: false,
+            error: "no_progress_with_remaining",
+            targeted,
+            succeeded,
+            failed: failed + 1,
+            remaining,
+            openaiCalls,
+          })
+        );
+        process.exit(1);
+      }
+      break;
+    }
+
+    succeeded += result.updated;
+    processed += result.updated;
+    remainingBefore = await countRemaining();
+    if (remainingBefore === 0) break;
+  }
+
+  const remaining = await countRemaining();
+  console.log(
+    JSON.stringify({
+      dryRun: false,
+      ok: true,
+      targeted,
+      succeeded,
+      failed,
+      remaining,
+      openaiCalls,
+    })
+  );
+}
+
+async function main() {
+  const { days, all, execute, confirm, maxItems } = parseArgs(
+    process.argv.slice(2)
+  );
+  const client = createScriptClient();
+
+  if (execute) {
+    if (confirm !== EXECUTE_CONFIRM) {
+      console.log(
+        JSON.stringify({
+          dryRun: false,
+          ok: false,
+          error: "confirm_required",
+          hint: "--execute requires --confirm=TRANSLATE_WIRE_TITLES",
+          targeted: 0,
+          succeeded: 0,
+          failed: 0,
+          remaining: 0,
+          openaiCalls: 0,
+        })
+      );
+      process.exit(1);
+    }
+    await runExecute({ client, days, all, maxItems });
+    return;
+  }
+
+  const { schemaReady } = await probeSchema(client);
+  await runDryReport({ client, days, all, schemaReady });
 }
 
 main().catch((err) => {

@@ -12,6 +12,12 @@ import {
   type NewsWireSortable,
 } from "@/lib/news-wire/rankNewsWire";
 import {
+  buildWireTitlePatchesFromOpenAi,
+  selectUnreadyWireLocalizeBatch,
+  type WireLocalizeRow,
+} from "@/lib/news-wire/localizeWireTitlesLogic";
+import { runWireLocalizeBatch } from "@/lib/news-wire/runWireLocalizeBatch";
+import {
   newsWireIdOrder,
   nyDateKeyBounds,
   paginateNewsWireItems,
@@ -309,6 +315,228 @@ describe("news wire ranking + home selection", () => {
   });
 });
 
+describe("news wire localize backlog selection", () => {
+  function localizeRow(
+    partial: Partial<WireLocalizeRow> & Pick<WireLocalizeRow, "id">
+  ): WireLocalizeRow {
+    return {
+      rss_title: partial.rss_title ?? "English headline",
+      rss_title_ko: partial.rss_title_ko ?? null,
+      rss_title_en: partial.rss_title_en ?? null,
+      wire_titles_ready_at: partial.wire_titles_ready_at ?? null,
+      created_at: partial.created_at,
+      status: partial.status ?? "pending",
+      ...partial,
+    };
+  }
+
+  it("selects older unready rows even when 120 newest are already ready", () => {
+    const rows: WireLocalizeRow[] = [];
+    for (let i = 0; i < 120; i += 1) {
+      rows.push(
+        localizeRow({
+          id: `ready-${i}`,
+          created_at: `2026-09-12T12:${String(i % 60).padStart(2, "0")}:00.000Z`,
+          rss_title_ko: "완료",
+          rss_title_en: "done",
+          wire_titles_ready_at: "2026-09-12T12:00:00.000Z",
+        })
+      );
+    }
+    rows.push(
+      localizeRow({
+        id: "old-unready",
+        created_at: "2026-09-10T01:00:00.000Z",
+        rss_title: "Old English only",
+        rss_title_ko: null,
+        rss_title_en: null,
+        wire_titles_ready_at: null,
+      })
+    );
+    const batch = selectUnreadyWireLocalizeBatch(rows, 40);
+    assert.equal(batch.length, 1);
+    assert.equal(batch[0]?.id, "old-unready");
+  });
+
+  it("rejects missing or malformed OpenAI items instead of counting success", () => {
+    const needing = [
+      localizeRow({
+        id: "a",
+        rss_title: "Hello",
+        rss_title_ko: null,
+        rss_title_en: null,
+      }),
+    ];
+    const missing = buildWireTitlePatchesFromOpenAi({
+      needing,
+      items: [],
+    });
+    assert.equal(missing.ok, false);
+    const bad = buildWireTitlePatchesFromOpenAi({
+      needing,
+      items: [{ id: "a", title_ko: "", title_en: "Hello" }],
+    });
+    assert.equal(bad.ok, false);
+  });
+
+  it("schema-missing batch returns schemaReady:false without OpenAI or writes", async () => {
+    let openaiCalls = 0;
+    let writes = 0;
+    const client = {
+      from() {
+        return {
+          select() {
+            return {
+              limit: async () => ({
+                data: null,
+                error: { code: "42703", message: "column rss_title_en does not exist" },
+              }),
+            };
+          },
+          update() {
+            writes += 1;
+            return {
+              eq() {
+                return {
+                  is: async () => ({ error: null }),
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+    const result = await runWireLocalizeBatch({
+      client,
+      chatCompletionJson: async () => {
+        openaiCalls += 1;
+        return { ok: false, error: "should_not_run" };
+      },
+      getModel: () => "gpt-5.4-nano",
+      checkOpenAiEnv: () => ({ ok: true }),
+      limit: 40,
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.schemaReady, false);
+    assert.equal(openaiCalls, 0);
+    assert.equal(writes, 0);
+  });
+
+  it("update failure returns ok:false after partial progress stays idempotent", async () => {
+    const rows = [
+      localizeRow({
+        id: "need-1",
+        rss_title: "One",
+        rss_title_ko: null,
+        rss_title_en: null,
+        wire_titles_ready_at: null,
+      }),
+    ];
+    let updateCalls = 0;
+    const client = {
+      from() {
+        return {
+          select() {
+            const chain = {
+              limit: async () => ({ data: null, error: null }),
+              in() {
+                return {
+                  is() {
+                    return {
+                      order() {
+                        return {
+                          limit: async () => ({ data: rows, error: null }),
+                        };
+                      },
+                    };
+                  },
+                };
+              },
+            };
+            return chain;
+          },
+          update() {
+            updateCalls += 1;
+            return {
+              eq() {
+                return {
+                  is: async () => ({ error: { message: "update_failed" } }),
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+    const result = await runWireLocalizeBatch({
+      client,
+      chatCompletionJson: async () => ({
+        ok: true,
+        data: {
+          items: [{ id: "need-1", title_ko: "하나", title_en: "One" }],
+        },
+      }),
+      getModel: () => "gpt-5.4-nano",
+      checkOpenAiEnv: () => ({ ok: true }),
+      limit: 40,
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.step, "update");
+    assert.ok(updateCalls >= 1);
+  });
+
+  it("does not re-translate rows that already have wire_titles_ready_at", async () => {
+    let openaiCalls = 0;
+    const rows = [
+      localizeRow({
+        id: "done",
+        rss_title: "Done",
+        rss_title_ko: "완료",
+        rss_title_en: "Done",
+        wire_titles_ready_at: "2026-09-12T00:00:00.000Z",
+      }),
+    ];
+    const client = {
+      from() {
+        return {
+          select() {
+            return {
+              limit: async () => ({ data: null, error: null }),
+              in() {
+                return {
+                  in() {
+                    return {
+                      order: async () => ({ data: rows, error: null }),
+                    };
+                  },
+                };
+              },
+            };
+          },
+          update() {
+            throw new Error("should_not_write");
+          },
+        };
+      },
+    };
+    const result = await runWireLocalizeBatch({
+      client,
+      candidateIds: ["done"],
+      chatCompletionJson: async () => {
+        openaiCalls += 1;
+        return { ok: true, data: { items: [] } };
+      },
+      getModel: () => "gpt-5.4-nano",
+      checkOpenAiEnv: () => ({ ok: true }),
+      limit: 40,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.updated, 0);
+    assert.equal(result.skippedReady, 1);
+    assert.equal(openaiCalls, 0);
+  });
+});
+
 describe("news wire page + date bounds", () => {
   it("clamps page to a finite positive integer", () => {
     assert.equal(parseNewsWirePage(0), 1);
@@ -428,6 +656,10 @@ describe("news wire public DTO + wiring", () => {
       join(process.cwd(), "lib/news-wire/localizeWireTitles.ts"),
       "utf8"
     );
+    const batch = readFileSync(
+      join(process.cwd(), "lib/news-wire/runWireLocalizeBatch.ts"),
+      "utf8"
+    );
     const schedule = readFileSync(
       join(process.cwd(), "lib/news-wire/scheduleWireTitleLocalizeAfter.ts"),
       "utf8"
@@ -458,32 +690,32 @@ describe("news wire public DTO + wiring", () => {
 
     assert.match(schedule, /from ["']next\/server["']/);
     assert.match(schedule, /\bafter\s*\(/);
-    assert.match(schedule, /localizeWireCandidateTitles\(\{\s*limit:\s*40/);
-    assert.match(schedule, /collect unchanged/);
+    assert.match(schedule, /return true/);
+    assert.match(schedule, /return false/);
+    assert.match(batch, /\.is\(\s*["']wire_titles_ready_at["']\s*,\s*null\s*\)/);
+    assert.match(batch, /\.limit\(limit\)/);
+    assert.match(localize, /runWireLocalizeBatch/);
 
-    // Shared regional boundary: exactly one schedule call site.
     assert.equal(
       (regional.match(/scheduleWireTitleLocalizeAfterResponse\(\)/g) ?? []).length,
       1
     );
-    assert.match(regional, /result\.save && !result\.testMode/);
-    assert.doesNotMatch(regional, /inserted\s*[>!]=?\s*0|totals\.inserted/);
-    // Desk / regional cron must not double-register — they share runRegionalCollect.
+    assert.match(regional, /wireTitleLocalizationScheduled/);
+    assert.match(regional, /openaiCalledDuringCollect:\s*false/);
+    assert.match(regional, /wireTitleLocalizationBatchLimit/);
     assert.doesNotMatch(desk, /scheduleWireTitleLocalizeAfterResponse/);
     assert.doesNotMatch(regionalCron, /scheduleWireTitleLocalizeAfterResponse/);
-    // Legacy path bypasses runRegionalCollect — one schedule there only.
     assert.equal(
       (legacy.match(/scheduleWireTitleLocalizeAfterResponse\(\)/g) ?? []).length,
       1
     );
-
-    // Backlog retry: localize selects by readiness, not this-run inserts.
-    assert.match(localize, /needsLocalization|!isWireTitlesReady/);
+    assert.match(legacy, /openaiCalledDuringCollect:\s*false/);
+    assert.match(legacy, /wireTitleLocalizationScheduled/);
     assert.doesNotMatch(ko, /localizeWire|chatCompletion|OpenAI/);
     assert.doesNotMatch(en, /localizeWire|chatCompletion|OpenAI/);
   });
 
-  it("dry-run script uses range pagination and unverified pricing shape", () => {
+  it("dry-run script defaults to dry-run and gates execute behind confirm", () => {
     const script = readFileSync(
       join(process.cwd(), "scripts/newsWireTitleBackfillDryRun.ts"),
       "utf8"
@@ -495,8 +727,12 @@ describe("news wire public DTO + wiring", () => {
     assert.match(script, /estimatedInputTokens/);
     assert.match(script, /estimatedOutputTokens/);
     assert.match(script, /estimatedUsd:\s*null/);
+    assert.match(script, /--execute/);
+    assert.match(script, /TRANSLATE_WIRE_TITLES/);
+    assert.match(script, /--max-items/);
+    assert.match(script, /schema_not_ready/);
+    assert.match(script, /no_progress_with_remaining/);
     assert.doesNotMatch(script, /readFileSync\([^\n]*\.env\.local/);
-    assert.doesNotMatch(script, /chatCompletion|OPENAI_API_KEY/);
     assert.match(script, /scannedMatchesCountExact/);
   });
 

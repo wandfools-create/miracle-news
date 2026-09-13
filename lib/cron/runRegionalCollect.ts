@@ -1,11 +1,19 @@
 import type { NextRequest } from "next/server";
 
 import { resolveCollectionTriggerType } from "@/lib/collection-candidates/collectionRunsCore";
-import { scheduleWireTitleLocalizeAfterResponse } from "@/lib/news-wire/scheduleWireTitleLocalizeAfter";
+import {
+  scheduleWireTitleLocalizeAfterResponse,
+  WIRE_TITLE_LOCALIZE_BATCH_LIMIT,
+} from "@/lib/news-wire/scheduleWireTitleLocalizeAfter";
 import { collectRssToReviewQueue } from "@/lib/rss/collectRssToReviewQueue";
 import type { CollectRssResult } from "@/lib/rss/collectRssToReviewQueue";
 import type { CollectRegion } from "@/lib/rss/collectRegions";
 import { resolveCollectRssOptionsForRegion } from "@/lib/rss/rssCollectConfig";
+
+export type RegionalCollectResult = CollectRssResult & {
+  /** after() registration only — not translate success/completion. */
+  wireTitleLocalizationScheduled: boolean;
+};
 
 /**
  * Core regional RSS collect (candidates only during the request).
@@ -15,15 +23,16 @@ import { resolveCollectRssOptionsForRegion } from "@/lib/rss/rssCollectConfig";
 export async function runRegionalCollect(
   region: CollectRegion,
   searchParams?: URLSearchParams | null
-): Promise<CollectRssResult> {
+): Promise<RegionalCollectResult> {
   const options = resolveCollectRssOptionsForRegion(region, searchParams);
   options.triggerType = resolveCollectionTriggerType(searchParams);
   const result = await collectRssToReviewQueue(options);
+  let wireTitleLocalizationScheduled = false;
   // Save runs only — including inserted=0 so backlog can drain next cycle.
   if (result.save && !result.testMode) {
-    scheduleWireTitleLocalizeAfterResponse();
+    wireTitleLocalizationScheduled = scheduleWireTitleLocalizeAfterResponse();
   }
-  return result;
+  return { ...result, wireTitleLocalizationScheduled };
 }
 
 export function collectHintFromResult(result: CollectRssResult): string | undefined {
@@ -35,7 +44,7 @@ export function collectHintFromResult(result: CollectRssResult): string | undefi
 }
 
 export function collectJsonFromResult(
-  result: CollectRssResult,
+  result: RegionalCollectResult,
   region: CollectRegion
 ) {
   return {
@@ -48,6 +57,9 @@ export function collectJsonFromResult(
     dryRun: result.dryRun,
     maxCandidatesPerRun: result.maxCandidatesPerRun,
     openaiCalled: false,
+    openaiCalledDuringCollect: false,
+    wireTitleLocalizationScheduled: result.wireTitleLocalizationScheduled,
+    wireTitleLocalizationBatchLimit: WIRE_TITLE_LOCALIZE_BATCH_LIMIT,
     costs: result.costs,
     totals: result.totals,
     feeds: result.feeds,

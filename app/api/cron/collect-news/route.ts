@@ -5,7 +5,10 @@ import {
   cronUnauthorizedResponse,
   isCronAuthorized,
 } from "@/lib/cron/cronAuth";
-import { scheduleWireTitleLocalizeAfterResponse } from "@/lib/news-wire/scheduleWireTitleLocalizeAfter";
+import {
+  scheduleWireTitleLocalizeAfterResponse,
+  WIRE_TITLE_LOCALIZE_BATCH_LIMIT,
+} from "@/lib/news-wire/scheduleWireTitleLocalizeAfter";
 import { collectRssToReviewQueue } from "@/lib/rss/collectRssToReviewQueue";
 import { resolveCollectRssOptions } from "@/lib/rss/rssCollectConfig";
 
@@ -24,8 +27,9 @@ async function runCollect(request: NextRequest) {
   const options = resolveCollectRssOptions(request.nextUrl.searchParams);
   const result = await collectRssToReviewQueue(options);
 
+  let wireTitleLocalizationScheduled = false;
   if (result.save && !result.testMode) {
-    scheduleWireTitleLocalizeAfterResponse();
+    wireTitleLocalizationScheduled = scheduleWireTitleLocalizeAfterResponse();
   }
 
   const hint = result.testMode
@@ -43,6 +47,9 @@ async function runCollect(request: NextRequest) {
     dryRun: result.dryRun,
     maxCandidatesPerRun: result.maxCandidatesPerRun,
     openaiCalled: false,
+    openaiCalledDuringCollect: false,
+    wireTitleLocalizationScheduled,
+    wireTitleLocalizationBatchLimit: WIRE_TITLE_LOCALIZE_BATCH_LIMIT,
     costs: result.costs,
     totals: result.totals,
     feeds: result.feeds,
