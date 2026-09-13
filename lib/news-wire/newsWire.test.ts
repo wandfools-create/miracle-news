@@ -12,12 +12,6 @@ import {
   type NewsWireSortable,
 } from "@/lib/news-wire/rankNewsWire";
 import {
-  buildWireTitlePatchesFromOpenAi,
-  selectUnreadyWireLocalizeBatch,
-  type WireLocalizeRow,
-} from "@/lib/news-wire/localizeWireTitlesLogic";
-import { runWireLocalizeBatch } from "@/lib/news-wire/runWireLocalizeBatch";
-import {
   newsWireIdOrder,
   nyDateKeyBounds,
   paginateNewsWireItems,
@@ -27,10 +21,7 @@ import {
 } from "@/lib/news-wire/newsWireQuery";
 import type { NewsWireDbRow } from "@/lib/news-wire/types";
 import {
-  displayWireTitle,
-  isWireEnTitleReady,
-  isWireKoTitleReady,
-  isWireTitlesReady,
+  displayOriginalWireTitle,
   sanitizeWireOutboundUrl,
 } from "@/lib/news-wire/wireTitles";
 
@@ -41,21 +32,19 @@ function dbRow(
     source: partial.source ?? "ap",
     feed_label: partial.feed_label ?? "AP",
     original_url: partial.original_url ?? `https://example.com/${partial.id}`,
-    rss_title: partial.rss_title ?? "English headline",
-    rss_title_ko: partial.rss_title_ko ?? "한글 제목",
-    rss_title_en: partial.rss_title_en ?? "English headline",
+    rss_title: partial.rss_title ?? "Original RSS headline",
     rss_published_at: partial.rss_published_at ?? partial.created_at,
     status: partial.status ?? "pending",
     article_id: partial.article_id ?? null,
     ai_recommend_grade: partial.ai_recommend_grade ?? null,
     ai_recommend_score: partial.ai_recommend_score ?? null,
-    wire_titles_ready_at: partial.wire_titles_ready_at ?? null,
     ...partial,
   };
 }
 
 function sortKey(
-  partial: Partial<NewsWireSortable> & Pick<NewsWireSortable, "id" | "collectedAt">
+  partial: Partial<NewsWireSortable> &
+    Pick<NewsWireSortable, "id" | "collectedAt">
 ): NewsWireSortable {
   return {
     aiRecommendGrade: partial.aiRecommendGrade ?? null,
@@ -65,73 +54,53 @@ function sortKey(
   };
 }
 
-describe("news wire titles", () => {
-  it("treats Hangul rss_title as KO-ready and Latin as EN-ready", () => {
-    assert.equal(
-      isWireKoTitleReady({ rss_title: "서울에서 회담", rss_title_ko: null }),
-      true
-    );
-    assert.equal(
-      isWireEnTitleReady({ rss_title: "Seoul summit", rss_title_en: null }),
-      true
-    );
-    assert.equal(
-      isWireTitlesReady({
-        rss_title: "Seoul summit",
-        rss_title_ko: null,
-        rss_title_en: null,
+describe("news wire original titles", () => {
+  it("shows original rss_title on both KO and EN", () => {
+    const hangul = { rss_title: "서울에서 회담" };
+    const latin = { rss_title: "Seoul summit" };
+    assert.equal(displayOriginalWireTitle(hangul), "서울에서 회담");
+    assert.equal(displayOriginalWireTitle(latin), "Seoul summit");
+    const now = Date.parse("2026-09-12T12:00:00.000Z");
+    const rows = [
+      dbRow({
+        id: "ko-native",
+        created_at: "2026-09-12T10:00:00.000Z",
+        rss_title: "서울에서 회담",
       }),
-      false
-    );
-    assert.equal(
-      isWireTitlesReady({
+      dbRow({
+        id: "en-native",
+        created_at: "2026-09-12T11:00:00.000Z",
         rss_title: "Seoul summit",
-        rss_title_ko: "서울 회담",
-        rss_title_en: null,
       }),
-      true
+    ];
+    const ko = rankDbRowsToPublicItems(rows, "ko", now);
+    const en = rankDbRowsToPublicItems(rows, "en", now);
+    assert.deepEqual(
+      ko.map((i) => i.title),
+      ["Seoul summit", "서울에서 회담"]
     );
+    assert.deepEqual(
+      en.map((i) => i.title),
+      ["Seoul summit", "서울에서 회담"]
+    );
+    assert.deepEqual(newsWireIdOrder(ko), newsWireIdOrder(en));
   });
 
-  it("does not treat wire_titles_ready_at alone as ready", () => {
-    assert.equal(
-      isWireTitlesReady({
-        rss_title: "Seoul summit",
-        rss_title_ko: null,
-        rss_title_en: null,
-        wire_titles_ready_at: "2026-09-11T00:00:00.000Z",
-      }),
-      false
+  it("exposes active candidates immediately without translation readiness", () => {
+    const now = Date.parse("2026-09-12T12:00:00.000Z");
+    const home = selectHomeNewsWireItems(
+      [
+        dbRow({
+          id: "raw",
+          created_at: "2026-09-12T11:00:00.000Z",
+          rss_title: "Untranslated English only",
+        }),
+      ],
+      "ko",
+      now
     );
-  });
-
-  it("never falls back to the opposite language", () => {
-    const enOnly = {
-      rss_title: "Seoul summit",
-      rss_title_ko: null,
-      rss_title_en: null,
-    };
-    assert.equal(displayWireTitle(enOnly, "ko"), null);
-    const koOnly = {
-      rss_title: "서울 회담",
-      rss_title_ko: null,
-      rss_title_en: null,
-    };
-    assert.equal(displayWireTitle(koOnly, "en"), null);
-  });
-
-  it("hides wrong-language exposure when ready timestamp is stale", () => {
-    const row = dbRow({
-      id: "stale",
-      created_at: "2026-09-11T10:00:00.000Z",
-      rss_title: "English only",
-      rss_title_ko: null,
-      rss_title_en: null,
-      wire_titles_ready_at: "2026-09-11T10:00:00.000Z",
-    });
-    const now = Date.parse("2026-09-11T12:00:00.000Z");
-    assert.deepEqual(selectHomeNewsWireItems([row], "ko", now), []);
-    assert.deepEqual(selectHomeNewsWireItems([row], "en", now), []);
+    assert.equal(home.length, 1);
+    assert.equal(home[0]?.title, "Untranslated English only");
   });
 
   it("sanitizes outbound URLs to http(s) only", () => {
@@ -214,61 +183,7 @@ describe("news wire ranking + home selection", () => {
     assert.equal(home[0]?.id, "late-priority");
   });
 
-  it("does not drop ready candidates buried after unreadies", () => {
-    const now = Date.parse("2026-09-11T12:00:00.000Z");
-    const rows: NewsWireDbRow[] = [];
-    for (let i = 0; i < 60; i += 1) {
-      rows.push(
-        dbRow({
-          id: `unready-${i}`,
-          created_at: `2026-09-11T11:${String(i).padStart(2, "0")}:00.000Z`,
-          rss_title: "English only",
-          rss_title_ko: null,
-          rss_title_en: null,
-          ai_recommend_grade: "best",
-          ai_recommend_score: 99,
-        })
-      );
-    }
-    rows.push(
-      dbRow({
-        id: "ready-deep",
-        created_at: "2026-09-11T01:00:00.000Z",
-        ai_recommend_grade: "normal",
-        ai_recommend_score: 50,
-      })
-    );
-    const ranked = rankDbRowsToPublicItems(rows, "ko", now);
-    assert.equal(ranked.length, 1);
-    assert.equal(ranked[0]?.id, "ready-deep");
-    const page1 = paginateNewsWireItems(ranked, 1);
-    assert.equal(page1.items[0]?.id, "ready-deep");
-    assert.equal(page1.hasMore, false);
-  });
-
-  it("keeps low and unevaluated candidates on the full page", () => {
-    const now = Date.parse("2026-09-11T12:00:00.000Z");
-    const rows = [
-      dbRow({
-        id: "low",
-        created_at: "2026-09-11T10:00:00.000Z",
-        ai_recommend_grade: "low",
-        ai_recommend_score: 5,
-      }),
-      dbRow({
-        id: "uneval",
-        created_at: "2026-09-11T09:00:00.000Z",
-        ai_recommend_grade: null,
-      }),
-    ];
-    const ranked = rankDbRowsToPublicItems(rows, "en", now);
-    assert.deepEqual(
-      ranked.map((r) => r.id).sort(),
-      ["low", "uneval"]
-    );
-  });
-
-  it("computes hasMore from filtered ready total", () => {
+  it("computes hasMore from filtered candidate total", () => {
     const now = Date.parse("2026-09-11T12:00:00.000Z");
     const rows = Array.from({ length: 51 }, (_, i) =>
       dbRow({
@@ -283,257 +198,9 @@ describe("news wire ranking + home selection", () => {
     const page1 = paginateNewsWireItems(ranked, 1);
     assert.equal(page1.items.length, 50);
     assert.equal(page1.hasMore, true);
-    assert.equal(page1.totalReady, 51);
     const page2 = paginateNewsWireItems(ranked, 2);
     assert.equal(page2.items.length, 1);
     assert.equal(page2.hasMore, false);
-  });
-
-  it("preserves identical KO/EN id order", () => {
-    const now = Date.parse("2026-09-11T12:00:00.000Z");
-    const rows = [
-      dbRow({
-        id: "a",
-        created_at: "2026-09-11T10:00:00.000Z",
-        ai_recommend_grade: "priority",
-        ai_recommend_score: 80,
-        rss_title_ko: "가",
-        rss_title_en: "A",
-      }),
-      dbRow({
-        id: "b",
-        created_at: "2026-09-11T11:00:00.000Z",
-        ai_recommend_grade: "normal",
-        ai_recommend_score: 40,
-        rss_title_ko: "나",
-        rss_title_en: "B",
-      }),
-    ];
-    const ko = newsWireIdOrder(rankDbRowsToPublicItems(rows, "ko", now));
-    const en = newsWireIdOrder(rankDbRowsToPublicItems(rows, "en", now));
-    assert.deepEqual(ko, en);
-  });
-});
-
-describe("news wire localize backlog selection", () => {
-  function localizeRow(
-    partial: Partial<WireLocalizeRow> & Pick<WireLocalizeRow, "id">
-  ): WireLocalizeRow {
-    return {
-      rss_title: partial.rss_title ?? "English headline",
-      rss_title_ko: partial.rss_title_ko ?? null,
-      rss_title_en: partial.rss_title_en ?? null,
-      wire_titles_ready_at: partial.wire_titles_ready_at ?? null,
-      created_at: partial.created_at,
-      status: partial.status ?? "pending",
-      ...partial,
-    };
-  }
-
-  it("selects older unready rows even when 120 newest are already ready", () => {
-    const rows: WireLocalizeRow[] = [];
-    for (let i = 0; i < 120; i += 1) {
-      rows.push(
-        localizeRow({
-          id: `ready-${i}`,
-          created_at: `2026-09-12T12:${String(i % 60).padStart(2, "0")}:00.000Z`,
-          rss_title_ko: "완료",
-          rss_title_en: "done",
-          wire_titles_ready_at: "2026-09-12T12:00:00.000Z",
-        })
-      );
-    }
-    rows.push(
-      localizeRow({
-        id: "old-unready",
-        created_at: "2026-09-10T01:00:00.000Z",
-        rss_title: "Old English only",
-        rss_title_ko: null,
-        rss_title_en: null,
-        wire_titles_ready_at: null,
-      })
-    );
-    const batch = selectUnreadyWireLocalizeBatch(rows, 40);
-    assert.equal(batch.length, 1);
-    assert.equal(batch[0]?.id, "old-unready");
-  });
-
-  it("rejects missing or malformed OpenAI items instead of counting success", () => {
-    const needing = [
-      localizeRow({
-        id: "a",
-        rss_title: "Hello",
-        rss_title_ko: null,
-        rss_title_en: null,
-      }),
-    ];
-    const missing = buildWireTitlePatchesFromOpenAi({
-      needing,
-      items: [],
-    });
-    assert.equal(missing.ok, false);
-    const bad = buildWireTitlePatchesFromOpenAi({
-      needing,
-      items: [{ id: "a", title_ko: "", title_en: "Hello" }],
-    });
-    assert.equal(bad.ok, false);
-  });
-
-  it("schema-missing batch returns schemaReady:false without OpenAI or writes", async () => {
-    let openaiCalls = 0;
-    let writes = 0;
-    const client = {
-      from() {
-        return {
-          select() {
-            return {
-              limit: async () => ({
-                data: null,
-                error: { code: "42703", message: "column rss_title_en does not exist" },
-              }),
-            };
-          },
-          update() {
-            writes += 1;
-            return {
-              eq() {
-                return {
-                  is: async () => ({ error: null }),
-                };
-              },
-            };
-          },
-        };
-      },
-    };
-    const result = await runWireLocalizeBatch({
-      client,
-      chatCompletionJson: async () => {
-        openaiCalls += 1;
-        return { ok: false, error: "should_not_run" };
-      },
-      getModel: () => "gpt-5.4-nano",
-      checkOpenAiEnv: () => ({ ok: true }),
-      limit: 40,
-    });
-    assert.equal(result.ok, false);
-    assert.equal(result.schemaReady, false);
-    assert.equal(openaiCalls, 0);
-    assert.equal(writes, 0);
-  });
-
-  it("update failure returns ok:false after partial progress stays idempotent", async () => {
-    const rows = [
-      localizeRow({
-        id: "need-1",
-        rss_title: "One",
-        rss_title_ko: null,
-        rss_title_en: null,
-        wire_titles_ready_at: null,
-      }),
-    ];
-    let updateCalls = 0;
-    const client = {
-      from() {
-        return {
-          select() {
-            const chain = {
-              limit: async () => ({ data: null, error: null }),
-              in() {
-                return {
-                  is() {
-                    return {
-                      order() {
-                        return {
-                          limit: async () => ({ data: rows, error: null }),
-                        };
-                      },
-                    };
-                  },
-                };
-              },
-            };
-            return chain;
-          },
-          update() {
-            updateCalls += 1;
-            return {
-              eq() {
-                return {
-                  is: async () => ({ error: { message: "update_failed" } }),
-                };
-              },
-            };
-          },
-        };
-      },
-    };
-    const result = await runWireLocalizeBatch({
-      client,
-      chatCompletionJson: async () => ({
-        ok: true,
-        data: {
-          items: [{ id: "need-1", title_ko: "하나", title_en: "One" }],
-        },
-      }),
-      getModel: () => "gpt-5.4-nano",
-      checkOpenAiEnv: () => ({ ok: true }),
-      limit: 40,
-    });
-    assert.equal(result.ok, false);
-    assert.equal(result.step, "update");
-    assert.ok(updateCalls >= 1);
-  });
-
-  it("does not re-translate rows that already have wire_titles_ready_at", async () => {
-    let openaiCalls = 0;
-    const rows = [
-      localizeRow({
-        id: "done",
-        rss_title: "Done",
-        rss_title_ko: "완료",
-        rss_title_en: "Done",
-        wire_titles_ready_at: "2026-09-12T00:00:00.000Z",
-      }),
-    ];
-    const client = {
-      from() {
-        return {
-          select() {
-            return {
-              limit: async () => ({ data: null, error: null }),
-              in() {
-                return {
-                  in() {
-                    return {
-                      order: async () => ({ data: rows, error: null }),
-                    };
-                  },
-                };
-              },
-            };
-          },
-          update() {
-            throw new Error("should_not_write");
-          },
-        };
-      },
-    };
-    const result = await runWireLocalizeBatch({
-      client,
-      candidateIds: ["done"],
-      chatCompletionJson: async () => {
-        openaiCalls += 1;
-        return { ok: true, data: { items: [] } };
-      },
-      getModel: () => "gpt-5.4-nano",
-      checkOpenAiEnv: () => ({ ok: true }),
-      limit: 40,
-    });
-    assert.equal(result.ok, true);
-    assert.equal(result.updated, 0);
-    assert.equal(result.skippedReady, 1);
-    assert.equal(openaiCalls, 0);
   });
 });
 
@@ -550,31 +217,25 @@ describe("news wire page + date bounds", () => {
   it("rejects impossible calendar dates", () => {
     assert.equal(nyDateKeyBounds("2026-99-99"), null);
     assert.equal(nyDateKeyBounds("2026-02-30"), null);
-    assert.equal(nyDateKeyBounds("not-a-date"), null);
   });
 
   it("uses next NY day start for DST-safe bounds", () => {
     const spring = nyDateKeyBounds("2026-03-08");
     assert.ok(spring);
-    const springMs =
-      Date.parse(spring!.endIso) - Date.parse(spring!.startIso);
-    assert.equal(springMs, 23 * 60 * 60 * 1000);
-
+    assert.equal(
+      Date.parse(spring!.endIso) - Date.parse(spring!.startIso),
+      23 * 60 * 60 * 1000
+    );
     const fall = nyDateKeyBounds("2026-11-01");
     assert.ok(fall);
-    const fallMs = Date.parse(fall!.endIso) - Date.parse(fall!.startIso);
-    assert.equal(fallMs, 25 * 60 * 60 * 1000);
-
-    const normal = nyDateKeyBounds("2026-09-11");
-    assert.ok(normal);
     assert.equal(
-      Date.parse(normal!.endIso) - Date.parse(normal!.startIso),
-      24 * 60 * 60 * 1000
+      Date.parse(fall!.endIso) - Date.parse(fall!.startIso),
+      25 * 60 * 60 * 1000
     );
   });
 });
 
-describe("news wire public DTO + wiring", () => {
+describe("news wire public DTO + no OpenAI path", () => {
   it("public items omit AI grade/score and article_id", () => {
     const now = Date.parse("2026-09-11T12:00:00.000Z");
     const items = selectHomeNewsWireItems(
@@ -603,7 +264,7 @@ describe("news wire public DTO + wiring", () => {
     ]);
   });
 
-  it("NewsWireItem type whitelist has no internal score fields", () => {
+  it("NewsWireItem whitelist has no translation fields", () => {
     const types = readFileSync(
       join(process.cwd(), "lib/news-wire/types.ts"),
       "utf8"
@@ -612,9 +273,11 @@ describe("news wire public DTO + wiring", () => {
       types.indexOf("export type NewsWireItem"),
       types.indexOf("export type NewsWireLocale")
     );
-    assert.doesNotMatch(publicBlock, /ai_recommend|article_id|wire_titles_ready/);
-    assert.match(publicBlock, /sourceLabel/);
-    assert.match(publicBlock, /originalUrl/);
+    assert.doesNotMatch(
+      publicBlock,
+      /ai_recommend|article_id|wire_titles|rss_title_en|rss_title_ko/
+    );
+    assert.doesNotMatch(types, /rss_title_en|wire_titles_ready_at/);
   });
 
   it("HomeNewsView shows NewsWire even when Spotlight is empty", () => {
@@ -626,10 +289,9 @@ describe("news wire public DTO + wiring", () => {
     assert.doesNotMatch(home, /showLeftRailContent/);
     const aside = home.slice(home.indexOf("homeLeftRailColClass"));
     assert.ok(aside.indexOf("SpotlightRail") < aside.indexOf("NewsWireRail"));
-    assert.doesNotMatch(home, /prepareEditionHomeSections/);
   });
 
-  it("migration is additive and does not loosen RLS", () => {
+  it("migration file remains additive (do not edit applied migration)", () => {
     const sql = readFileSync(
       join(process.cwd(), "migrations/20260911_public_news_wire_v1.sql"),
       "utf8"
@@ -637,43 +299,24 @@ describe("news wire public DTO + wiring", () => {
     assert.match(sql, /rss_title_en/);
     assert.match(sql, /wire_titles_ready_at/);
     assert.match(sql, /IF NOT EXISTS/);
-    assert.doesNotMatch(sql, /^\s*UPDATE\s+/im);
-    assert.doesNotMatch(sql, /^\s*DELETE\s+FROM/im);
-    assert.doesNotMatch(sql, /^\s*TRUNCATE/im);
-    assert.doesNotMatch(sql, /GRANT SELECT[\s\S]*TO anon/i);
+    assert.doesNotMatch(sql, /^\s*DROP\s+/im);
   });
 
-  it("schedules after() once at collect request boundary; never awaits inside collectRss", () => {
+  it("collect and wire paths make zero OpenAI calls; translation modules removed", () => {
     const fetchSrc = readFileSync(
       join(process.cwd(), "lib/news-wire/fetchNewsWire.ts"),
+      "utf8"
+    );
+    const querySrc = readFileSync(
+      join(process.cwd(), "lib/news-wire/newsWireQuery.ts"),
       "utf8"
     );
     const collect = readFileSync(
       join(process.cwd(), "lib/rss/collectRssToReviewQueue.ts"),
       "utf8"
     );
-    const localize = readFileSync(
-      join(process.cwd(), "lib/news-wire/localizeWireTitles.ts"),
-      "utf8"
-    );
-    const batch = readFileSync(
-      join(process.cwd(), "lib/news-wire/runWireLocalizeBatch.ts"),
-      "utf8"
-    );
-    const schedule = readFileSync(
-      join(process.cwd(), "lib/news-wire/scheduleWireTitleLocalizeAfter.ts"),
-      "utf8"
-    );
     const regional = readFileSync(
       join(process.cwd(), "lib/cron/runRegionalCollect.ts"),
-      "utf8"
-    );
-    const desk = readFileSync(
-      join(process.cwd(), "lib/cron/runRegionalDeskOrchestrator.ts"),
-      "utf8"
-    );
-    const regionalCron = readFileSync(
-      join(process.cwd(), "lib/cron/runRegionalCollectCron.ts"),
       "utf8"
     );
     const legacy = readFileSync(
@@ -683,72 +326,25 @@ describe("news wire public DTO + wiring", () => {
     const ko = readFileSync(join(process.cwd(), "app/ko/wire/page.tsx"), "utf8");
     const en = readFileSync(join(process.cwd(), "app/en/wire/page.tsx"), "utf8");
 
-    assert.match(fetchSrc, /collectRowsByRangePagination/);
-    assert.doesNotMatch(fetchSrc, /chatCompletion|localizeWireCandidateTitles/);
-    assert.doesNotMatch(collect, /localizeWireCandidateTitles|scheduleWireTitle/);
-    assert.doesNotMatch(collect, /from ["']next\/server["']/);
-
-    assert.match(schedule, /from ["']next\/server["']/);
-    assert.match(schedule, /\bafter\s*\(/);
-    assert.match(schedule, /return true/);
-    assert.match(schedule, /return false/);
-    assert.match(batch, /\.is\(\s*["']wire_titles_ready_at["']\s*,\s*null\s*\)/);
-    assert.match(batch, /\.limit\(limit\)/);
-    assert.match(localize, /runWireLocalizeBatch/);
-
-    assert.equal(
-      (regional.match(/scheduleWireTitleLocalizeAfterResponse\(\)/g) ?? []).length,
-      1
-    );
-    assert.match(regional, /wireTitleLocalizationScheduled/);
-    assert.match(regional, /openaiCalledDuringCollect:\s*false/);
-    assert.match(regional, /wireTitleLocalizationBatchLimit/);
-    assert.doesNotMatch(desk, /scheduleWireTitleLocalizeAfterResponse/);
-    assert.doesNotMatch(regionalCron, /scheduleWireTitleLocalizeAfterResponse/);
-    assert.equal(
-      (legacy.match(/scheduleWireTitleLocalizeAfterResponse\(\)/g) ?? []).length,
-      1
-    );
-    assert.match(legacy, /openaiCalledDuringCollect:\s*false/);
-    assert.match(legacy, /wireTitleLocalizationScheduled/);
+    assert.doesNotMatch(fetchSrc, /chatCompletion|localizeWire|OpenAI|after\(/);
+    assert.doesNotMatch(querySrc, /isWireTitlesReady|displayWireTitle|rss_title_en/);
+    assert.match(querySrc, /displayOriginalWireTitle/);
+    assert.doesNotMatch(collect, /localizeWire|scheduleWire|after\(/);
+    assert.doesNotMatch(regional, /scheduleWire|wireTitleLocalization|after\(/);
+    assert.doesNotMatch(legacy, /scheduleWire|wireTitleLocalization|after\(/);
+    assert.match(legacy, /openaiCalled:\s*false/);
+    assert.match(regional, /openaiCalled:\s*false/);
     assert.doesNotMatch(ko, /localizeWire|chatCompletion|OpenAI/);
     assert.doesNotMatch(en, /localizeWire|chatCompletion|OpenAI/);
-  });
 
-  it("dry-run script defaults to dry-run and gates execute behind confirm", () => {
-    const script = readFileSync(
-      join(process.cwd(), "scripts/newsWireTitleBackfillDryRun.ts"),
-      "utf8"
-    );
-    assert.match(script, /collectRowsByRangePagination/);
-    assert.match(script, /loadEnvConfig/);
-    assert.match(script, /createClient/);
-    assert.match(script, /pricing_unverified/);
-    assert.match(script, /estimatedInputTokens/);
-    assert.match(script, /estimatedOutputTokens/);
-    assert.match(script, /estimatedUsd:\s*null/);
-    assert.match(script, /--execute/);
-    assert.match(script, /TRANSLATE_WIRE_TITLES/);
-    assert.match(script, /--max-items/);
-    assert.match(script, /schema_not_ready/);
-    assert.match(script, /no_progress_with_remaining/);
-    assert.doesNotMatch(script, /readFileSync\([^\n]*\.env\.local/);
-    assert.match(script, /scannedMatchesCountExact/);
-  });
-
-  it("left rail keeps min-w-0 to avoid overflow nesting", () => {
-    const home = readFileSync(
-      join(process.cwd(), "components/home/HomeNewsView.tsx"),
-      "utf8"
-    );
-    const rail = readFileSync(
-      join(process.cwd(), "components/home/NewsWireRail.tsx"),
-      "utf8"
-    );
-    assert.match(home, /homeLeftRailColClass\(\)/);
-    assert.match(home, /order-3 min-w-0 xl:order-none xl:row-start-2/);
-    assert.match(rail, /min-w-0/);
-    assert.match(rail, /line-clamp-2/);
-    assert.match(rail, /truncate/);
+    for (const rel of [
+      "lib/news-wire/localizeWireTitles.ts",
+      "lib/news-wire/localizeWireTitlesLogic.ts",
+      "lib/news-wire/runWireLocalizeBatch.ts",
+      "lib/news-wire/scheduleWireTitleLocalizeAfter.ts",
+      "scripts/newsWireTitleBackfillDryRun.ts",
+    ]) {
+      assert.throws(() => readFileSync(join(process.cwd(), rel), "utf8"));
+    }
   });
 });

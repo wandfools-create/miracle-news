@@ -1015,9 +1015,6 @@ export async function collectRssToReviewQueue(
 
   console.info("[collectRss] run done", { totals, costs, collectionRunId });
 
-  // Title localization is scheduled via after() at the Next.js request
-  // boundary (runRegionalCollect / legacy collect-news), not awaited here.
-
   return {
     ok: feeds.every(
       (f) => !f.error || f.inserted > 0 || (f.wouldInsert ?? 0) > 0

@@ -25,22 +25,22 @@ export const NEWS_WIRE_MAX_PAGE = 200;
 export const NEWS_WIRE_FETCH_PAGE_SIZE = 50;
 export const NEWS_WIRE_FETCH_MAX_PAGES = 200;
 
-/** Server-only lean select — includes sort fields never sent to the client. */
+/**
+ * Server-only lean select — includes sort fields never sent to the client.
+ * Does not select translation columns (runtime uses original rss_title only).
+ */
 export const NEWS_WIRE_DB_SELECT = `
   id,
   source,
   feed_label,
   original_url,
   rss_title,
-  rss_title_ko,
-  rss_title_en,
   rss_published_at,
   created_at,
   status,
   article_id,
   ai_recommend_grade,
-  ai_recommend_score,
-  wire_titles_ready_at
+  ai_recommend_score
 `.replace(/\s+/g, " ").trim();
 
 /** Internal row used for filtering/ranking on the server only. */
@@ -50,15 +50,12 @@ export type NewsWireDbRow = {
   feed_label: string | null;
   original_url: string;
   rss_title: string;
-  rss_title_ko: string | null;
-  rss_title_en?: string | null;
   rss_published_at: string | null;
   created_at: string;
   status: CollectionCandidateStatus;
   article_id: string | null;
   ai_recommend_grade: string | null;
   ai_recommend_score: number | null;
-  wire_titles_ready_at?: string | null;
 };
 
 /**

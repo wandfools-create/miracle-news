@@ -19,8 +19,7 @@ import {
   type NewsWireLocale,
 } from "@/lib/news-wire/types";
 import {
-  displayWireTitle,
-  isWireTitlesReady,
+  displayOriginalWireTitle,
   sanitizeWireOutboundUrl,
 } from "@/lib/news-wire/wireTitles";
 
@@ -92,10 +91,9 @@ function toRankedPublic(
   row: NewsWireDbRow,
   locale: NewsWireLocale
 ): RankedPublic | null {
-  if (!isWireTitlesReady(row)) return null;
   const originalUrl = sanitizeWireOutboundUrl(row.original_url);
   if (!originalUrl) return null;
-  const title = displayWireTitle(row, locale);
+  const title = displayOriginalWireTitle(row);
   if (!title) return null;
 
   const baseLabel =
@@ -129,7 +127,7 @@ function toRankedPublic(
   };
 }
 
-/** Filter ready/URL + sort — grades stay on server sort keys only. */
+/** Filter URL + sort — grades stay on server sort keys only. */
 export function rankDbRowsToPublicItems(
   rows: NewsWireDbRow[],
   locale: NewsWireLocale,

@@ -37,21 +37,6 @@ type ServiceClient = ReturnType<
   typeof createServiceRoleSupabaseClient
 >["client"];
 
-function isMissingWireColumn(error: {
-  code?: string;
-  message?: string;
-  details?: string;
-}): boolean {
-  const blob =
-    `${error.code ?? ""} ${error.message ?? ""} ${error.details ?? ""}`.toLowerCase();
-  return (
-    blob.includes("rss_title_en") ||
-    blob.includes("wire_titles_ready_at") ||
-    blob.includes("42703") ||
-    (blob.includes("column") && blob.includes("does not exist"))
-  );
-}
-
 function isMissingRelation(error: {
   code?: string;
   message?: string;
@@ -142,7 +127,7 @@ async function fetchAllWireRowsInCreatedWindow(options: {
       }
       const { data, error } = await query;
       if (error) {
-        if (isMissingWireColumn(error) || isMissingRelation(error)) {
+        if (isMissingRelation(error)) {
           return { ok: false, error: "__schema_missing__" };
         }
         return { ok: false, error: error.message };
