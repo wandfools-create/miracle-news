@@ -11,6 +11,10 @@ import {
   sourceKeysForCollectRegion,
   type CollectRegion,
 } from "@/lib/rss/collectRegions";
+import {
+  parseCollectRunExclusionStats,
+  type CollectRunExclusionStats,
+} from "@/lib/rss/collectRunExclusionStats";
 import type { CollectionCandidateStatus } from "./types";
 import type { CollectionRunStatus } from "./collectionRunsCore";
 
@@ -33,6 +37,11 @@ export type CollectionRunSummary = {
   discordNotified: number | null;
   total: number;
   processed: number;
+  /**
+   * Detailed exclusion counters when present on the stored run.
+   * null = legacy / missing → UI shows 「기록 없음」 (never invent zeros).
+   */
+  exclusionStats?: CollectRunExclusionStats | null;
 };
 
 export type CandidateRunRow = {
@@ -56,6 +65,7 @@ export type StoredCollectionRun = {
   new_candidate_count?: number | null;
   duplicate_count?: number | null;
   failed_count?: number | null;
+  exclusion_stats?: unknown;
 };
 
 /** UTC collect slot hours matching desk cadence. */
@@ -252,6 +262,8 @@ function summarizeRows(
           : null,
     total: meta?.total ?? total,
     processed: meta?.processed ?? processed,
+    exclusionStats:
+      meta?.exclusionStats !== undefined ? meta.exclusionStats : null,
   };
 }
 
@@ -297,6 +309,7 @@ export function summarizeCollectionRuns(
         collectedCount: run.collected_count ?? rows.length,
         newCandidates: run.new_candidate_count ?? rows.length,
         failed: run.failed_count ?? undefined,
+        exclusionStats: parseCollectRunExclusionStats(run.exclusion_stats),
       })
     );
   }

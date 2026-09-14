@@ -125,11 +125,11 @@ export default function RssSourceHealthPanel({
                 성공{" "}
                 {row.lastSuccessAt
                   ? formatCollectionRunTimeEt(row.lastSuccessAt)
-                  : "—"}{" "}
+                  : "기록 없음"}{" "}
                 · 실패{" "}
                 {row.lastFailureAt
                   ? formatCollectionRunTimeEt(row.lastFailureAt)
-                  : "—"}
+                  : "기록 없음"}
               </p>
               {row.lastFailureReason ? (
                 <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-red-700/80">

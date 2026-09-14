@@ -25,6 +25,7 @@ export type FetchedCollectionRun = {
   failed_count: number;
   error_summary: string | null;
   created_at: string;
+  exclusion_stats?: unknown;
 };
 
 export async function fetchRecentCollectionRuns(limit = RECENT_RUNS_LIMIT): Promise<{
@@ -39,7 +40,7 @@ export async function fetchRecentCollectionRuns(limit = RECENT_RUNS_LIMIT): Prom
     const { data, error } = await client
       .from("collection_runs")
       .select(
-        "id, region, trigger_type, started_at, finished_at, status, collected_count, new_candidate_count, duplicate_count, failed_count, error_summary, created_at"
+        "id, region, trigger_type, started_at, finished_at, status, collected_count, new_candidate_count, duplicate_count, failed_count, error_summary, created_at, exclusion_stats"
       )
       .order("started_at", { ascending: false })
       .limit(limit);
@@ -47,6 +48,21 @@ export async function fetchRecentCollectionRuns(limit = RECENT_RUNS_LIMIT): Prom
     if (error) {
       if (isCollectionRunsSchemaMissing(error)) {
         return { runs: [], schemaMissing: true };
+      }
+      if (/exclusion_stats/i.test(error.message ?? "")) {
+        const retry = await client
+          .from("collection_runs")
+          .select(
+            "id, region, trigger_type, started_at, finished_at, status, collected_count, new_candidate_count, duplicate_count, failed_count, error_summary, created_at"
+          )
+          .order("started_at", { ascending: false })
+          .limit(limit);
+        if (!retry.error) {
+          return {
+            runs: (retry.data ?? []) as FetchedCollectionRun[],
+            schemaMissing: false,
+          };
+        }
       }
       console.warn("[admin/collection-runs] fetch failed", {
         code: error.code,

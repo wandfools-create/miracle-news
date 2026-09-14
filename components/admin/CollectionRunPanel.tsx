@@ -8,6 +8,12 @@ import {
   collectionRunStatusLabel,
   formatCollectionRunTimeEt,
 } from "@/lib/collection-candidates/groupCandidatesByRun";
+import {
+  COLLECT_RUN_EXCLUSION_STAT_LABELS,
+  displayExclusionStat,
+  formatExclusionStatDisplay,
+  type CollectRunExclusionStatKey,
+} from "@/lib/rss/collectRunExclusionStats";
 
 type Props = {
   runs: CollectionRunSummary[];
@@ -32,6 +38,19 @@ function buildHref(
   return q ? `${pathname}?${q}` : pathname;
 }
 
+const DETAIL_KEYS: CollectRunExclusionStatKey[] = [
+  "rssReceived",
+  "saved",
+  "feedFetchFailed",
+  "undated",
+  "olderThan72h",
+  "duplicateUrl",
+  "feedCapReached",
+  "fieldDisabled",
+  "excludeKeyword",
+  "saveFailed",
+];
+
 export default function CollectionRunPanel({
   runs,
   activeRunKey,
@@ -50,7 +69,7 @@ export default function CollectionRunPanel({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold tracking-wide text-gray-600">
-          수집 회차
+          수집 회차 · 제외 이유
         </p>
         <div className="flex flex-wrap gap-1.5">
           <Link
@@ -124,7 +143,9 @@ export default function CollectionRunPanel({
       </div>
 
       <p className="mt-2 text-[11px] text-gray-500">
-        시각은 미국 동부시간(America/New_York, DST 반영)입니다.
+        시각은 미국 동부시간(America/New_York, DST 반영)입니다. 상세 제외
+        집계는 migration 적용 후 새 회차부터 기록됩니다. 과거 회차는 「기록
+        없음」입니다.
       </p>
 
       {latest && expandLatest ? (
@@ -176,6 +197,10 @@ function RunRow({
   const progress =
     run.total > 0 ? Math.round((run.processed / run.total) * 100) : 0;
   const kindLabel = run.kind === "real" ? "실제 회차" : "추정 회차";
+  const stats = run.exclusionStats ?? null;
+  const categoryEntries = stats
+    ? Object.entries(stats.byCategory).sort((a, b) => b[1] - a[1])
+    : null;
 
   return (
     <Link
@@ -222,6 +247,40 @@ function RunRow({
       </p>
       <p className="mt-1">
         진행 {progress}% · {collectionRunStatusLabel(run.status)}
+      </p>
+
+      <div
+        className={`mt-2 grid gap-1 sm:grid-cols-2 ${
+          active ? "text-white/90" : "text-gray-700"
+        }`}
+      >
+        {DETAIL_KEYS.map((key) => {
+          const shown = formatExclusionStatDisplay(
+            displayExclusionStat(stats, key)
+          );
+          return (
+            <p key={key} className="text-[11px] leading-snug">
+              <span className={active ? "text-white/70" : "text-gray-500"}>
+                {COLLECT_RUN_EXCLUSION_STAT_LABELS[key]}
+              </span>
+              {": "}
+              <span className="font-semibold">{shown}</span>
+            </p>
+          );
+        })}
+      </div>
+
+      <p
+        className={`mt-2 text-[11px] ${active ? "text-white/80" : "text-gray-600"}`}
+      >
+        분야별 후보 수:{" "}
+        {categoryEntries == null ? (
+          <span className="font-semibold">기록 없음</span>
+        ) : categoryEntries.length === 0 ? (
+          <span className="font-semibold">0</span>
+        ) : (
+          categoryEntries.map(([cat, n]) => `${cat} ${n}`).join(" · ")
+        )}
       </p>
     </Link>
   );

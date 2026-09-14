@@ -5,6 +5,7 @@
 import "server-only";
 
 import type { CollectRegion } from "@/lib/rss/collectRegions";
+import type { CollectRunExclusionStats } from "@/lib/rss/collectRunExclusionStats";
 import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
@@ -52,6 +53,8 @@ export type FinishCollectionRunInput = {
   failedCount: number;
   hardFailed?: boolean;
   errorSummary?: string | null;
+  /** Detailed exclusion counters (null/omit for legacy callers). */
+  exclusionStats?: CollectRunExclusionStats | null;
 };
 
 export async function createCollectionRun(input: {
@@ -119,23 +122,54 @@ export async function finishCollectionRun(
 
   try {
     const { client } = createServiceRoleSupabaseClient();
+    const updatePayload: Record<string, unknown> = {
+      finished_at: new Date().toISOString(),
+      status,
+      collected_count: Math.max(0, input.collectedCount),
+      new_candidate_count: Math.max(0, input.newCandidateCount),
+      duplicate_count: Math.max(0, input.duplicateCount),
+      failed_count: Math.max(0, input.failedCount),
+      error_summary: sanitizeCollectionRunErrorSummary(input.errorSummary),
+    };
+    if (input.exclusionStats) {
+      updatePayload.exclusion_stats = input.exclusionStats;
+    }
     const { error } = await client
       .from("collection_runs")
-      .update({
-        finished_at: new Date().toISOString(),
-        status,
-        collected_count: Math.max(0, input.collectedCount),
-        new_candidate_count: Math.max(0, input.newCandidateCount),
-        duplicate_count: Math.max(0, input.duplicateCount),
-        failed_count: Math.max(0, input.failedCount),
-        error_summary: sanitizeCollectionRunErrorSummary(input.errorSummary),
-      })
+      .update(updatePayload)
       .eq("id", input.runId)
       .eq("status", "running");
 
     if (error) {
       if (isCollectionRunsSchemaMissing(error)) {
         return { ok: false, skipped: true };
+      }
+      // Additive column may not be applied yet — retry without exclusion_stats.
+      if (
+        input.exclusionStats &&
+        /exclusion_stats/i.test(`${error.message ?? ""} ${error.details ?? ""}`)
+      ) {
+        const { error: retryError } = await client
+          .from("collection_runs")
+          .update({
+            finished_at: new Date().toISOString(),
+            status,
+            collected_count: Math.max(0, input.collectedCount),
+            new_candidate_count: Math.max(0, input.newCandidateCount),
+            duplicate_count: Math.max(0, input.duplicateCount),
+            failed_count: Math.max(0, input.failedCount),
+            error_summary: sanitizeCollectionRunErrorSummary(
+              input.errorSummary
+            ),
+          })
+          .eq("id", input.runId)
+          .eq("status", "running");
+        if (!retryError) {
+          console.warn(
+            "[collectionRuns] finish without exclusion_stats — migration not applied"
+          );
+          return { ok: true };
+        }
       }
       console.warn("[collectionRuns] finish failed", {
         code: error.code,

@@ -67,6 +67,12 @@ import {
   rssFeedInsertQuota,
   sortRssItemsNewestFirst,
 } from "@/lib/rss/rssItemFreshness";
+import {
+  addCollectRunExclusionStats,
+  classifyFieldExclusionDecisionKey,
+  emptyCollectRunExclusionStats,
+  incrementCategoryCount,
+} from "@/lib/rss/collectRunExclusionStats";
 import { parseRssFeed, type ParsedRssItem } from "@/lib/rss/parseRssFeed";
 import {
   YONHAP_KR_RADAR_MAX_INSERTS_PER_RUN,
@@ -89,6 +95,18 @@ export type FeedCollectStats = {
   skippedOld: number;
   failed: number;
   error?: string;
+  /** Detailed counters for admin exclusion breakdown (optional on legacy logs). */
+  exclusion?: {
+    rssReceived: number;
+    undated: number;
+    olderThan72h: number;
+    feedFetchFailed: number;
+    feedCapReached: number;
+    fieldDisabled: number;
+    excludeKeyword: number;
+    otherSkipped: number;
+    byCategory: Record<string, number>;
+  };
 };
 
 export type CollectRssResult = {
@@ -475,7 +493,8 @@ function publisherMaxInserts(feed: RssFeedSource): number {
 async function prefilterRssFeedItems(
   feed: RssFeedSource,
   items: ParsedRssItem[],
-  ctx: CollectRunContext
+  ctx: CollectRunContext,
+  exclusion: NonNullable<FeedCollectStats["exclusion"]>
 ): Promise<{ toProcess: ParsedRssItem[]; skipped: number }> {
   const toProcess: ParsedRssItem[] = [];
   let skipped = 0;
@@ -484,6 +503,7 @@ async function prefilterRssFeedItems(
     const resolved = resolveSubmittedUrl(item.link);
     if (!resolved.ok) {
       skipped += 1;
+      exclusion.otherSkipped += 1;
       continue;
     }
 
@@ -495,6 +515,7 @@ async function prefilterRssFeedItems(
     });
     if (skipReason) {
       skipped += 1;
+      exclusion.otherSkipped += 1;
       await logRssCollectItemSkipped({
         sourceLabel: feed.label,
         originalUrl: resolved.href,
@@ -536,6 +557,12 @@ async function prefilterRssFeedItems(
             );
           } else {
             skipped += 1;
+            const bucket = classifyFieldExclusionDecisionKey(
+              fieldDecision.decisionKey
+            );
+            if (bucket === "fieldDisabled") exclusion.fieldDisabled += 1;
+            else if (bucket === "excludeKeyword") exclusion.excludeKeyword += 1;
+            else exclusion.otherSkipped += 1;
             await logRssCollectItemSkipped({
               sourceLabel: feed.label,
               originalUrl: resolved.href,
@@ -585,6 +612,7 @@ async function prefilterRssFeedItems(
           });
         } else {
           skipped += 1;
+          exclusion.excludeKeyword += 1;
           await logRssCollectItemSkipped({
             sourceLabel: feed.label,
             originalUrl: resolved.href,
@@ -627,6 +655,17 @@ function emptyFeedStats(feed: RssFeedSource): FeedCollectStats {
     skipped: 0,
     skippedOld: 0,
     failed: 0,
+    exclusion: {
+      rssReceived: 0,
+      undated: 0,
+      olderThan72h: 0,
+      feedFetchFailed: 0,
+      feedCapReached: 0,
+      fieldDisabled: 0,
+      excludeKeyword: 0,
+      otherSkipped: 0,
+      byCategory: {},
+    },
   };
 }
 
@@ -636,15 +675,19 @@ async function prepareFeed(
   ctx: CollectRunContext
 ): Promise<PreparedFeed> {
   const stats = emptyFeedStats(feed);
+  const exclusion = stats.exclusion!;
   const fetched = await fetchFeedItems(feed);
   if (!fetched.ok) {
     stats.error = fetched.error;
+    exclusion.feedFetchFailed = 1;
     console.warn("[collectRss] feed failed (continuing other feeds)", {
       source: feed.sourceKey,
       error: fetched.error,
     });
     return { feed, stats, queue: [] };
   }
+
+  exclusion.rssReceived = fetched.items.length;
 
   // 1) Newest first → 2) 72h freshness (+ strict undated skip when required)
   // → 3) scan window, then insert queue capped per feedUrl.
@@ -653,27 +696,35 @@ async function prepareFeed(
     ? evaluateRssItemAgeStrict
     : evaluateRssItemAge;
   const fresh: ParsedRssItem[] = [];
-  let skippedOld = 0;
   for (const item of sorted) {
     const age = ageFn(item.publishedAt);
-    if (age.action === "skip_old" || age.action === "skip_undated") {
-      skippedOld += 1;
+    if (age.action === "skip_undated") {
+      stats.skippedOld += 1;
+      exclusion.undated += 1;
+      continue;
+    }
+    if (age.action === "skip_old") {
+      stats.skippedOld += 1;
+      exclusion.olderThan72h += 1;
       continue;
     }
     fresh.push(item);
     if (fresh.length >= RSS_MAX_ITEMS_PER_FEED) break;
   }
-  stats.skippedOld += skippedOld;
   stats.checked = fresh.length;
 
   const { toProcess, skipped: prefilterSkipped } = await prefilterRssFeedItems(
     feed,
     fresh,
-    ctx
+    ctx,
+    exclusion
   );
   stats.skipped += prefilterSkipped;
 
   const maxInserts = publisherMaxInserts(feed);
+  if (toProcess.length > maxInserts) {
+    exclusion.feedCapReached += toProcess.length - maxInserts;
+  }
   return { feed, stats, queue: toProcess.slice(0, maxInserts) };
 }
 
@@ -719,11 +770,19 @@ async function drainFeedInsertQuota(
     }
     if (typeof outcome === "object" && outcome.kind === "would_insert") {
       prepared.stats.wouldInsert = (prepared.stats.wouldInsert ?? 0) + 1;
+      incrementCategoryCount(
+        prepared.stats.exclusion!.byCategory,
+        prepared.feed.category
+      );
       savedThisCall += 1;
       continue;
     }
 
     prepared.stats.inserted += 1;
+    incrementCategoryCount(
+      prepared.stats.exclusion!.byCategory,
+      prepared.feed.category
+    );
     savedThisCall += 1;
     ctx.remainingCandidateBudget.value -= 1;
   }
@@ -1047,6 +1106,26 @@ export async function collectRssToReviewQueue(
     }
   );
 
+  let exclusionStats = emptyCollectRunExclusionStats();
+  for (const f of feeds) {
+    const ex = f.exclusion;
+    if (!ex) continue;
+    exclusionStats = addCollectRunExclusionStats(exclusionStats, {
+      rssReceived: ex.rssReceived,
+      saved: f.inserted,
+      feedFetchFailed: ex.feedFetchFailed,
+      undated: ex.undated,
+      olderThan72h: ex.olderThan72h,
+      duplicateUrl: f.duplicates,
+      feedCapReached: ex.feedCapReached,
+      fieldDisabled: ex.fieldDisabled,
+      excludeKeyword: ex.excludeKeyword,
+      saveFailed: f.failed,
+      otherSkipped: ex.otherSkipped,
+      byCategory: ex.byCategory,
+    });
+  }
+
   await logRunCollection(totals, ctx);
 
   if (collectionRunId) {
@@ -1058,6 +1137,7 @@ export async function collectRssToReviewQueue(
       failedCount: totals.failed,
       hardFailed,
       errorSummary,
+      exclusionStats,
     });
   }
 

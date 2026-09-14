@@ -141,6 +141,7 @@ export default async function CollectionCandidatesPage({
       new_candidate_count: r.new_candidate_count,
       duplicate_count: r.duplicate_count,
       failed_count: r.failed_count,
+      exclusion_stats: r.exclusion_stats,
     }))
   );
   const runSummaries = filterRunSummariesByRegion(
