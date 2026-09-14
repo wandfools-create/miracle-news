@@ -1,3 +1,4 @@
+import { CANDIDATE_SOURCE_LABELS } from "@/lib/collection-candidates/candidateSourceLabels";
 import {
   CANDIDATE_STATUS_LABELS,
   type CollectionCandidateStatus,
@@ -6,17 +7,6 @@ import { formatDateTimeKo } from "@/lib/articleWorkflow";
 import { shortenCandidateFailure } from "@/lib/collection-candidates/candidateListQuery";
 import DismissCandidateForm from "@/components/admin/DismissCandidateForm";
 import EnrichCandidateForm from "@/components/admin/EnrichCandidateForm";
-
-const SOURCE_LABELS: Record<string, string> = {
-  ap: "AP",
-  "fox-news": "Fox",
-  "pbs-newshour": "PBS",
-  csm: "CSM",
-  chosun: "조선일보",
-  tvchosun: "TV조선",
-  insight: "인사이트",
-  "yonhap-kr-radar": "연합뉴스 속보",
-};
 
 type CollectionCandidateCardProps = {
   id: string;
@@ -56,7 +46,7 @@ export default function CollectionCandidateCard({
   dateFilter,
   showLocalizeTools = false,
 }: CollectionCandidateCardProps) {
-  const sourceLabel = feedLabel || SOURCE_LABELS[source] || source;
+  const sourceLabel = feedLabel || CANDIDATE_SOURCE_LABELS[source] || source;
   const statusLabel = CANDIDATE_STATUS_LABELS[status] ?? status;
   const canMakeArticle =
     status === "pending" || status === "enrich_failed" || status === "enriching";

@@ -41,7 +41,8 @@ export function rssFeedInsertQuota(input: {
 export type RssItemAgeDecision =
   | { action: "allow"; reason: "fresh" }
   | { action: "allow"; reason: "unknown_published_at" }
-  | { action: "skip_old"; reason: "older_than_max_age"; ageMs: number };
+  | { action: "skip_old"; reason: "older_than_max_age"; ageMs: number }
+  | { action: "skip_undated"; reason: "missing_or_invalid_published_at" };
 
 export function evaluateRssItemAge(
   publishedAt: string | null | undefined,
@@ -61,4 +62,54 @@ export function evaluateRssItemAge(
     return { action: "skip_old", reason: "older_than_max_age", ageMs };
   }
   return { action: "allow", reason: "fresh" };
+}
+
+/** Strict age gate: undated / unparseable never allowed. */
+export function evaluateRssItemAgeStrict(
+  publishedAt: string | null | undefined,
+  nowMs = Date.now(),
+  maxAgeMs = RSS_MAX_ITEM_AGE_MS
+): RssItemAgeDecision {
+  const raw = publishedAt?.trim();
+  if (!raw) {
+    return {
+      action: "skip_undated",
+      reason: "missing_or_invalid_published_at",
+    };
+  }
+  const t = new Date(raw).getTime();
+  if (!Number.isFinite(t)) {
+    return {
+      action: "skip_undated",
+      reason: "missing_or_invalid_published_at",
+    };
+  }
+  const ageMs = nowMs - t;
+  if (ageMs > maxAgeMs) {
+    return { action: "skip_old", reason: "older_than_max_age", ageMs };
+  }
+  return { action: "allow", reason: "fresh" };
+}
+
+export function rssItemPublishedAtMs(
+  publishedAt: string | null | undefined
+): number | null {
+  const raw = publishedAt?.trim();
+  if (!raw) return null;
+  const t = new Date(raw).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+/** Newest first; undated / unparseable dates sort last. */
+export function sortRssItemsNewestFirst<
+  T extends { publishedAt: string | null },
+>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
+    const ta = rssItemPublishedAtMs(a.publishedAt);
+    const tb = rssItemPublishedAtMs(b.publishedAt);
+    if (ta == null && tb == null) return 0;
+    if (ta == null) return 1;
+    if (tb == null) return -1;
+    return tb - ta;
+  });
 }

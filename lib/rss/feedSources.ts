@@ -44,6 +44,16 @@ export type RssFeedSource = {
    * Yonhap KR radar uses 3 so it stays a small auxiliary budget.
    */
   maxInsertsPerRun?: number;
+  /**
+   * When true, undated / unparseable pubDate items are never inserted.
+   * Used for newly added US politics / public-health feeds.
+   */
+  requirePublishedAt?: boolean;
+  /**
+   * When true, insert cap is per feedUrl (not shared across same sourceKey).
+   * KR multi-category desks stay shared; NYT/WaPo/NPR/CDC use per-URL caps.
+   */
+  independentInsertCap?: boolean;
   /** When set, used as candidate category (overrides title inference). */
   category?: RssFeedCategory;
   /**
@@ -131,6 +141,115 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     feedUrl: "https://www.sciencedaily.com/rss/all.xml",
     sourceCountry: "US",
     collectRegion: COLLECT_REGION_US_INTL,
+  },
+  {
+    sourceKey: "nyt",
+    label: "NYT Politics",
+    feedUrl: "https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml",
+    sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
+    category: "politics",
+    requirePublishedAt: true,
+    independentInsertCap: true,
+  },
+  {
+    sourceKey: "nyt",
+    label: "NYT World",
+    feedUrl: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+    sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
+    category: "world",
+    requirePublishedAt: true,
+    independentInsertCap: true,
+  },
+  {
+    sourceKey: "wapo",
+    label: "Washington Post Politics",
+    feedUrl: "https://feeds.washingtonpost.com/rss/politics",
+    sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
+    category: "politics",
+    requirePublishedAt: true,
+    independentInsertCap: true,
+  },
+  {
+    sourceKey: "wapo",
+    label: "Washington Post World",
+    feedUrl: "https://feeds.washingtonpost.com/rss/world",
+    sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
+    category: "world",
+    requirePublishedAt: true,
+    independentInsertCap: true,
+  },
+  {
+    sourceKey: "the-hill",
+    label: "The Hill",
+    feedUrl: "https://thehill.com/news/feed/",
+    sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
+    category: "politics",
+    requirePublishedAt: true,
+    independentInsertCap: true,
+  },
+  {
+    sourceKey: "npr",
+    label: "NPR Politics",
+    feedUrl: "https://feeds.npr.org/1014/rss.xml",
+    sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
+    category: "politics",
+    requirePublishedAt: true,
+    independentInsertCap: true,
+  },
+  {
+    sourceKey: "npr",
+    label: "NPR World",
+    feedUrl: "https://feeds.npr.org/1004/rss.xml",
+    sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
+    category: "world",
+    requirePublishedAt: true,
+    independentInsertCap: true,
+  },
+  {
+    sourceKey: "pbs-newshour",
+    label: "PBS NewsHour · 세계",
+    feedUrl: "https://www.pbs.org/newshour/feeds/rss/world",
+    sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
+    category: "world",
+    requirePublishedAt: true,
+  },
+  {
+    sourceKey: "cdc",
+    label: "CDC Online Newsroom",
+    feedUrl: "https://tools.cdc.gov/api/v2/resources/media/132608.rss",
+    sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
+    category: "society",
+    requirePublishedAt: true,
+    independentInsertCap: true,
+  },
+  {
+    sourceKey: "cdc",
+    label: "CDC Outbreaks (US)",
+    feedUrl: "https://tools.cdc.gov/api/v2/resources/media/285676.rss",
+    sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
+    category: "society",
+    requirePublishedAt: true,
+    independentInsertCap: true,
+  },
+  {
+    sourceKey: "who",
+    label: "WHO News (English)",
+    feedUrl: "https://www.who.int/rss-feeds/news-english.xml",
+    sourceCountry: "US",
+    collectRegion: COLLECT_REGION_US_INTL,
+    category: "society",
+    requirePublishedAt: true,
+    independentInsertCap: true,
   },
   {
     sourceKey: "chosun",

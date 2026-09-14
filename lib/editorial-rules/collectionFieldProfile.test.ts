@@ -10,6 +10,7 @@ import {
   buildDefaultCollectionFieldProfile,
   detectConfidentCountry,
   evaluateCollectionFieldProfile,
+  mergeFieldOverrides,
   shouldAutoExcludeFieldDecision,
 } from "@/lib/editorial-rules/evaluateCollectionFieldProfile";
 import type { CollectionCountryConfig } from "@/lib/editorial-rules/collectionProfileTypes";
@@ -52,7 +53,12 @@ describe("collection field profile evaluation", () => {
   it("rescues unchecked field when public-health exception present", () => {
     const profile = buildDefaultCollectionFieldProfile(true);
     for (const f of profile.fields) {
-      if (f.id.startsWith("society.") || f.id.startsWith("science.")) {
+      if (
+        f.id.startsWith("society.") ||
+        f.id.startsWith("science.") ||
+        f.id.startsWith("lifestyle.") ||
+        f.id === "public_health.infectious"
+      ) {
         f.enabled = false;
       }
     }
@@ -66,6 +72,133 @@ describe("collection field profile evaluation", () => {
     );
     assert.equal(decision.action, "review");
     assert.equal(decision.rescuedFromExclude, true);
+  });
+
+  it("keeps strong outbreak as review when science and lifestyle are off", () => {
+    const profile = buildDefaultCollectionFieldProfile(true);
+    for (const f of profile.fields) {
+      if (
+        f.id.startsWith("science.") ||
+        f.id.startsWith("lifestyle.") ||
+        f.id === "public_health.infectious" ||
+        f.id === "society.health"
+      ) {
+        f.enabled = false;
+      }
+    }
+    const decision = evaluateCollectionFieldProfile(
+      {
+        title: "Measles outbreak cases surge across multiple states",
+        summary: "CDC reports hospitalizations rising",
+        collectRegion: "us-intl",
+      },
+      profile
+    );
+    assert.equal(decision.action, "review");
+    assert.equal(decision.rescuedFromExclude, true);
+    assert.ok(decision.exceptionSignals.includes("public-health"));
+  });
+
+  it("excludes computer virus and soft lifestyle health", () => {
+    const profile = buildDefaultCollectionFieldProfile(true);
+    const virus = evaluateCollectionFieldProfile(
+      {
+        title: "Computer virus spreads through email malware",
+        summary: "Antivirus vendors warn of ransomware",
+        collectRegion: "us-intl",
+      },
+      profile
+    );
+    assert.equal(virus.action, "exclude");
+
+    const soft = evaluateCollectionFieldProfile(
+      {
+        title: "Celebrity health tips and diet wellness hacks",
+        summary: "Lifestyle wellness roundup",
+        collectRegion: "us-intl",
+      },
+      profile
+    );
+    assert.equal(soft.action, "exclude");
+  });
+
+  it("does not pass on lone weak virus or research tokens", () => {
+    const profile = buildDefaultCollectionFieldProfile(true);
+    profile.acceptUnclassified = false;
+    const decision = evaluateCollectionFieldProfile(
+      {
+        title: "New virus research published in lab notes",
+        summary: "Health study looks at general findings",
+        collectRegion: "us-intl",
+      },
+      profile
+    );
+    assert.equal(decision.action, "exclude");
+    assert.equal(decision.exceptionSignals.includes("public-health"), false);
+  });
+
+  it("does not pass WHO/CDC name-only items as public health", () => {
+    const profile = buildDefaultCollectionFieldProfile(true);
+    profile.acceptUnclassified = false;
+    const who = evaluateCollectionFieldProfile(
+      {
+        title: "WHO and Switzerland cement cooperation until 2028",
+        summary: "Partnership renewal announcement",
+        collectRegion: "us-intl",
+      },
+      profile
+    );
+    assert.equal(who.action, "exclude");
+    assert.equal(who.exceptionSignals.includes("public-health"), false);
+
+    const cdc = evaluateCollectionFieldProfile(
+      {
+        title: "CDC Launches New Overdose Prevention Data Channel",
+        summary: "Agency statement on data tools",
+        collectRegion: "us-intl",
+      },
+      profile
+    );
+    assert.equal(cdc.action, "exclude");
+  });
+
+  it("defaults public_health.infectious on only when setting absent", () => {
+    const defaults = buildDefaultCollectionFieldProfile(true);
+    const ph = defaults.fields.find((f) => f.id === "public_health.infectious");
+    assert.ok(ph);
+    assert.equal(ph!.enabled, true);
+    assert.equal(ph!.realm, "public_health");
+
+    const legacy = defaults.fields.find((f) => f.id === "society.health");
+    assert.ok(legacy);
+    assert.equal(legacy!.enabled, false);
+
+    // Simulate existing profile: society.health was on; new field missing → default on.
+    const existingOn = mergeFieldOverrides(defaults, {
+      enabledById: { "society.health": true },
+    });
+    assert.equal(
+      existingOn.fields.find((f) => f.id === "society.health")!.enabled,
+      true
+    );
+    assert.equal(
+      existingOn.fields.find((f) => f.id === "public_health.infectious")!
+        .enabled,
+      true
+    );
+  });
+
+  it("accepts enabled US politics hard news without auto-exclude", () => {
+    const profile = buildDefaultCollectionFieldProfile(true);
+    const decision = evaluateCollectionFieldProfile(
+      {
+        title: "Senate votes on foreign aid package for allies",
+        summary: "White House urges Congress to act",
+        collectRegion: "us-intl",
+      },
+      profile
+    );
+    assert.equal(shouldAutoExcludeFieldDecision(decision), false);
   });
 
   it("rejects unclassified when acceptUnclassified is OFF", () => {

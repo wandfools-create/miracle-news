@@ -17,6 +17,11 @@ import {
   keywordMatches,
   normalizeEditorialText,
 } from "@/lib/editorial-rules/matchKeywords";
+import {
+  detectStrongPublicHealthSignal,
+  isScienceOrLifestyleFieldId,
+  isSoftPublicHealthNoise,
+} from "@/lib/editorial-rules/publicHealthSignals";
 
 function scopeApplies(
   scope: CollectionRegionScope,
@@ -183,14 +188,92 @@ export function evaluateCollectionFieldProfile(
   const collectHits = hits.filter((h) => h.matchedCollect.length > 0);
   const enabledCollect = collectHits.filter((h) => h.enabled);
   const disabledCollect = collectHits.filter((h) => !h.enabled);
+  const strongPublicHealth = detectStrongPublicHealthSignal(text);
+  const softHealthNoise = isSoftPublicHealthNoise(text);
 
-  // Multi-field or low-confidence → never auto-exclude.
+  // Soft lifestyle / celebrity / computer-virus noise never enters via PH keywords alone.
+  if (softHealthNoise && !strongPublicHealth) {
+    const onlySoftHealthFields =
+      collectHits.length > 0 &&
+      collectHits.every(
+        (h) =>
+          h.fieldId === "public_health.infectious" ||
+          h.fieldId === "society.health" ||
+          isScienceOrLifestyleFieldId(h.fieldId)
+      );
+    if (onlySoftHealthFields || collectHits.length === 0) {
+      return {
+        action: "exclude",
+        reason: "생활 건강·연예 건강·컴퓨터 바이러스 등 연성 건강 신호 제외",
+        decisionKey: "soft-public-health-noise",
+        matchedFields: hits,
+        exceptionSignals,
+        rescuedFromExclude: false,
+        countrySkippedUncertain,
+        lowConfidence: false,
+      };
+    }
+  }
+
+  // Multi-field or low-confidence → never auto-exclude (unless all soft desks disabled).
   const lowConfidence =
     collectHits.length === 1 &&
     collectHits[0]!.matchedCollect.length === 1 &&
     collectHits[0]!.matchedCollect[0]!.trim().length <= 2;
 
   if (collectHits.length >= 2 || lowConfidence) {
+    const allDisabled =
+      collectHits.length >= 1 &&
+      collectHits.every((h) => !h.enabled) &&
+      enabledCollect.length === 0;
+    const allDisabledScienceLifestyle =
+      collectHits.length >= 2 &&
+      collectHits.every(
+        (h) => !h.enabled && isScienceOrLifestyleFieldId(h.fieldId)
+      );
+
+    // Strong infectious signals beat disabled science/lifestyle/PH field checkboxes.
+    if (allDisabled && strongPublicHealth) {
+      return {
+        action: "review",
+        reason:
+          "분야 체크 해제 상태이나 강한 공중보건·감염병 신호로 일반 검토 후보",
+        decisionKey: "public-health-strong-signal",
+        matchedFields: hits,
+        exceptionSignals,
+        rescuedFromExclude: true,
+        countrySkippedUncertain,
+        lowConfidence: false,
+      };
+    }
+
+    if (allDisabledScienceLifestyle && !strongPublicHealth) {
+      if (exceptionSignals.length > 0) {
+        return {
+          action: "review",
+          reason: `과학·생활 해제이나 중요 예외 신호로 일반 검토`,
+          decisionKey: "science-lifestyle-disabled-exception",
+          matchedFields: hits,
+          exceptionSignals,
+          rescuedFromExclude: true,
+          countrySkippedUncertain,
+          lowConfidence: false,
+        };
+      }
+      return {
+        action: "exclude",
+        reason: `체크 해제 과학·생활 분야: ${collectHits
+          .map((h) => h.labelKo)
+          .slice(0, 4)
+          .join(", ")}`,
+        decisionKey: "science-lifestyle-disabled",
+        matchedFields: hits,
+        exceptionSignals,
+        rescuedFromExclude: false,
+        countrySkippedUncertain,
+        lowConfidence: false,
+      };
+    }
     return {
       action: "review",
       reason:
@@ -207,11 +290,25 @@ export function evaluateCollectionFieldProfile(
   }
 
   if (disabledCollect.length === 1 && enabledCollect.length === 0) {
+    const disabled = disabledCollect[0]!;
+    if (strongPublicHealth) {
+      return {
+        action: "review",
+        reason:
+          "분야 체크 해제 상태이나 강한 공중보건·감염병 신호로 일반 검토 후보",
+        decisionKey: "public-health-strong-signal",
+        matchedFields: hits,
+        exceptionSignals,
+        rescuedFromExclude: true,
+        countrySkippedUncertain,
+        lowConfidence: false,
+      };
+    }
     if (exceptionSignals.length > 0) {
       return {
         action: "review",
-        reason: `체크 해제 분야(${disabledCollect[0]!.labelKo})이나 중요 예외 신호로 일반 검토`,
-        decisionKey: `field-disabled:${disabledCollect[0]!.fieldId}`,
+        reason: `체크 해제 분야(${disabled.labelKo})이나 중요 예외 신호로 일반 검토`,
+        decisionKey: `field-disabled:${disabled.fieldId}`,
         matchedFields: hits,
         exceptionSignals,
         rescuedFromExclude: true,
@@ -221,8 +318,8 @@ export function evaluateCollectionFieldProfile(
     }
     return {
       action: "exclude",
-      reason: `체크 해제 분야: ${disabledCollect[0]!.labelKo}`,
-      decisionKey: `field-disabled:${disabledCollect[0]!.fieldId}`,
+      reason: `체크 해제 분야: ${disabled.labelKo}`,
+      decisionKey: `field-disabled:${disabled.fieldId}`,
       matchedFields: hits,
       exceptionSignals,
       rescuedFromExclude: false,

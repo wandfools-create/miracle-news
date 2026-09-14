@@ -60,10 +60,12 @@ import {
 } from "@/lib/rss/feedSources";
 import {
   evaluateRssItemAge,
+  evaluateRssItemAgeStrict,
   RSS_FIRST_PASS_INSERTS_PER_FEED,
   RSS_MAX_INSERTS_PER_FEED,
   RSS_MAX_ITEMS_PER_FEED,
   rssFeedInsertQuota,
+  sortRssItemsNewestFirst,
 } from "@/lib/rss/rssItemFreshness";
 import { parseRssFeed, type ParsedRssItem } from "@/lib/rss/parseRssFeed";
 import {
@@ -266,13 +268,16 @@ async function processRssItem(
 
   const link = resolved.href;
 
-  const age = evaluateRssItemAge(item.publishedAt);
-  if (age.action === "skip_old") {
-    console.info("[collectRss] skip old item", {
+  const age = feed.requirePublishedAt
+    ? evaluateRssItemAgeStrict(item.publishedAt)
+    : evaluateRssItemAge(item.publishedAt);
+  if (age.action === "skip_old" || age.action === "skip_undated") {
+    console.info("[collectRss] skip aged/undated item", {
       source: feed.sourceKey,
       link,
       publishedAt: item.publishedAt,
-      ageMs: age.ageMs,
+      reason: age.reason,
+      ...(age.action === "skip_old" ? { ageMs: age.ageMs } : {}),
     });
     return "skipped_old";
   }
@@ -641,17 +646,35 @@ async function prepareFeed(
     return { feed, stats, queue: [] };
   }
 
-  const items = fetched.items.slice(0, RSS_MAX_ITEMS_PER_FEED);
-  stats.checked = items.length;
+  // 1) Newest first → 2) 72h freshness (+ strict undated skip when required)
+  // → 3) scan window, then insert queue capped per feedUrl.
+  const sorted = sortRssItemsNewestFirst(fetched.items);
+  const ageFn = feed.requirePublishedAt
+    ? evaluateRssItemAgeStrict
+    : evaluateRssItemAge;
+  const fresh: ParsedRssItem[] = [];
+  let skippedOld = 0;
+  for (const item of sorted) {
+    const age = ageFn(item.publishedAt);
+    if (age.action === "skip_old" || age.action === "skip_undated") {
+      skippedOld += 1;
+      continue;
+    }
+    fresh.push(item);
+    if (fresh.length >= RSS_MAX_ITEMS_PER_FEED) break;
+  }
+  stats.skippedOld += skippedOld;
+  stats.checked = fresh.length;
 
   const { toProcess, skipped: prefilterSkipped } = await prefilterRssFeedItems(
     feed,
-    items,
+    fresh,
     ctx
   );
   stats.skipped += prefilterSkipped;
 
-  return { feed, stats, queue: [...toProcess] };
+  const maxInserts = publisherMaxInserts(feed);
+  return { feed, stats, queue: toProcess.slice(0, maxInserts) };
 }
 
 /**
@@ -803,7 +826,13 @@ async function drainMainPublishersFair(
   ctx: CollectRunContext,
   pass: 0 | 1 | 2
 ): Promise<void> {
-  const publisherKeys = uniqueMainPublisherKeys(mainPrepared);
+  const sharedPrepared = mainPrepared.filter(
+    (p) => !p.feed.independentInsertCap
+  );
+  const independentPrepared = mainPrepared.filter(
+    (p) => p.feed.independentInsertCap
+  );
+  const publisherKeys = uniqueMainPublisherKeys(sharedPrepared);
 
   if (pass === 0) {
     for (const sourceKey of publisherKeys) {
@@ -816,6 +845,11 @@ async function drainMainPublishersFair(
         ctx,
         1
       );
+    }
+    for (const p of independentPrepared) {
+      if (ctx.options.save && ctx.remainingCandidateBudget.value <= 0) break;
+      if (feedSavedCount(p.stats) > 0) continue;
+      await drainFeedInsertQuota(p, seenUrls, ctx, 1);
     }
     return;
   }
@@ -839,6 +873,20 @@ async function drainMainPublishersFair(
       ctx,
       quota
     );
+  }
+
+  // Per feedUrl cap (NYT/WaPo/NPR/CDC/WHO) — not shared across sourceKey.
+  for (const p of independentPrepared) {
+    if (ctx.options.save && ctx.remainingCandidateBudget.value <= 0) break;
+    const quota = rssFeedInsertQuota({
+      pass,
+      alreadyInserted: feedSavedCount(p.stats),
+      runBudgetRemaining: ctx.options.save
+        ? ctx.remainingCandidateBudget.value
+        : Number.MAX_SAFE_INTEGER,
+      maxInserts: publisherMaxInserts(p.feed),
+    });
+    await drainFeedInsertQuota(p, seenUrls, ctx, quota);
   }
 }
 

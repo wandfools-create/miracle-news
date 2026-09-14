@@ -8,6 +8,7 @@ export type CollectionFieldRealm =
   | "politics"
   | "economy"
   | "society"
+  | "public_health"
   | "culture"
   | "science"
   | "lifestyle";
@@ -26,6 +27,7 @@ export const COLLECTION_REALM_LABELS: Record<CollectionFieldRealm, string> = {
   politics: "정치",
   economy: "경제",
   society: "사회",
+  public_health: "공중보건",
   culture: "문화",
   science: "과학",
   lifestyle: "생활·기타",
@@ -35,6 +37,7 @@ export const COLLECTION_REALM_ORDER: CollectionFieldRealm[] = [
   "politics",
   "economy",
   "society",
+  "public_health",
   "culture",
   "science",
   "lifestyle",
@@ -330,10 +333,14 @@ export const BUILT_IN_COLLECTION_FIELDS: BuiltInCollectionField[] = [
     excludeKeywords: [],
   },
   {
+    /**
+     * Legacy id kept so existing field_settings rows are not dropped.
+     * New installs default OFF; use public_health.infectious instead.
+     */
     id: "society.health",
     realm: "society",
-    labelKo: "감염병·공중보건",
-    defaultEnabled: true,
+    labelKo: "감염병·공중보건(이전)",
+    defaultEnabled: false,
     collectKeywords: [
       "감염병",
       "공중보건",
@@ -344,10 +351,69 @@ export const BUILT_IN_COLLECTION_FIELDS: BuiltInCollectionField[] = [
       "pandemic",
       "outbreak",
       "public health",
-      "cdc",
-      "who",
+      "infectious disease",
+      "세계보건기구",
+      "질병관리청",
     ],
-    excludeKeywords: [],
+    excludeKeywords: [
+      "컴퓨터 바이러스",
+      "computer virus",
+      "malware",
+      "다이어트",
+      "diet tip",
+      "연예인 건강",
+      "celebrity health",
+      "health tips",
+    ],
+  },
+  // 공중보건 (독립 분야)
+  {
+    id: "public_health.infectious",
+    realm: "public_health",
+    labelKo: "공중보건·감염병",
+    defaultEnabled: true,
+    collectKeywords: [
+      "공중보건",
+      "감염병",
+      "전염병",
+      "확진",
+      "집단감염",
+      "팬데믹",
+      "유행",
+      "발병",
+      "확산",
+      "보건당국",
+      "질병관리청",
+      "세계보건기구",
+      "public health",
+      "infectious disease",
+      "outbreak",
+      "epidemic",
+      "pandemic",
+      "hospitalization",
+      "world health organization",
+      "centers for disease control",
+      "measles",
+      "mpox",
+      "ebola",
+      "cholera",
+      "covid-19",
+      "avian flu",
+    ],
+    excludeKeywords: [
+      "컴퓨터 바이러스",
+      "computer virus",
+      "malware",
+      "ransomware",
+      "다이어트",
+      "diet tip",
+      "weight loss",
+      "연예인 건강",
+      "celebrity health",
+      "health tips",
+      "wellness hack",
+      "생활 건강",
+    ],
   },
   {
     id: "society.migration",

@@ -11,10 +11,12 @@ import {
 } from "./feedSources";
 import {
   evaluateRssItemAge,
+  evaluateRssItemAgeStrict,
   RSS_FIRST_PASS_INSERTS_PER_FEED,
   RSS_MAX_INSERTS_PER_FEED,
   RSS_MAX_ITEM_AGE_MS,
   rssFeedInsertQuota,
+  sortRssItemsNewestFirst,
 } from "./rssItemFreshness";
 import {
   publisherQuotaRemaining,
@@ -65,9 +67,9 @@ describe("RSS ops expansion (fixture only, no OpenAI)", () => {
     );
   });
 
-  it("registers PBS headlines and politics feeds under pbs-newshour", () => {
+  it("registers PBS headlines, politics, and world feeds under pbs-newshour", () => {
     const pbs = RSS_FEED_SOURCES.filter((f) => f.sourceKey === "pbs-newshour");
-    assert.equal(pbs.length, 2);
+    assert.equal(pbs.length, 3);
     assert.ok(
       pbs.some(
         (f) =>
@@ -80,15 +82,92 @@ describe("RSS ops expansion (fixture only, no OpenAI)", () => {
     assert.ok(politics);
     assert.equal(politics.category, "politics");
     assert.equal(politics.collectRegion, "us-intl");
+    const world = pbs.find(
+      (f) => f.feedUrl === "https://www.pbs.org/newshour/feeds/rss/world"
+    );
+    assert.ok(world);
+    assert.equal(world.category, "world");
   });
 
+  it("registers verified US politics/intl and official public-health feeds", () => {
+    const urls = RSS_FEED_SOURCES.map((f) => f.feedUrl);
+    assert.ok(
+      urls.includes("https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml")
+    );
+    assert.ok(
+      urls.includes("https://rss.nytimes.com/services/xml/rss/nyt/World.xml")
+    );
+    assert.ok(
+      urls.includes("https://feeds.washingtonpost.com/rss/politics")
+    );
+    assert.ok(urls.includes("https://feeds.washingtonpost.com/rss/world"));
+    assert.ok(urls.includes("https://thehill.com/news/feed/"));
+    assert.ok(urls.includes("https://feeds.npr.org/1014/rss.xml"));
+    assert.ok(urls.includes("https://feeds.npr.org/1004/rss.xml"));
+    assert.ok(
+      urls.includes(
+        "https://tools.cdc.gov/api/v2/resources/media/132608.rss"
+      )
+    );
+    assert.ok(
+      urls.includes(
+        "https://tools.cdc.gov/api/v2/resources/media/285676.rss"
+      )
+    );
+    assert.ok(
+      urls.includes("https://www.who.int/rss-feeds/news-english.xml")
+    );
+    // Guessed / broken official endpoints must stay out.
+    assert.equal(
+      urls.some((u) => u.includes("politico.com")),
+      false
+    );
+    assert.equal(
+      urls.some((u) => u.includes("whitehouse.gov")),
+      false
+    );
+    assert.equal(
+      urls.some((u) => u.includes("cdc.gov/feeds/mmwr")),
+      false
+    );
+    const gated = RSS_FEED_SOURCES.filter((f) =>
+      ["nyt", "wapo", "the-hill", "npr", "cdc", "who"].includes(f.sourceKey)
+    );
+    assert.ok(gated.length >= 10);
+    assert.ok(gated.every((f) => f.requirePublishedAt === true));
+    assert.ok(gated.every((f) => f.independentInsertCap === true));
+  });
+
+  it("sorts newest-first, skips undated for strict feeds, caps per feedUrl", () => {
+    const sorted = sortRssItemsNewestFirst([
+      { publishedAt: "2026-09-10T00:00:00.000Z", title: "old" },
+      { publishedAt: null, title: "undated" },
+      { publishedAt: "2026-09-13T12:00:00.000Z", title: "new" },
+    ]);
+    assert.equal(sorted[0]!.title, "new");
+    assert.equal(sorted[2]!.title, "undated");
+    assert.equal(evaluateRssItemAgeStrict(null).action, "skip_undated");
+    assert.equal(
+      evaluateRssItemAgeStrict("not-a-date").action,
+      "skip_undated"
+    );
+    assert.equal(evaluateRssItemAge(null).reason, "unknown_published_at");
+    const src = readFileSync(
+      join(process.cwd(), "lib/rss/collectRssToReviewQueue.ts"),
+      "utf8"
+    );
+    assert.match(src, /sortRssItemsNewestFirst/);
+    assert.match(src, /evaluateRssItemAgeStrict/);
+    assert.match(src, /independentInsertCap/);
+    assert.match(src, /toProcess\.slice\(0,\s*maxInserts\)/);
+  });
   it("disables Yonhap English from active collection (row kept)", () => {
     assert.equal(isRssFeedSourceEnabled("yonhap"), false);
     assert.equal(getRssSourceHealthLabel("yonhap"), "비활성");
     const activeKeys = getActiveRssFeedSources().map((f) => f.sourceKey);
     assert.equal(activeKeys.includes("yonhap"), false);
-    assert.equal(getActiveRssFeedSources().length, 22);
-    assert.equal(getActiveRssPublisherKeys().length, 12);
+    assert.equal(getActiveRssFeedSources().length, 33);
+    assert.equal(getActiveRssPublisherKeys().length, 18);
     assert.ok(RSS_FEED_SOURCES.some((f) => f.sourceKey === "yonhap"));
     assert.ok(
       getActiveRssFeedSources().some((f) => f.sourceKey === "yonhap-kr-radar")

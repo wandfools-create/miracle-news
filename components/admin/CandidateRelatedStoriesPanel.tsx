@@ -1,20 +1,7 @@
 import Link from "next/link";
 import type { RelatedStoryRef } from "@/lib/same-event/relatedStories";
 import { formatDateTimeKo } from "@/lib/articleWorkflow";
-
-const SOURCE_LABELS: Record<string, string> = {
-  ap: "AP",
-  "fox-news": "Fox",
-  "pbs-newshour": "PBS",
-  csm: "CSM",
-  yonhap: "Yonhap",
-  "yonhap-kr-radar": "연합뉴스 속보",
-  "korea-herald": "Korea Herald",
-  bbc: "BBC",
-  chosun: "조선일보",
-  tvchosun: "TV조선",
-  insight: "인사이트",
-};
+import { CANDIDATE_SOURCE_LABELS } from "@/lib/collection-candidates/candidateSourceLabels";
 
 type Props = {
   related: RelatedStoryRef[];
@@ -63,7 +50,7 @@ export default function CandidateRelatedStoriesPanel({
               )}
               <span className="text-slate-600">
                 {" "}
-                · {SOURCE_LABELS[r.source] || r.source}
+                · {CANDIDATE_SOURCE_LABELS[r.source] || r.source}
                 {r.publishedAt ? ` · ${formatDateTimeKo(r.publishedAt)}` : ""}
                 {" · "}
                 {r.statusLabel}
