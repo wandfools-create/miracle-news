@@ -10,10 +10,21 @@ export type ArticleRegion = "us" | "kr";
 /** Known outlet keys — Korea */
 export const KR_SOURCE_KEYS = new Set<string>(PRIMARY_KOREAN_SOURCE_KEYS);
 
+/** Desk-only US/intl source keys (admin region; not home filter chips). */
+export const US_INTL_DESK_SOURCE_KEYS = [
+  "nyt",
+  "wapo",
+  "the-hill",
+  "npr",
+  "cdc",
+  "who",
+] as const;
+
 /** Known outlet keys — US / international (includes legacy reuters for region only). */
 export const US_SOURCE_KEYS = new Set<string>([
   ...PRIMARY_FOREIGN_SOURCE_KEYS,
   ...LEGACY_SOURCE_KEYS,
+  ...US_INTL_DESK_SOURCE_KEYS,
 ]);
 
 const HOST_SUFFIX_TO_SOURCE_KEY: Array<{ suffix: string; key: string }> = [
@@ -32,6 +43,12 @@ const HOST_SUFFIX_TO_SOURCE_KEY: Array<{ suffix: string; key: string }> = [
   { suffix: "bbc.co.uk", key: "bbc" },
   { suffix: "bbc.com", key: "bbc" },
   { suffix: "sciencedaily.com", key: "sciencedaily" },
+  { suffix: "nytimes.com", key: "nyt" },
+  { suffix: "washingtonpost.com", key: "wapo" },
+  { suffix: "thehill.com", key: "the-hill" },
+  { suffix: "npr.org", key: "npr" },
+  { suffix: "cdc.gov", key: "cdc" },
+  { suffix: "who.int", key: "who" },
 ];
 
 const US_HOST_HINTS = [
@@ -44,6 +61,12 @@ const US_HOST_HINTS = [
   "bbc.co.uk",
   "bbc.com",
   "sciencedaily.com",
+  "nytimes.com",
+  "washingtonpost.com",
+  "thehill.com",
+  "npr.org",
+  "cdc.gov",
+  "who.int",
 ];
 
 function regionFromSourceKey(key: string): ArticleRegion | null {

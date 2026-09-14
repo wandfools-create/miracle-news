@@ -33,21 +33,7 @@ import CandidateRelatedStoriesPanel from "@/components/admin/CandidateRelatedSto
 import { formatDateTimeKo } from "@/lib/articleWorkflow";
 import type { RelatedStoryRef } from "@/lib/same-event/relatedStories";
 import { shortenCandidateFailure } from "@/lib/collection-candidates/candidateListQuery";
-
-const SOURCE_LABELS: Record<string, string> = {
-  ap: "AP",
-  "fox-news": "Fox",
-  "pbs-newshour": "PBS",
-  csm: "CSM",
-  yonhap: "Yonhap",
-  "yonhap-kr-radar": "연합뉴스 속보",
-  "korea-herald": "Korea Herald",
-  bbc: "BBC",
-  sciencedaily: "ScienceDaily",
-  chosun: "조선일보",
-  tvchosun: "TV조선",
-  insight: "인사이트",
-};
+import { CANDIDATE_SOURCE_LABELS } from "@/lib/collection-candidates/candidateSourceLabels";
 
 export type WorkbenchCandidate = {
   id: string;
@@ -374,7 +360,7 @@ export default function CollectionCandidatesWorkbench({
 
       <div className="space-y-2.5">
         {rows.map((c) => {
-          const sourceLabel = c.feedLabel || SOURCE_LABELS[c.source] || c.source;
+          const sourceLabel = c.feedLabel || CANDIDATE_SOURCE_LABELS[c.source] || c.source;
           const statusLabel = CANDIDATE_STATUS_LABELS[c.status] ?? c.status;
           const canMakeArticle =
             c.status === "pending" ||

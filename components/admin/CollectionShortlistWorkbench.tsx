@@ -21,23 +21,9 @@ import {
   type CandidateCategoryKey,
 } from "@/lib/collection-candidates/candidateCategory";
 import { formatDateTimeKo } from "@/lib/articleWorkflow";
+import { CANDIDATE_SOURCE_LABELS } from "@/lib/collection-candidates/candidateSourceLabels";
 
 const SCROLL_KEY = "admin-cs-scroll-y";
-
-const SOURCE_LABELS: Record<string, string> = {
-  ap: "AP",
-  "fox-news": "Fox",
-  "pbs-newshour": "PBS",
-  csm: "CSM",
-  yonhap: "Yonhap",
-  "yonhap-kr-radar": "연합뉴스 속보",
-  "korea-herald": "Korea Herald",
-  bbc: "BBC",
-  sciencedaily: "ScienceDaily",
-  chosun: "조선일보",
-  tvchosun: "TV조선",
-  insight: "인사이트",
-};
 
 export type ShortlistCard = {
   id: string;
@@ -241,7 +227,7 @@ export default function CollectionShortlistWorkbench({
 
       <div className="space-y-2.5">
         {rows.map((c) => {
-          const sourceLabel = c.feedLabel || SOURCE_LABELS[c.source] || c.source;
+          const sourceLabel = c.feedLabel || CANDIDATE_SOURCE_LABELS[c.source] || c.source;
           return (
             <article
               key={c.id}

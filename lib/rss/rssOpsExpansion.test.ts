@@ -11,10 +11,12 @@ import {
 } from "./feedSources";
 import {
   evaluateRssItemAge,
+  evaluateRssItemAgeStrict,
   RSS_FIRST_PASS_INSERTS_PER_FEED,
   RSS_MAX_INSERTS_PER_FEED,
   RSS_MAX_ITEM_AGE_MS,
   rssFeedInsertQuota,
+  sortRssItemsNewestFirst,
 } from "./rssItemFreshness";
 import {
   publisherQuotaRemaining,
@@ -128,8 +130,37 @@ describe("RSS ops expansion (fixture only, no OpenAI)", () => {
       urls.some((u) => u.includes("cdc.gov/feeds/mmwr")),
       false
     );
+    const gated = RSS_FEED_SOURCES.filter((f) =>
+      ["nyt", "wapo", "the-hill", "npr", "cdc", "who"].includes(f.sourceKey)
+    );
+    assert.ok(gated.length >= 10);
+    assert.ok(gated.every((f) => f.requirePublishedAt === true));
+    assert.ok(gated.every((f) => f.independentInsertCap === true));
   });
 
+  it("sorts newest-first, skips undated for strict feeds, caps per feedUrl", () => {
+    const sorted = sortRssItemsNewestFirst([
+      { publishedAt: "2026-09-10T00:00:00.000Z", title: "old" },
+      { publishedAt: null, title: "undated" },
+      { publishedAt: "2026-09-13T12:00:00.000Z", title: "new" },
+    ]);
+    assert.equal(sorted[0]!.title, "new");
+    assert.equal(sorted[2]!.title, "undated");
+    assert.equal(evaluateRssItemAgeStrict(null).action, "skip_undated");
+    assert.equal(
+      evaluateRssItemAgeStrict("not-a-date").action,
+      "skip_undated"
+    );
+    assert.equal(evaluateRssItemAge(null).reason, "unknown_published_at");
+    const src = readFileSync(
+      join(process.cwd(), "lib/rss/collectRssToReviewQueue.ts"),
+      "utf8"
+    );
+    assert.match(src, /sortRssItemsNewestFirst/);
+    assert.match(src, /evaluateRssItemAgeStrict/);
+    assert.match(src, /independentInsertCap/);
+    assert.match(src, /toProcess\.slice\(0,\s*maxInserts\)/);
+  });
   it("disables Yonhap English from active collection (row kept)", () => {
     assert.equal(isRssFeedSourceEnabled("yonhap"), false);
     assert.equal(getRssSourceHealthLabel("yonhap"), "비활성");

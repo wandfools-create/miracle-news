@@ -44,6 +44,16 @@ export type RssFeedSource = {
    * Yonhap KR radar uses 3 so it stays a small auxiliary budget.
    */
   maxInsertsPerRun?: number;
+  /**
+   * When true, undated / unparseable pubDate items are never inserted.
+   * Used for newly added US politics / public-health feeds.
+   */
+  requirePublishedAt?: boolean;
+  /**
+   * When true, insert cap is per feedUrl (not shared across same sourceKey).
+   * KR multi-category desks stay shared; NYT/WaPo/NPR/CDC use per-URL caps.
+   */
+  independentInsertCap?: boolean;
   /** When set, used as candidate category (overrides title inference). */
   category?: RssFeedCategory;
   /**
@@ -139,6 +149,8 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     sourceCountry: "US",
     collectRegion: COLLECT_REGION_US_INTL,
     category: "politics",
+    requirePublishedAt: true,
+    independentInsertCap: true,
   },
   {
     sourceKey: "nyt",
@@ -147,6 +159,8 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     sourceCountry: "US",
     collectRegion: COLLECT_REGION_US_INTL,
     category: "world",
+    requirePublishedAt: true,
+    independentInsertCap: true,
   },
   {
     sourceKey: "wapo",
@@ -155,6 +169,8 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     sourceCountry: "US",
     collectRegion: COLLECT_REGION_US_INTL,
     category: "politics",
+    requirePublishedAt: true,
+    independentInsertCap: true,
   },
   {
     sourceKey: "wapo",
@@ -163,6 +179,8 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     sourceCountry: "US",
     collectRegion: COLLECT_REGION_US_INTL,
     category: "world",
+    requirePublishedAt: true,
+    independentInsertCap: true,
   },
   {
     sourceKey: "the-hill",
@@ -171,6 +189,8 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     sourceCountry: "US",
     collectRegion: COLLECT_REGION_US_INTL,
     category: "politics",
+    requirePublishedAt: true,
+    independentInsertCap: true,
   },
   {
     sourceKey: "npr",
@@ -179,6 +199,8 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     sourceCountry: "US",
     collectRegion: COLLECT_REGION_US_INTL,
     category: "politics",
+    requirePublishedAt: true,
+    independentInsertCap: true,
   },
   {
     sourceKey: "npr",
@@ -187,6 +209,8 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     sourceCountry: "US",
     collectRegion: COLLECT_REGION_US_INTL,
     category: "world",
+    requirePublishedAt: true,
+    independentInsertCap: true,
   },
   {
     sourceKey: "pbs-newshour",
@@ -195,6 +219,7 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     sourceCountry: "US",
     collectRegion: COLLECT_REGION_US_INTL,
     category: "world",
+    requirePublishedAt: true,
   },
   {
     sourceKey: "cdc",
@@ -203,6 +228,8 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     sourceCountry: "US",
     collectRegion: COLLECT_REGION_US_INTL,
     category: "society",
+    requirePublishedAt: true,
+    independentInsertCap: true,
   },
   {
     sourceKey: "cdc",
@@ -211,6 +238,8 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     sourceCountry: "US",
     collectRegion: COLLECT_REGION_US_INTL,
     category: "society",
+    requirePublishedAt: true,
+    independentInsertCap: true,
   },
   {
     sourceKey: "who",
@@ -219,6 +248,8 @@ export const RSS_FEED_SOURCES: RssFeedSource[] = [
     sourceCountry: "US",
     collectRegion: COLLECT_REGION_US_INTL,
     category: "society",
+    requirePublishedAt: true,
+    independentInsertCap: true,
   },
   {
     sourceKey: "chosun",

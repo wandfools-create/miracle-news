@@ -36,5 +36,14 @@ describe("public health strong signals", () => {
       isSoftPublicHealthNoise("Celebrity health tips and diet wellness hacks"),
       true
     );
+    // Agency name alone is not enough.
+    assert.equal(
+      detectStrongPublicHealthSignal("WHO Director-General visits Jordan"),
+      false
+    );
+    assert.equal(
+      detectStrongPublicHealthSignal("CDC launches new data channel"),
+      false
+    );
   });
 });

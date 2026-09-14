@@ -10,7 +10,7 @@ const SOFT_PUBLIC_HEALTH_NOISE =
   /(?:computer\s+virus|malware|ransomware|trojan\s+horse|phishing|cyber\s*attack|antivirus|컴퓨터\s*바이러스|랜섬웨어|악성코드|연예인\s*건강|셀럽\s*건강|celebrity\s+health|red\s+carpet|다이어트|diet\s+tip|weight\s+loss|wellness\s+hack|health\s+tips?|lifestyle\s+wellness|yoga\s+routine|skincare|영양\s*제|건강\s*팁|생활\s*건강|feel[\s-]?good\s+health)/iu;
 
 const AUTHORITY_SIGNAL =
-  /\b(?:cdc|centers for disease control|who\b|world health organization|public health (?:agency|authority|department)|hhs|nih|질병관리청|질병관리본부|보건당국|보건복지부|세계보건기구)\b/iu;
+  /\b(?:cdc|centers for disease control|world health organization|public health (?:agency|authority|department)|hhs|nih|질병관리청|질병관리본부|보건당국|보건복지부|세계보건기구)\b/iu;
 
 const DISEASE_SIGNAL =
   /\b(?:measles|mpox|monkeypox|ebola|cholera|avian\s+flu|bird\s+flu|covid-?19|sars-cov-2|influenza|tuberculosis|malaria|dengue|zika|polio|mers|sars\b|norovirus|rsv\b|marburg|lassa|감염병|신종\s*감염병|전염병|홍역|콜레라|에볼라|조류\s*독감|독감\s*유행|결핵|말라리아|뎅기|지카|소아마비)\b/iu;

@@ -137,6 +137,31 @@ describe("collection field profile evaluation", () => {
     assert.equal(decision.exceptionSignals.includes("public-health"), false);
   });
 
+  it("does not pass WHO/CDC name-only items as public health", () => {
+    const profile = buildDefaultCollectionFieldProfile(true);
+    profile.acceptUnclassified = false;
+    const who = evaluateCollectionFieldProfile(
+      {
+        title: "WHO and Switzerland cement cooperation until 2028",
+        summary: "Partnership renewal announcement",
+        collectRegion: "us-intl",
+      },
+      profile
+    );
+    assert.equal(who.action, "exclude");
+    assert.equal(who.exceptionSignals.includes("public-health"), false);
+
+    const cdc = evaluateCollectionFieldProfile(
+      {
+        title: "CDC Launches New Overdose Prevention Data Channel",
+        summary: "Agency statement on data tools",
+        collectRegion: "us-intl",
+      },
+      profile
+    );
+    assert.equal(cdc.action, "exclude");
+  });
+
   it("defaults public_health.infectious on only when setting absent", () => {
     const defaults = buildDefaultCollectionFieldProfile(true);
     const ph = defaults.fields.find((f) => f.id === "public_health.infectious");
