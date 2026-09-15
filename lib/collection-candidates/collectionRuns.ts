@@ -6,6 +6,7 @@ import "server-only";
 
 import type { CollectRegion } from "@/lib/rss/collectRegions";
 import type { CollectRunExclusionStats } from "@/lib/rss/collectRunExclusionStats";
+import { sanitizeCollectRunExclusionStatsForStorage } from "@/lib/rss/collectRunExclusionStats";
 import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
@@ -132,7 +133,13 @@ export async function finishCollectionRun(
       error_summary: sanitizeCollectionRunErrorSummary(input.errorSummary),
     };
     if (input.exclusionStats) {
-      updatePayload.exclusion_stats = input.exclusionStats;
+      const sanitized = sanitizeCollectRunExclusionStatsForStorage(
+        input.exclusionStats
+      );
+      // Never write `{}` or invalid payloads — omit so existing NULL stays NULL.
+      if (sanitized) {
+        updatePayload.exclusion_stats = sanitized;
+      }
     }
     const { error } = await client
       .from("collection_runs")
@@ -144,29 +151,18 @@ export async function finishCollectionRun(
       if (isCollectionRunsSchemaMissing(error)) {
         return { ok: false, skipped: true };
       }
-      // Additive column may not be applied yet — retry without exclusion_stats.
-      if (
-        input.exclusionStats &&
-        /exclusion_stats/i.test(`${error.message ?? ""} ${error.details ?? ""}`)
-      ) {
+      // Stats must never block finishing the run / collecting news (fail-open).
+      if (updatePayload.exclusion_stats) {
+        const { exclusion_stats: _drop, ...withoutStats } = updatePayload;
+        void _drop;
         const { error: retryError } = await client
           .from("collection_runs")
-          .update({
-            finished_at: new Date().toISOString(),
-            status,
-            collected_count: Math.max(0, input.collectedCount),
-            new_candidate_count: Math.max(0, input.newCandidateCount),
-            duplicate_count: Math.max(0, input.duplicateCount),
-            failed_count: Math.max(0, input.failedCount),
-            error_summary: sanitizeCollectionRunErrorSummary(
-              input.errorSummary
-            ),
-          })
+          .update(withoutStats)
           .eq("id", input.runId)
           .eq("status", "running");
         if (!retryError) {
           console.warn(
-            "[collectionRuns] finish without exclusion_stats — migration not applied"
+            "[collectionRuns] finish without exclusion_stats — stats write failed (fail-open)"
           );
           return { ok: true };
         }
