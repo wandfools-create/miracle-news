@@ -5,6 +5,8 @@
 import "server-only";
 
 import type { CollectRegion } from "@/lib/rss/collectRegions";
+import type { CollectRunExclusionStats } from "@/lib/rss/collectRunExclusionStats";
+import { sanitizeCollectRunExclusionStatsForStorage } from "@/lib/rss/collectRunExclusionStats";
 import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
@@ -52,6 +54,8 @@ export type FinishCollectionRunInput = {
   failedCount: number;
   hardFailed?: boolean;
   errorSummary?: string | null;
+  /** Detailed exclusion counters (null/omit for legacy callers). */
+  exclusionStats?: CollectRunExclusionStats | null;
 };
 
 export async function createCollectionRun(input: {
@@ -119,23 +123,49 @@ export async function finishCollectionRun(
 
   try {
     const { client } = createServiceRoleSupabaseClient();
+    const updatePayload: Record<string, unknown> = {
+      finished_at: new Date().toISOString(),
+      status,
+      collected_count: Math.max(0, input.collectedCount),
+      new_candidate_count: Math.max(0, input.newCandidateCount),
+      duplicate_count: Math.max(0, input.duplicateCount),
+      failed_count: Math.max(0, input.failedCount),
+      error_summary: sanitizeCollectionRunErrorSummary(input.errorSummary),
+    };
+    if (input.exclusionStats) {
+      const sanitized = sanitizeCollectRunExclusionStatsForStorage(
+        input.exclusionStats
+      );
+      // Never write `{}` or invalid payloads — omit so existing NULL stays NULL.
+      if (sanitized) {
+        updatePayload.exclusion_stats = sanitized;
+      }
+    }
     const { error } = await client
       .from("collection_runs")
-      .update({
-        finished_at: new Date().toISOString(),
-        status,
-        collected_count: Math.max(0, input.collectedCount),
-        new_candidate_count: Math.max(0, input.newCandidateCount),
-        duplicate_count: Math.max(0, input.duplicateCount),
-        failed_count: Math.max(0, input.failedCount),
-        error_summary: sanitizeCollectionRunErrorSummary(input.errorSummary),
-      })
+      .update(updatePayload)
       .eq("id", input.runId)
       .eq("status", "running");
 
     if (error) {
       if (isCollectionRunsSchemaMissing(error)) {
         return { ok: false, skipped: true };
+      }
+      // Stats must never block finishing the run / collecting news (fail-open).
+      if (updatePayload.exclusion_stats) {
+        const { exclusion_stats: _drop, ...withoutStats } = updatePayload;
+        void _drop;
+        const { error: retryError } = await client
+          .from("collection_runs")
+          .update(withoutStats)
+          .eq("id", input.runId)
+          .eq("status", "running");
+        if (!retryError) {
+          console.warn(
+            "[collectionRuns] finish without exclusion_stats — stats write failed (fail-open)"
+          );
+          return { ok: true };
+        }
       }
       console.warn("[collectionRuns] finish failed", {
         code: error.code,
