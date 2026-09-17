@@ -76,6 +76,18 @@ import {
   stableFeedKey,
   type CollectFeedStatRow,
 } from "@/lib/rss/collectRunExclusionStats";
+import {
+  COLLECT_REGION_US_INTL,
+} from "@/lib/rss/collectRegions";
+import {
+  isUsIntlNonCoreLifestyle,
+  publishedAtMs,
+  scoreUsIntlCollectPriority,
+  selectUsIntlItemsByPriority,
+  shouldBypassUsIntlFieldExclude,
+  type UsIntlCollectPriority,
+  type UsIntlPriorityCandidate,
+} from "@/lib/rss/usIntlCollectPriority";
 import { parseRssFeed, type ParsedRssItem } from "@/lib/rss/parseRssFeed";
 import {
   YONHAP_KR_RADAR_MAX_INSERTS_PER_RUN,
@@ -503,6 +515,7 @@ async function prefilterRssFeedItems(
 ): Promise<{ toProcess: ParsedRssItem[]; skipped: number }> {
   const toProcess: ParsedRssItem[] = [];
   let skipped = 0;
+  const usIntlPriority = ctx.options.region === COLLECT_REGION_US_INTL;
 
   for (const item of items) {
     const resolved = resolveSubmittedUrl(item.link);
@@ -531,6 +544,36 @@ async function prefilterRssFeedItems(
       continue;
     }
 
+    const priority = usIntlPriority
+      ? scoreUsIntlCollectPriority({
+          title: item.title,
+          summary: item.summary,
+          sourceKey: feed.sourceKey,
+        })
+      : null;
+
+    // US·intl: drop soft lifestyle / entertainment / curiosity before field profile.
+    if (
+      usIntlPriority &&
+      priority != null &&
+      isUsIntlNonCoreLifestyle({
+        title: item.title,
+        summary: item.summary,
+        sourceKey: feed.sourceKey,
+      })
+    ) {
+      skipped += 1;
+      exclusion.otherSkipped += 1;
+      await logRssCollectItemSkipped({
+        sourceLabel: feed.label,
+        originalUrl: resolved.href,
+        rssTitle: item.title,
+        reason: "us_intl_non_core_lifestyle",
+        persistLogs: false,
+      });
+      continue;
+    }
+
     // Field/country allowlist (before OpenAI / body extract). Fail-open when
     // profile schema missing — do not suddenly drop all intake.
     try {
@@ -545,39 +588,48 @@ async function prefilterRssFeedItems(
           ctx.fieldProfile
         );
         if (shouldAutoExcludeFieldDecision(fieldDecision)) {
-          const audited = await recordEditorialExclusion({
-            ruleId: null,
-            ruleName: fieldDecision.decisionKey.slice(0, 120),
-            source: feed.sourceKey,
-            region: ctx.options.region ?? null,
-            originalUrl: resolved.href,
-            title: item.title,
-            reason: fieldDecision.reason,
-            collectionRunId: ctx.collectionRunId,
-          });
-          if (!audited) {
-            console.warn(
-              "[collectRss] field-profile exclude audit failed; fail-open",
-              { source: feed.sourceKey, key: fieldDecision.decisionKey }
-            );
-          } else {
-            skipped += 1;
-            const bucket = classifyFieldExclusionDecisionKey(
-              fieldDecision.decisionKey
-            );
-            if (bucket === "fieldCountryKeyword") {
-              exclusion.fieldCountryKeyword += 1;
-            } else {
-              exclusion.otherSkipped += 1;
-            }
-            await logRssCollectItemSkipped({
-              sourceLabel: feed.label,
-              originalUrl: resolved.href,
-              rssTitle: item.title,
-              reason: `field_profile:${fieldDecision.reason}`,
-              persistLogs: false,
+          const bypass =
+            usIntlPriority &&
+            priority != null &&
+            shouldBypassUsIntlFieldExclude({
+              priority,
+              decisionKey: fieldDecision.decisionKey,
             });
-            continue;
+          if (!bypass) {
+            const audited = await recordEditorialExclusion({
+              ruleId: null,
+              ruleName: fieldDecision.decisionKey.slice(0, 120),
+              source: feed.sourceKey,
+              region: ctx.options.region ?? null,
+              originalUrl: resolved.href,
+              title: item.title,
+              reason: fieldDecision.reason,
+              collectionRunId: ctx.collectionRunId,
+            });
+            if (!audited) {
+              console.warn(
+                "[collectRss] field-profile exclude audit failed; fail-open",
+                { source: feed.sourceKey, key: fieldDecision.decisionKey }
+              );
+            } else {
+              skipped += 1;
+              const bucket = classifyFieldExclusionDecisionKey(
+                fieldDecision.decisionKey
+              );
+              if (bucket === "fieldCountryKeyword") {
+                exclusion.fieldCountryKeyword += 1;
+              } else {
+                exclusion.otherSkipped += 1;
+              }
+              await logRssCollectItemSkipped({
+                sourceLabel: feed.label,
+                originalUrl: resolved.href,
+                rssTitle: item.title,
+                reason: `field_profile:${fieldDecision.reason}`,
+                persistLogs: false,
+              });
+              continue;
+            }
           }
         }
       }
@@ -723,12 +775,70 @@ async function prepareFeed(
   );
   stats.skipped += prefilterSkipped;
 
+  // Korea (and non-us-intl): keep arrival/newest-first feed cap slice.
+  // US·intl: defer feed-cap + run-limit until global priority selection.
+  if (ctx.options.region === COLLECT_REGION_US_INTL) {
+    return { feed, stats, queue: toProcess };
+  }
+
   const maxInserts = publisherMaxInserts(feed);
   if (toProcess.length > maxInserts) {
     // Final reason: feed/source insert cap (not run-limit 미처리).
     exclusion.feedOrSourceCap += toProcess.length - maxInserts;
   }
   return { feed, stats, queue: toProcess.slice(0, maxInserts) };
+}
+
+/**
+ * US·intl only: rank eligible items by P0→P2, then apply per-feed/source
+ * caps and the run limit. P3 never pads empty slots.
+ * Returns exact run-limit 미처리 count (titles not stored).
+ */
+function applyUsIntlPrioritySelection(
+  prepared: PreparedFeed[],
+  runLimit: number
+): number {
+  const candidates: UsIntlPriorityCandidate<ParsedRssItem>[] = [];
+
+  for (let feedIndex = 0; feedIndex < prepared.length; feedIndex++) {
+    const p = prepared[feedIndex]!;
+    const maxInserts = publisherMaxInserts(p.feed);
+    for (const item of p.queue) {
+      const priority: UsIntlCollectPriority = scoreUsIntlCollectPriority({
+        title: item.title,
+        summary: item.summary,
+        sourceKey: p.feed.sourceKey,
+      });
+      candidates.push({
+        item,
+        priority,
+        publishedAtMs: publishedAtMs(item.publishedAt),
+        feedIndex,
+        sourceKey: p.feed.sourceKey,
+        feedUrl: p.feed.feedUrl,
+        independentInsertCap: Boolean(p.feed.independentInsertCap),
+        maxInserts,
+      });
+    }
+  }
+
+  const selected = selectUsIntlItemsByPriority(candidates, runLimit);
+
+  for (let feedIndex = 0; feedIndex < prepared.length; feedIndex++) {
+    prepared[feedIndex]!.queue = selected.selectedByFeed.get(feedIndex) ?? [];
+  }
+
+  for (const c of selected.feedCapDropped) {
+    prepared[c.feedIndex]!.stats.exclusion!.feedOrSourceCap += 1;
+  }
+
+  for (const c of selected.nonSaveDropped) {
+    const p = prepared[c.feedIndex]!;
+    p.stats.exclusion!.otherSkipped += 1;
+    p.stats.skipped += 1;
+  }
+
+  return selected.runLimitUnprocessed.length;
 }
 
 /**
@@ -1069,28 +1179,34 @@ export async function collectRssToReviewQueue(
     (p) => p.feed.sourceKey === YONHAP_KR_RADAR_SOURCE_KEY
   );
 
-  // 2) Publisher seed — each main publisher gets 1 insert opportunity before
-  //    any publisher accumulates a second (eligible queue only; no forced save).
-  await drainMainPublishersFair(prepared, mainPrepared, seenUrls, ctx, 0);
-
-  // 3) Fair pass 1 — up to FIRST_PASS inserts per publisher with category rotation.
-  await drainMainPublishersFair(prepared, mainPrepared, seenUrls, ctx, 1);
-
-  // 4) Fair pass 2 — leftover run budget for main publishers (cap 4 combined).
-  await drainMainPublishersFair(prepared, mainPrepared, seenUrls, ctx, 2);
-
-  // 5) Yonhap KR radar — small auxiliary cap (≤3), only after main quotas.
-  for (const p of radarPrepared) {
-    if (ctx.options.save && ctx.remainingCandidateBudget.value <= 0) break;
-    const quota = rssFeedInsertQuota({
-      pass: 2,
-      alreadyInserted: publisherSavedCount(prepared, p.feed.sourceKey),
-      runBudgetRemaining: ctx.options.save
-        ? ctx.remainingCandidateBudget.value
-        : Number.MAX_SAFE_INTEGER,
-      maxInserts: publisherMaxInserts(p.feed),
-    });
-    await drainFeedInsertQuota(p, seenUrls, ctx, quota);
+  let usIntlRunLimitUnprocessed = 0;
+  if (options.region === COLLECT_REGION_US_INTL) {
+    // US·intl: global P0→P2 priority before feed-cap / run-limit; never pad with P3.
+    usIntlRunLimitUnprocessed = applyUsIntlPrioritySelection(
+      prepared,
+      options.maxCandidatesPerRun
+    );
+    for (const p of prepared) {
+      if (p.queue.length === 0) continue;
+      await drainFeedInsertQuota(p, seenUrls, ctx, p.queue.length);
+    }
+  } else {
+    // Korea path: existing publisher seed + fair passes (unchanged).
+    await drainMainPublishersFair(prepared, mainPrepared, seenUrls, ctx, 0);
+    await drainMainPublishersFair(prepared, mainPrepared, seenUrls, ctx, 1);
+    await drainMainPublishersFair(prepared, mainPrepared, seenUrls, ctx, 2);
+    for (const p of radarPrepared) {
+      if (ctx.options.save && ctx.remainingCandidateBudget.value <= 0) break;
+      const quota = rssFeedInsertQuota({
+        pass: 2,
+        alreadyInserted: publisherSavedCount(prepared, p.feed.sourceKey),
+        runBudgetRemaining: ctx.options.save
+          ? ctx.remainingCandidateBudget.value
+          : Number.MAX_SAFE_INTEGER,
+        maxInserts: publisherMaxInserts(p.feed),
+      });
+      await drainFeedInsertQuota(p, seenUrls, ctx, quota);
+    }
   }
 
   const feeds: FeedCollectStats[] = [];
@@ -1125,7 +1241,9 @@ export async function collectRssToReviewQueue(
   > | null;
   try {
     const finishedAt = new Date().toISOString();
-    const unprocessedExact = prepared.reduce((n, p) => n + p.queue.length, 0);
+    const unprocessedExact =
+      prepared.reduce((n, p) => n + p.queue.length, 0) +
+      usIntlRunLimitUnprocessed;
     const runLimitUsed = options.save
       ? Math.max(0, options.maxCandidatesPerRun - remainingCandidateBudget.value)
       : totals.inserted + totals.wouldInsert;
