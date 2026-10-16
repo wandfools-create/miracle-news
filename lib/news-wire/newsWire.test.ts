@@ -16,6 +16,9 @@ import {
   archiveDbRowsToPublicItems,
   buildHannoonArticleHref,
   isPublicHannoonArticle,
+  newsWireArchiveDbRange,
+  newsWireArchiveHasMore,
+  newsWireArchivePageCount,
   newsWireIdOrder,
   nyDateKeyBounds,
   paginateNewsWireItems,
@@ -583,24 +586,6 @@ describe("news wire permanent archive + Hannoon mark", () => {
     );
   });
 
-  it("paginates archive at max 50 per page", () => {
-    assert.equal(NEWS_WIRE_PAGE_SIZE, 50);
-    const rows = Array.from({ length: 51 }, (_, i) =>
-      dbRow({
-        id: `p-${String(i).padStart(3, "0")}`,
-        created_at: `2026-09-11T10:00:${String(i % 60).padStart(2, "0")}.000Z`,
-        rss_published_at: `2026-09-11T09:${String(i % 60).padStart(2, "0")}:00.000Z`,
-        status: "enriched",
-      })
-    );
-    const ranked = archiveDbRowsToPublicItems(rows, "ko");
-    const page1 = paginateNewsWireItems(ranked, 1);
-    assert.equal(page1.items.length, 50);
-    assert.equal(page1.hasMore, true);
-    const page2 = paginateNewsWireItems(ranked, 2);
-    assert.equal(page2.items.length, 1);
-  });
-
   it("past NY date archive bounds remain queryable", () => {
     const past = nyDateKeyBounds("2025-01-15");
     assert.ok(past);
@@ -651,10 +636,6 @@ describe("news wire permanent archive + Hannoon mark", () => {
     assert.doesNotMatch(fetchSrc, /chatCompletion|OpenAI|openai/);
     assert.match(fetchSrc, /NEWS_WIRE_ARCHIVE_INCLUDE_STATUSES/);
     assert.match(fetchSrc, /filterDuplicateLiveArticles/);
-    assert.match(
-      fetchSrc,
-      /Archive keeps articleized rows; do not filterDuplicateLiveArticles/
-    );
     assert.equal(NEWS_WIRE_HOME_LIMIT, 8);
     assert.equal(NEWS_WIRE_HOME_LOOKBACK_MS, 24 * 60 * 60 * 1000);
   });
@@ -690,5 +671,126 @@ describe("news wire permanent archive + Hannoon mark", () => {
     );
     assert.match(fetchHome, /filterDuplicateLiveArticles\(client, fetched\.rows\)/);
     assert.match(fetchHome, /NEWS_WIRE_INCLUDE_STATUSES/);
+  });
+});
+
+describe("news wire archive DB pagination", () => {
+  it("page 1 and page 2 use inclusive DB ranges 0-49 and 50-99", () => {
+    assert.equal(NEWS_WIRE_PAGE_SIZE, 50);
+    const page1 = newsWireArchiveDbRange(1);
+    const page2 = newsWireArchiveDbRange(2);
+    assert.deepEqual(page1, { from: 0, to: 49, page: 1 });
+    assert.deepEqual(page2, { from: 50, to: 99, page: 2 });
+  });
+
+  it("page ranges do not overlap", () => {
+    const a = newsWireArchiveDbRange(1);
+    const b = newsWireArchiveDbRange(2);
+    const c = newsWireArchiveDbRange(3);
+    assert.ok(a.to < b.from);
+    assert.ok(b.to < c.from);
+    const idsA = new Set(
+      Array.from({ length: a.to - a.from + 1 }, (_, i) => a.from + i)
+    );
+    const idsB = new Set(
+      Array.from({ length: b.to - b.from + 1 }, (_, i) => b.from + i)
+    );
+    for (const id of idsB) assert.equal(idsA.has(id), false);
+  });
+
+  it("stable archive sort matches DB order contract", () => {
+    const rows = [
+      {
+        id: "z",
+        publishedAt: "2026-09-11T12:00:00.000Z",
+        collectedAt: "2026-09-11T01:00:00.000Z",
+      },
+      {
+        id: "a",
+        publishedAt: "2026-09-11T12:00:00.000Z",
+        collectedAt: "2026-09-11T01:00:00.000Z",
+      },
+      {
+        id: "mid",
+        publishedAt: null,
+        collectedAt: "2026-09-11T20:00:00.000Z",
+      },
+    ].sort(compareArchiveNewsWireItems);
+    assert.deepEqual(
+      rows.map((r) => r.id),
+      ["a", "z", "mid"]
+    );
+  });
+
+  it("computes total count pageCount and hasMore", () => {
+    assert.equal(newsWireArchivePageCount(0), 0);
+    assert.equal(newsWireArchivePageCount(50), 1);
+    assert.equal(newsWireArchivePageCount(51), 2);
+    assert.equal(newsWireArchivePageCount(120), 3);
+    assert.equal(newsWireArchiveHasMore(1, 120), true);
+    assert.equal(newsWireArchiveHasMore(3, 120), false);
+    assert.equal(newsWireArchiveHasMore(1, 50), false);
+  });
+
+  it("fetchNewsWireDayPage applies user page at DB and fetches at most 50 candidates", () => {
+    const fetchSrc = readFileSync(
+      join(process.cwd(), "lib/news-wire/fetchNewsWire.ts"),
+      "utf8"
+    );
+    const dayFn = fetchSrc.slice(
+      fetchSrc.indexOf("export async function fetchNewsWireDayPage"),
+      fetchSrc.length
+    );
+    assert.match(dayFn, /newsWireArchiveDbRange/);
+    assert.match(dayFn, /count:\s*"exact"/);
+    assert.match(
+      dayFn,
+      /\.order\("rss_published_at",\s*\{\s*ascending:\s*false,\s*nullsFirst:\s*false\s*\}/
+    );
+    assert.match(dayFn, /\.order\("created_at",\s*\{\s*ascending:\s*false\s*\}/);
+    assert.match(dayFn, /\.order\("id",\s*\{\s*ascending:\s*true\s*\}/);
+    assert.match(dayFn, /\.range\(from,\s*to\)/);
+    assert.doesNotMatch(dayFn, /collectRowsByRangePagination/);
+    assert.doesNotMatch(dayFn, /paginateNewsWireItems/);
+    assert.match(dayFn, /At most one DB page of candidates/);
+
+    // Simulate a >50-row day: only the DB page slice is mapped to DTOs.
+    const dayRows = Array.from({ length: 120 }, (_, i) =>
+      dbRow({
+        id: `d-${String(i).padStart(3, "0")}`,
+        created_at: `2026-09-11T10:00:00.000Z`,
+        rss_published_at: `2026-09-11T09:${String(i % 60).padStart(2, "0")}:00.000Z`,
+      })
+    );
+    const { from, to } = newsWireArchiveDbRange(1);
+    const fetched = dayRows.slice(from, to + 1);
+    assert.equal(fetched.length, 50);
+    assert.ok(fetched.length <= NEWS_WIRE_PAGE_SIZE);
+    const items = archiveDbRowsToPublicItems(fetched, "ko");
+    assert.ok(items.length <= 50);
+    assert.equal(newsWireArchivePageCount(dayRows.length), 3);
+  });
+
+  it("DTO mapping preserves DB page order for KO/EN parity", () => {
+    const pageRows = [
+      dbRow({
+        id: "first",
+        created_at: "2026-09-11T12:00:00.000Z",
+        rss_published_at: "2026-09-11T12:00:00.000Z",
+      }),
+      dbRow({
+        id: "second",
+        created_at: "2026-09-11T11:00:00.000Z",
+        rss_published_at: "2026-09-11T11:00:00.000Z",
+      }),
+    ];
+    assert.deepEqual(
+      newsWireIdOrder(archiveDbRowsToPublicItems(pageRows, "ko")),
+      newsWireIdOrder(archiveDbRowsToPublicItems(pageRows, "en"))
+    );
+    assert.deepEqual(newsWireIdOrder(archiveDbRowsToPublicItems(pageRows, "ko")), [
+      "first",
+      "second",
+    ]);
   });
 });

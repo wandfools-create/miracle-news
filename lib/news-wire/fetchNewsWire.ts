@@ -5,9 +5,11 @@ import {
   archiveDbRowsToPublicItems,
   buildHannoonArticleHref,
   isPublicHannoonArticle,
+  newsWireArchiveDbRange,
+  newsWireArchiveHasMore,
+  newsWireArchivePageCount,
   newsWireIdOrder,
   nyDateKeyBounds,
-  paginateNewsWireItems,
   parseNewsWirePage,
   selectHomeNewsWireItems,
   todayNyDateKey,
@@ -153,6 +155,7 @@ async function resolvePublishedHannoonHrefs(
   return hrefByArticleId;
 }
 
+/** Home preview only — still scans the lookback window in batches. */
 async function fetchAllWireRowsInCreatedWindow(options: {
   client: ServiceClient;
   gteIso: string;
@@ -255,17 +258,22 @@ export type NewsWireDayPage = {
   pageSize: number;
   hasMore: boolean;
   totalReady: number;
+  pageCount: number;
   schemaReady: boolean;
   error: string | null;
 };
 
+/**
+ * Permanent /wire day archive: one exact count + one paged SELECT.
+ * Does not walk the full day with collectRowsByRangePagination.
+ */
 export async function fetchNewsWireDayPage(options: {
   locale: NewsWireLocale;
   dateKey: string;
   page?: number;
   nowMs?: number;
 }): Promise<NewsWireDayPage> {
-  const page = parseNewsWirePage(options.page ?? 1);
+  const { page, from, to } = newsWireArchiveDbRange(options.page ?? 1);
   const empty = (extra: Partial<NewsWireDayPage>): NewsWireDayPage => ({
     items: [],
     dateKey: options.dateKey,
@@ -273,6 +281,7 @@ export async function fetchNewsWireDayPage(options: {
     pageSize: NEWS_WIRE_PAGE_SIZE,
     hasMore: false,
     totalReady: 0,
+    pageCount: 0,
     schemaReady: true,
     error: null,
     ...extra,
@@ -290,21 +299,46 @@ export async function fetchNewsWireDayPage(options: {
 
   try {
     const { client } = createServiceRoleSupabaseClient();
-    const fetched = await fetchAllWireRowsInCreatedWindow({
-      client,
-      gteIso: bounds.startIso,
-      ltIso: bounds.endIso,
-      statuses: NEWS_WIRE_ARCHIVE_INCLUDE_STATUSES,
-    });
-    if (!fetched.ok) {
-      return empty({
-        schemaReady: fetched.schemaReady,
-        error: fetched.error,
-      });
+    const statuses = [...NEWS_WIRE_ARCHIVE_INCLUDE_STATUSES];
+
+    const { count, error: countError } = await client
+      .from("collection_candidates")
+      .select("id", { count: "exact", head: true })
+      .in("status", statuses)
+      .gte("created_at", bounds.startIso)
+      .lt("created_at", bounds.endIso);
+
+    if (countError) {
+      if (isMissingRelation(countError)) {
+        return empty({ schemaReady: false, error: null });
+      }
+      return empty({ schemaReady: true, error: countError.message });
     }
 
-    // Archive keeps articleized rows; do not filterDuplicateLiveArticles.
-    const articleIds = fetched.rows
+    const totalReady = count ?? 0;
+    const pageCount = newsWireArchivePageCount(totalReady);
+
+    const { data, error } = await client
+      .from("collection_candidates")
+      .select(NEWS_WIRE_DB_SELECT)
+      .in("status", statuses)
+      .gte("created_at", bounds.startIso)
+      .lt("created_at", bounds.endIso)
+      .order("rss_published_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to);
+
+    if (error) {
+      if (isMissingRelation(error)) {
+        return empty({ schemaReady: false, error: null });
+      }
+      return empty({ schemaReady: true, error: error.message });
+    }
+
+    const pageRows = (data ?? []) as unknown as NewsWireDbRow[];
+    // At most one DB page of candidates (≤ NEWS_WIRE_PAGE_SIZE).
+    const articleIds = pageRows
       .map((r) => r.article_id)
       .filter((id): id is string => Boolean(id));
     const hannoonHrefByArticleId = await resolvePublishedHannoonHrefs(
@@ -312,19 +346,20 @@ export async function fetchNewsWireDayPage(options: {
       articleIds,
       options.locale
     );
-    const ranked = archiveDbRowsToPublicItems(
-      fetched.rows,
+    const items = archiveDbRowsToPublicItems(
+      pageRows,
       options.locale,
       hannoonHrefByArticleId
     );
-    const sliced = paginateNewsWireItems(ranked, page);
+
     return {
-      items: sliced.items,
+      items,
       dateKey: options.dateKey,
-      page: sliced.page,
-      pageSize: sliced.pageSize,
-      hasMore: sliced.hasMore,
-      totalReady: sliced.totalReady,
+      page,
+      pageSize: NEWS_WIRE_PAGE_SIZE,
+      hasMore: newsWireArchiveHasMore(page, totalReady),
+      totalReady,
+      pageCount,
       schemaReady: true,
       error: null,
     };

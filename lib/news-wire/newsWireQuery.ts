@@ -7,7 +7,6 @@ import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
 import { formatAmericaNewYorkDateKey } from "@/lib/cron/americaNewYork";
 import { startOfNyDateKeyMs } from "@/lib/home/nyEditionTime";
 import {
-  compareArchiveNewsWireItems,
   compareNewsWireItems,
   parseWireGrade,
 } from "@/lib/news-wire/rankNewsWire";
@@ -156,8 +155,36 @@ export function rankDbRowsToPublicItems(
 }
 
 /**
- * Permanent archive: safe outbound URLs only, chronological sort, optional
- * public Hannoon href map (article_id → public locale path).
+ * Inclusive PostgREST `.range(from, to)` for archive `?page=`.
+ * Page 1 → 0..49, page 2 → 50..99.
+ */
+export function newsWireArchiveDbRange(pageRaw: unknown): {
+  from: number;
+  to: number;
+  page: number;
+} {
+  const page = parseNewsWirePage(pageRaw);
+  const from = (page - 1) * NEWS_WIRE_PAGE_SIZE;
+  return { from, to: from + NEWS_WIRE_PAGE_SIZE - 1, page };
+}
+
+/** Total archive pages from an exact DB count under the same day filters. */
+export function newsWireArchivePageCount(totalCount: number): number {
+  const n = Number.isFinite(totalCount) ? Math.max(0, Math.floor(totalCount)) : 0;
+  if (n <= 0) return 0;
+  return Math.ceil(n / NEWS_WIRE_PAGE_SIZE);
+}
+
+export function newsWireArchiveHasMore(
+  page: number,
+  totalCount: number
+): boolean {
+  return page * NEWS_WIRE_PAGE_SIZE < totalCount;
+}
+
+/**
+ * Map one DB archive page (already sorted) to public DTOs.
+ * Preserves input order; drops unsafe URLs / empty titles only.
  */
 export function archiveDbRowsToPublicItems(
   rows: NewsWireDbRow[],
@@ -173,20 +200,6 @@ export function archiveDbRowsToPublicItems(
     const item = toPublicItem(row, locale, href);
     if (item) items.push(item);
   }
-  items.sort((a, b) =>
-    compareArchiveNewsWireItems(
-      {
-        id: a.id,
-        publishedAt: a.publishedAt,
-        collectedAt: a.collectedAt,
-      },
-      {
-        id: b.id,
-        publishedAt: b.publishedAt,
-        collectedAt: b.collectedAt,
-      }
-    )
-  );
   return items;
 }
 
