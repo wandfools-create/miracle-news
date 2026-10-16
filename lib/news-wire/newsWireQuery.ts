@@ -7,6 +7,7 @@ import { getArticleSourceLabel } from "@/lib/article/sourceResolution";
 import { formatAmericaNewYorkDateKey } from "@/lib/cron/americaNewYork";
 import { startOfNyDateKeyMs } from "@/lib/home/nyEditionTime";
 import {
+  compareArchiveNewsWireItems,
   compareNewsWireItems,
   parseWireGrade,
 } from "@/lib/news-wire/rankNewsWire";
@@ -87,10 +88,11 @@ type RankedPublic = {
   };
 };
 
-function toRankedPublic(
+function toPublicItem(
   row: NewsWireDbRow,
-  locale: NewsWireLocale
-): RankedPublic | null {
+  locale: NewsWireLocale,
+  hannoonHref: string | null = null
+): NewsWireItem | null {
   const originalUrl = sanitizeWireOutboundUrl(row.original_url);
   if (!originalUrl) return null;
   const title = displayOriginalWireTitle(row);
@@ -106,14 +108,25 @@ function toRankedPublic(
   const sourceLabel = localizeSourceLabel(baseLabel, locale, row.source);
 
   return {
-    publicItem: {
-      id: row.id,
-      title,
-      sourceLabel,
-      publishedAt: row.rss_published_at,
-      collectedAt: row.created_at,
-      originalUrl,
-    },
+    id: row.id,
+    title,
+    sourceLabel,
+    publishedAt: row.rss_published_at,
+    collectedAt: row.created_at,
+    originalUrl,
+    hannoonHref,
+  };
+}
+
+function toRankedPublic(
+  row: NewsWireDbRow,
+  locale: NewsWireLocale
+): RankedPublic | null {
+  const publicItem = toPublicItem(row, locale, null);
+  if (!publicItem) return null;
+
+  return {
+    publicItem,
     sortKey: {
       id: row.id,
       aiRecommendGrade: parseWireGrade(row.ai_recommend_grade),
@@ -127,7 +140,7 @@ function toRankedPublic(
   };
 }
 
-/** Filter URL + sort — grades stay on server sort keys only. */
+/** Filter URL + sort — grades stay on server sort keys only. Home preview path. */
 export function rankDbRowsToPublicItems(
   rows: NewsWireDbRow[],
   locale: NewsWireLocale,
@@ -140,6 +153,41 @@ export function rankDbRowsToPublicItems(
   }
   ranked.sort((a, b) => compareNewsWireItems(a.sortKey, b.sortKey, nowMs));
   return ranked.map((r) => r.publicItem);
+}
+
+/**
+ * Permanent archive: safe outbound URLs only, chronological sort, optional
+ * public Hannoon href map (article_id → public locale path).
+ */
+export function archiveDbRowsToPublicItems(
+  rows: NewsWireDbRow[],
+  locale: NewsWireLocale,
+  hannoonHrefByArticleId: ReadonlyMap<string, string> = new Map()
+): NewsWireItem[] {
+  const items: NewsWireItem[] = [];
+  for (const row of rows) {
+    const href =
+      row.article_id != null
+        ? (hannoonHrefByArticleId.get(row.article_id) ?? null)
+        : null;
+    const item = toPublicItem(row, locale, href);
+    if (item) items.push(item);
+  }
+  items.sort((a, b) =>
+    compareArchiveNewsWireItems(
+      {
+        id: a.id,
+        publishedAt: a.publishedAt,
+        collectedAt: a.collectedAt,
+      },
+      {
+        id: b.id,
+        publishedAt: b.publishedAt,
+        collectedAt: b.collectedAt,
+      }
+    )
+  );
+  return items;
 }
 
 export function selectHomeNewsWireItems(
@@ -177,4 +225,28 @@ export function paginateNewsWireItems(
 
 export function newsWireIdOrder(items: NewsWireItem[]): string[] {
   return items.map((i) => i.id);
+}
+
+/** Whether a linked article qualifies for the public Hannoon mark. */
+export function isPublicHannoonArticle(article: {
+  is_published?: boolean | null;
+  status?: string | null;
+  review_status?: string | null;
+  published_at?: string | null;
+}): boolean {
+  return (
+    article.is_published === true &&
+    String(article.status ?? "") === "published" &&
+    String(article.review_status ?? "") === "approved" &&
+    Boolean(article.published_at)
+  );
+}
+
+export function buildHannoonArticleHref(
+  locale: NewsWireLocale,
+  slug: string | null | undefined
+): string | null {
+  const trimmed = (slug ?? "").trim();
+  if (!trimmed) return null;
+  return locale === "ko" ? `/ko/article/${trimmed}` : `/en/article/${trimmed}`;
 }

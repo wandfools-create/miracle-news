@@ -1,12 +1,31 @@
 import type { CollectionCandidateStatus } from "@/lib/collection-candidates/types";
 import type { ArticleLocale } from "@/lib/article/formatPublishedDate";
 
-/** Statuses shown on the public News Wire. */
+/**
+ * Statuses for homepage News Wire preview only.
+ * Keeps existing home behavior (excludes enriched / expired).
+ */
 export const NEWS_WIRE_INCLUDE_STATUSES: CollectionCandidateStatus[] = [
   "pending",
   "shortlisted",
   "enriching",
   "enrich_failed",
+];
+
+/**
+ * Statuses for the permanent /wire day archive.
+ * Includes articleized (`enriched`) and soft time-expiry (`expired`) rows.
+ * `selected` is a valid collected desk state between shortlist and enrich.
+ * Excludes only `dismissed` (plus dangerous URLs at sanitize time).
+ */
+export const NEWS_WIRE_ARCHIVE_INCLUDE_STATUSES: CollectionCandidateStatus[] = [
+  "pending",
+  "shortlisted",
+  "selected",
+  "enriching",
+  "enrich_failed",
+  "enriched",
+  "expired",
 ];
 
 export const NEWS_WIRE_EXCLUDE_STATUSES: CollectionCandidateStatus[] = [
@@ -61,6 +80,7 @@ export type NewsWireDbRow = {
 /**
  * Public DTO for RSC/client props — whitelist only.
  * No AI grade/score, article_id, or translation-status fields.
+ * `hannoonHref` is set only when a linked article is actually public for the locale.
  */
 export type NewsWireItem = {
   id: string;
@@ -69,6 +89,8 @@ export type NewsWireItem = {
   publishedAt: string | null;
   collectedAt: string;
   originalUrl: string;
+  /** Public locale article path, or null when mark must stay hidden. */
+  hannoonHref: string | null;
 };
 
 export type NewsWireLocale = ArticleLocale;
