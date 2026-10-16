@@ -79,3 +79,27 @@ export function parseWireGrade(
 ): AiRecommendGrade | null {
   return normalizeAiRecommendGrade(raw);
 }
+
+/**
+ * Permanent /wire archive sort (locale-neutral):
+ * 1. rss_published_at DESC NULLS LAST
+ * 2. created_at DESC
+ * 3. id ASC
+ */
+export function compareArchiveNewsWireItems(
+  a: { id: string; publishedAt: string | null; collectedAt: string },
+  b: { id: string; publishedAt: string | null; collectedAt: string }
+): number {
+  const aPub = a.publishedAt ? Date.parse(a.publishedAt) : Number.NaN;
+  const bPub = b.publishedAt ? Date.parse(b.publishedAt) : Number.NaN;
+  const aHasPub = Number.isFinite(aPub);
+  const bHasPub = Number.isFinite(bPub);
+  if (aHasPub && bHasPub && bPub !== aPub) return bPub - aPub;
+  if (aHasPub !== bHasPub) return aHasPub ? -1 : 1;
+
+  const aCreated = Date.parse(a.collectedAt) || 0;
+  const bCreated = Date.parse(b.collectedAt) || 0;
+  if (bCreated !== aCreated) return bCreated - aCreated;
+
+  return a.id.localeCompare(b.id);
+}

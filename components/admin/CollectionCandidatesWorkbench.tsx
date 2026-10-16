@@ -547,7 +547,7 @@ export default function CollectionCandidatesWorkbench({
                         href={`/admin/review/${c.articleId}`}
                         className="rounded-md border border-green-300 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-900 hover:bg-green-100"
                       >
-                        검토 대기
+                        한눈 기사
                       </a>
                     ) : null}
                     {canDismiss ? (

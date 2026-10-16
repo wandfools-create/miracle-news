@@ -87,10 +87,11 @@ type RankedPublic = {
   };
 };
 
-function toRankedPublic(
+function toPublicItem(
   row: NewsWireDbRow,
-  locale: NewsWireLocale
-): RankedPublic | null {
+  locale: NewsWireLocale,
+  hannoonHref: string | null = null
+): NewsWireItem | null {
   const originalUrl = sanitizeWireOutboundUrl(row.original_url);
   if (!originalUrl) return null;
   const title = displayOriginalWireTitle(row);
@@ -106,14 +107,25 @@ function toRankedPublic(
   const sourceLabel = localizeSourceLabel(baseLabel, locale, row.source);
 
   return {
-    publicItem: {
-      id: row.id,
-      title,
-      sourceLabel,
-      publishedAt: row.rss_published_at,
-      collectedAt: row.created_at,
-      originalUrl,
-    },
+    id: row.id,
+    title,
+    sourceLabel,
+    publishedAt: row.rss_published_at,
+    collectedAt: row.created_at,
+    originalUrl,
+    hannoonHref,
+  };
+}
+
+function toRankedPublic(
+  row: NewsWireDbRow,
+  locale: NewsWireLocale
+): RankedPublic | null {
+  const publicItem = toPublicItem(row, locale, null);
+  if (!publicItem) return null;
+
+  return {
+    publicItem,
     sortKey: {
       id: row.id,
       aiRecommendGrade: parseWireGrade(row.ai_recommend_grade),
@@ -127,7 +139,7 @@ function toRankedPublic(
   };
 }
 
-/** Filter URL + sort — grades stay on server sort keys only. */
+/** Filter URL + sort — grades stay on server sort keys only. Home preview path. */
 export function rankDbRowsToPublicItems(
   rows: NewsWireDbRow[],
   locale: NewsWireLocale,
@@ -140,6 +152,55 @@ export function rankDbRowsToPublicItems(
   }
   ranked.sort((a, b) => compareNewsWireItems(a.sortKey, b.sortKey, nowMs));
   return ranked.map((r) => r.publicItem);
+}
+
+/**
+ * Inclusive PostgREST `.range(from, to)` for archive `?page=`.
+ * Page 1 → 0..49, page 2 → 50..99.
+ */
+export function newsWireArchiveDbRange(pageRaw: unknown): {
+  from: number;
+  to: number;
+  page: number;
+} {
+  const page = parseNewsWirePage(pageRaw);
+  const from = (page - 1) * NEWS_WIRE_PAGE_SIZE;
+  return { from, to: from + NEWS_WIRE_PAGE_SIZE - 1, page };
+}
+
+/** Total archive pages from an exact DB count under the same day filters. */
+export function newsWireArchivePageCount(totalCount: number): number {
+  const n = Number.isFinite(totalCount) ? Math.max(0, Math.floor(totalCount)) : 0;
+  if (n <= 0) return 0;
+  return Math.ceil(n / NEWS_WIRE_PAGE_SIZE);
+}
+
+export function newsWireArchiveHasMore(
+  page: number,
+  totalCount: number
+): boolean {
+  return page * NEWS_WIRE_PAGE_SIZE < totalCount;
+}
+
+/**
+ * Map one DB archive page (already sorted) to public DTOs.
+ * Preserves input order; drops unsafe URLs / empty titles only.
+ */
+export function archiveDbRowsToPublicItems(
+  rows: NewsWireDbRow[],
+  locale: NewsWireLocale,
+  hannoonHrefByArticleId: ReadonlyMap<string, string> = new Map()
+): NewsWireItem[] {
+  const items: NewsWireItem[] = [];
+  for (const row of rows) {
+    const href =
+      row.article_id != null
+        ? (hannoonHrefByArticleId.get(row.article_id) ?? null)
+        : null;
+    const item = toPublicItem(row, locale, href);
+    if (item) items.push(item);
+  }
+  return items;
 }
 
 export function selectHomeNewsWireItems(
@@ -177,4 +238,28 @@ export function paginateNewsWireItems(
 
 export function newsWireIdOrder(items: NewsWireItem[]): string[] {
   return items.map((i) => i.id);
+}
+
+/** Whether a linked article qualifies for the public Hannoon mark. */
+export function isPublicHannoonArticle(article: {
+  is_published?: boolean | null;
+  status?: string | null;
+  review_status?: string | null;
+  published_at?: string | null;
+}): boolean {
+  return (
+    article.is_published === true &&
+    String(article.status ?? "") === "published" &&
+    String(article.review_status ?? "") === "approved" &&
+    Boolean(article.published_at)
+  );
+}
+
+export function buildHannoonArticleHref(
+  locale: NewsWireLocale,
+  slug: string | null | undefined
+): string | null {
+  const trimmed = (slug ?? "").trim();
+  if (!trimmed) return null;
+  return locale === "ko" ? `/ko/article/${trimmed}` : `/en/article/${trimmed}`;
 }

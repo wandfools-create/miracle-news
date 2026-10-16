@@ -7,11 +7,18 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
+  compareArchiveNewsWireItems,
   compareNewsWireItems,
   newsWireRankBucket,
   type NewsWireSortable,
 } from "@/lib/news-wire/rankNewsWire";
 import {
+  archiveDbRowsToPublicItems,
+  buildHannoonArticleHref,
+  isPublicHannoonArticle,
+  newsWireArchiveDbRange,
+  newsWireArchiveHasMore,
+  newsWireArchivePageCount,
   newsWireIdOrder,
   nyDateKeyBounds,
   paginateNewsWireItems,
@@ -20,6 +27,13 @@ import {
   selectHomeNewsWireItems,
 } from "@/lib/news-wire/newsWireQuery";
 import type { NewsWireDbRow } from "@/lib/news-wire/types";
+import {
+  NEWS_WIRE_ARCHIVE_INCLUDE_STATUSES,
+  NEWS_WIRE_HOME_LIMIT,
+  NEWS_WIRE_HOME_LOOKBACK_MS,
+  NEWS_WIRE_INCLUDE_STATUSES,
+  NEWS_WIRE_PAGE_SIZE,
+} from "@/lib/news-wire/types";
 import {
   displayOriginalWireTitle,
   sanitizeWireOutboundUrl,
@@ -256,12 +270,14 @@ describe("news wire public DTO + no OpenAI path", () => {
     assert.doesNotMatch(json, /ai_recommend|aiRecommend|article_id|articleId/);
     assert.deepEqual(Object.keys(items[0]!).sort(), [
       "collectedAt",
+      "hannoonHref",
       "id",
       "originalUrl",
       "publishedAt",
       "sourceLabel",
       "title",
     ]);
+    assert.equal(items[0]!.hannoonHref, null);
   });
 
   it("NewsWireItem whitelist has no translation fields", () => {
@@ -346,5 +362,435 @@ describe("news wire public DTO + no OpenAI path", () => {
     ]) {
       assert.throws(() => readFileSync(join(process.cwd(), rel), "utf8"));
     }
+  });
+});
+
+describe("news wire permanent archive + Hannoon mark", () => {
+  it("keeps enriched candidates in the archive public list", () => {
+    const rows = [
+      dbRow({
+        id: "enriched-1",
+        created_at: "2026-09-11T10:00:00.000Z",
+        status: "enriched",
+        article_id: "art-1",
+        rss_title: "Already articleized",
+      }),
+      dbRow({
+        id: "pending-1",
+        created_at: "2026-09-11T11:00:00.000Z",
+        status: "pending",
+        rss_title: "Still pending",
+      }),
+    ];
+    assert.ok(NEWS_WIRE_ARCHIVE_INCLUDE_STATUSES.includes("enriched"));
+    assert.ok(NEWS_WIRE_ARCHIVE_INCLUDE_STATUSES.includes("expired"));
+    assert.ok(!NEWS_WIRE_INCLUDE_STATUSES.includes("enriched"));
+    const items = archiveDbRowsToPublicItems(rows, "ko");
+    assert.deepEqual(
+      items.map((i) => i.id).sort(),
+      ["enriched-1", "pending-1"]
+    );
+  });
+
+  it("shows candidates with no article link", () => {
+    const items = archiveDbRowsToPublicItems(
+      [
+        dbRow({
+          id: "orphan",
+          created_at: "2026-09-11T10:00:00.000Z",
+          article_id: null,
+          status: "pending",
+        }),
+      ],
+      "en"
+    );
+    assert.equal(items.length, 1);
+    assert.equal(items[0]!.hannoonHref, null);
+  });
+
+  it("shows Hannoon mark only for truly public linked articles", () => {
+    const hrefMap = new Map([["art-live", "/ko/article/live-slug"]]);
+    const items = archiveDbRowsToPublicItems(
+      [
+        dbRow({
+          id: "with-public",
+          created_at: "2026-09-11T10:00:00.000Z",
+          status: "enriched",
+          article_id: "art-live",
+        }),
+        dbRow({
+          id: "with-draft",
+          created_at: "2026-09-11T09:00:00.000Z",
+          status: "enriched",
+          article_id: "art-draft",
+        }),
+        dbRow({
+          id: "enriching",
+          created_at: "2026-09-11T08:00:00.000Z",
+          status: "enriching",
+          article_id: null,
+        }),
+        dbRow({
+          id: "failed",
+          created_at: "2026-09-11T07:00:00.000Z",
+          status: "enrich_failed",
+          article_id: "art-partial",
+        }),
+      ],
+      "ko",
+      hrefMap
+    );
+    const byId = Object.fromEntries(items.map((i) => [i.id, i]));
+    assert.equal(byId["with-public"]!.hannoonHref, "/ko/article/live-slug");
+    assert.equal(byId["with-draft"]!.hannoonHref, null);
+    assert.equal(byId["enriching"]!.hannoonHref, null);
+    assert.equal(byId["failed"]!.hannoonHref, null);
+  });
+
+  it("public article gate rejects unpublished / in-progress / revoked", () => {
+    assert.equal(
+      isPublicHannoonArticle({
+        is_published: true,
+        status: "published",
+        review_status: "approved",
+        published_at: "2026-09-11T12:00:00.000Z",
+      }),
+      true
+    );
+    assert.equal(
+      isPublicHannoonArticle({
+        is_published: false,
+        status: "approved",
+        review_status: "approved",
+        published_at: null,
+      }),
+      false
+    );
+    assert.equal(
+      isPublicHannoonArticle({
+        is_published: true,
+        status: "ready_for_human_review",
+        review_status: "pending",
+        published_at: null,
+      }),
+      false
+    );
+    assert.equal(
+      isPublicHannoonArticle({
+        is_published: false,
+        status: "published",
+        review_status: "approved",
+        published_at: "2026-09-11T12:00:00.000Z",
+      }),
+      false
+    );
+    assert.equal(buildHannoonArticleHref("ko", "abc"), "/ko/article/abc");
+    assert.equal(buildHannoonArticleHref("en", "abc"), "/en/article/abc");
+    assert.equal(buildHannoonArticleHref("ko", "  "), null);
+  });
+
+  it("excludes dismissed and dangerous URLs from public archive", () => {
+    assert.ok(!NEWS_WIRE_ARCHIVE_INCLUDE_STATUSES.includes("dismissed"));
+    const items = archiveDbRowsToPublicItems(
+      [
+        dbRow({
+          id: "danger",
+          created_at: "2026-09-11T10:00:00.000Z",
+          status: "pending",
+          original_url: "javascript:alert(1)",
+          rss_title: "Bad",
+        }),
+        dbRow({
+          id: "ftp",
+          created_at: "2026-09-11T09:00:00.000Z",
+          status: "pending",
+          original_url: "ftp://evil.example/x",
+        }),
+        dbRow({
+          id: "ok",
+          created_at: "2026-09-11T08:00:00.000Z",
+          status: "pending",
+          original_url: "https://safe.example/a",
+        }),
+      ],
+      "ko"
+    );
+    assert.deepEqual(
+      items.map((i) => i.id),
+      ["ok"]
+    );
+    assert.ok(items[0]!.originalUrl.startsWith("https://"));
+  });
+
+  it("original links use target=_blank noopener noreferrer in page view", () => {
+    const view = readFileSync(
+      join(process.cwd(), "components/news-wire/NewsWirePageView.tsx"),
+      "utf8"
+    );
+    assert.match(view, /target="_blank"/);
+    assert.match(view, /rel="noopener noreferrer"/);
+    assert.match(view, /한눈 기사/);
+    assert.match(view, /Hannoon/);
+    assert.match(view, /item\.hannoonHref/);
+  });
+
+  it("KO/EN archive share the same candidate id order", () => {
+    const rows = [
+      dbRow({
+        id: "a",
+        created_at: "2026-09-11T10:00:00.000Z",
+        rss_published_at: "2026-09-11T09:00:00.000Z",
+      }),
+      dbRow({
+        id: "b",
+        created_at: "2026-09-11T11:00:00.000Z",
+        rss_published_at: null,
+      }),
+      dbRow({
+        id: "c",
+        created_at: "2026-09-11T12:00:00.000Z",
+        rss_published_at: "2026-09-11T08:00:00.000Z",
+      }),
+    ];
+    const ko = archiveDbRowsToPublicItems(rows, "ko");
+    const en = archiveDbRowsToPublicItems(rows, "en");
+    assert.deepEqual(newsWireIdOrder(ko), newsWireIdOrder(en));
+  });
+
+  it("archive sort is rss_published_at DESC NULLS LAST, then created_at DESC, id ASC", () => {
+    const sorted = [
+      {
+        id: "older-pub",
+        publishedAt: "2026-09-10T12:00:00.000Z",
+        collectedAt: "2026-09-11T20:00:00.000Z",
+      },
+      {
+        id: "newer-pub",
+        publishedAt: "2026-09-11T12:00:00.000Z",
+        collectedAt: "2026-09-11T01:00:00.000Z",
+      },
+      {
+        id: "null-b",
+        publishedAt: null,
+        collectedAt: "2026-09-11T10:00:00.000Z",
+      },
+      {
+        id: "null-a",
+        publishedAt: null,
+        collectedAt: "2026-09-11T10:00:00.000Z",
+      },
+    ].sort(compareArchiveNewsWireItems);
+    assert.deepEqual(
+      sorted.map((r) => r.id),
+      ["newer-pub", "older-pub", "null-a", "null-b"]
+    );
+  });
+
+  it("past NY date archive bounds remain queryable", () => {
+    const past = nyDateKeyBounds("2025-01-15");
+    assert.ok(past);
+    assert.ok(Date.parse(past!.startIso) < Date.parse(past!.endIso));
+    assert.equal(
+      Date.parse(past!.endIso) - Date.parse(past!.startIso),
+      24 * 60 * 60 * 1000
+    );
+  });
+
+  it("public archive DTO whitelist excludes internal fields", () => {
+    const items = archiveDbRowsToPublicItems(
+      [
+        dbRow({
+          id: "w",
+          created_at: "2026-09-11T10:00:00.000Z",
+          status: "enriched",
+          article_id: "secret-art",
+          ai_recommend_grade: "best",
+          ai_recommend_score: 99,
+        }),
+      ],
+      "ko",
+      new Map([["secret-art", "/ko/article/public-slug"]])
+    );
+    const json = JSON.stringify(items[0]);
+    assert.doesNotMatch(
+      json,
+      /ai_recommend|aiRecommend|article_id|articleId|enrich_error|discord|service.?role/i
+    );
+    assert.deepEqual(Object.keys(items[0]!).sort(), [
+      "collectedAt",
+      "hannoonHref",
+      "id",
+      "originalUrl",
+      "publishedAt",
+      "sourceLabel",
+      "title",
+    ]);
+    assert.equal(items[0]!.hannoonHref, "/ko/article/public-slug");
+  });
+
+  it("archive fetch path has no OpenAI and home limits stay unchanged", () => {
+    const fetchSrc = readFileSync(
+      join(process.cwd(), "lib/news-wire/fetchNewsWire.ts"),
+      "utf8"
+    );
+    assert.doesNotMatch(fetchSrc, /chatCompletion|OpenAI|openai/);
+    assert.match(fetchSrc, /NEWS_WIRE_ARCHIVE_INCLUDE_STATUSES/);
+    assert.match(fetchSrc, /filterDuplicateLiveArticles/);
+    assert.equal(NEWS_WIRE_HOME_LIMIT, 8);
+    assert.equal(NEWS_WIRE_HOME_LOOKBACK_MS, 24 * 60 * 60 * 1000);
+  });
+
+  it("admin 기사 만들기 still calls enrichCandidateAction only", () => {
+    const form = readFileSync(
+      join(process.cwd(), "components/admin/EnrichCandidateForm.tsx"),
+      "utf8"
+    );
+    assert.match(form, /enrichCandidateAction/);
+    assert.doesNotMatch(form, /publishArticle|approvedPublish|quickPublish/);
+    const promote = readFileSync(
+      join(
+        process.cwd(),
+        "lib/collection-candidates/promoteCollectionCandidate.ts"
+      ),
+      "utf8"
+    );
+    assert.match(promote, /article_id: inserted\.articleId/);
+    assert.match(promote, /status: "enriched"/);
+  });
+
+  it("home layout and home selection files are unchanged in this PR", () => {
+    const home = readFileSync(
+      join(process.cwd(), "components/home/HomeNewsView.tsx"),
+      "utf8"
+    );
+    assert.match(home, /NewsWireRail/);
+    assert.match(home, /homeLeftRailColClass/);
+    const fetchHome = readFileSync(
+      join(process.cwd(), "lib/news-wire/fetchNewsWire.ts"),
+      "utf8"
+    );
+    assert.match(fetchHome, /filterDuplicateLiveArticles\(client, fetched\.rows\)/);
+    assert.match(fetchHome, /NEWS_WIRE_INCLUDE_STATUSES/);
+  });
+});
+
+describe("news wire archive DB pagination", () => {
+  it("page 1 and page 2 use inclusive DB ranges 0-49 and 50-99", () => {
+    assert.equal(NEWS_WIRE_PAGE_SIZE, 50);
+    const page1 = newsWireArchiveDbRange(1);
+    const page2 = newsWireArchiveDbRange(2);
+    assert.deepEqual(page1, { from: 0, to: 49, page: 1 });
+    assert.deepEqual(page2, { from: 50, to: 99, page: 2 });
+  });
+
+  it("page ranges do not overlap", () => {
+    const a = newsWireArchiveDbRange(1);
+    const b = newsWireArchiveDbRange(2);
+    const c = newsWireArchiveDbRange(3);
+    assert.ok(a.to < b.from);
+    assert.ok(b.to < c.from);
+    const idsA = new Set(
+      Array.from({ length: a.to - a.from + 1 }, (_, i) => a.from + i)
+    );
+    const idsB = new Set(
+      Array.from({ length: b.to - b.from + 1 }, (_, i) => b.from + i)
+    );
+    for (const id of idsB) assert.equal(idsA.has(id), false);
+  });
+
+  it("stable archive sort matches DB order contract", () => {
+    const rows = [
+      {
+        id: "z",
+        publishedAt: "2026-09-11T12:00:00.000Z",
+        collectedAt: "2026-09-11T01:00:00.000Z",
+      },
+      {
+        id: "a",
+        publishedAt: "2026-09-11T12:00:00.000Z",
+        collectedAt: "2026-09-11T01:00:00.000Z",
+      },
+      {
+        id: "mid",
+        publishedAt: null,
+        collectedAt: "2026-09-11T20:00:00.000Z",
+      },
+    ].sort(compareArchiveNewsWireItems);
+    assert.deepEqual(
+      rows.map((r) => r.id),
+      ["a", "z", "mid"]
+    );
+  });
+
+  it("computes total count pageCount and hasMore", () => {
+    assert.equal(newsWireArchivePageCount(0), 0);
+    assert.equal(newsWireArchivePageCount(50), 1);
+    assert.equal(newsWireArchivePageCount(51), 2);
+    assert.equal(newsWireArchivePageCount(120), 3);
+    assert.equal(newsWireArchiveHasMore(1, 120), true);
+    assert.equal(newsWireArchiveHasMore(3, 120), false);
+    assert.equal(newsWireArchiveHasMore(1, 50), false);
+  });
+
+  it("fetchNewsWireDayPage applies user page at DB and fetches at most 50 candidates", () => {
+    const fetchSrc = readFileSync(
+      join(process.cwd(), "lib/news-wire/fetchNewsWire.ts"),
+      "utf8"
+    );
+    const dayFn = fetchSrc.slice(
+      fetchSrc.indexOf("export async function fetchNewsWireDayPage"),
+      fetchSrc.length
+    );
+    assert.match(dayFn, /newsWireArchiveDbRange/);
+    assert.match(dayFn, /count:\s*"exact"/);
+    assert.match(
+      dayFn,
+      /\.order\("rss_published_at",\s*\{\s*ascending:\s*false,\s*nullsFirst:\s*false\s*\}/
+    );
+    assert.match(dayFn, /\.order\("created_at",\s*\{\s*ascending:\s*false\s*\}/);
+    assert.match(dayFn, /\.order\("id",\s*\{\s*ascending:\s*true\s*\}/);
+    assert.match(dayFn, /\.range\(from,\s*to\)/);
+    assert.doesNotMatch(dayFn, /collectRowsByRangePagination/);
+    assert.doesNotMatch(dayFn, /paginateNewsWireItems/);
+    assert.match(dayFn, /At most one DB page of candidates/);
+
+    // Simulate a >50-row day: only the DB page slice is mapped to DTOs.
+    const dayRows = Array.from({ length: 120 }, (_, i) =>
+      dbRow({
+        id: `d-${String(i).padStart(3, "0")}`,
+        created_at: `2026-09-11T10:00:00.000Z`,
+        rss_published_at: `2026-09-11T09:${String(i % 60).padStart(2, "0")}:00.000Z`,
+      })
+    );
+    const { from, to } = newsWireArchiveDbRange(1);
+    const fetched = dayRows.slice(from, to + 1);
+    assert.equal(fetched.length, 50);
+    assert.ok(fetched.length <= NEWS_WIRE_PAGE_SIZE);
+    const items = archiveDbRowsToPublicItems(fetched, "ko");
+    assert.ok(items.length <= 50);
+    assert.equal(newsWireArchivePageCount(dayRows.length), 3);
+  });
+
+  it("DTO mapping preserves DB page order for KO/EN parity", () => {
+    const pageRows = [
+      dbRow({
+        id: "first",
+        created_at: "2026-09-11T12:00:00.000Z",
+        rss_published_at: "2026-09-11T12:00:00.000Z",
+      }),
+      dbRow({
+        id: "second",
+        created_at: "2026-09-11T11:00:00.000Z",
+        rss_published_at: "2026-09-11T11:00:00.000Z",
+      }),
+    ];
+    assert.deepEqual(
+      newsWireIdOrder(archiveDbRowsToPublicItems(pageRows, "ko")),
+      newsWireIdOrder(archiveDbRowsToPublicItems(pageRows, "en"))
+    );
+    assert.deepEqual(newsWireIdOrder(archiveDbRowsToPublicItems(pageRows, "ko")), [
+      "first",
+      "second",
+    ]);
   });
 });

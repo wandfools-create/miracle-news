@@ -118,14 +118,24 @@ export default function NewsWirePageView({
         <ul className="mt-6 divide-y divide-neutral-100">
           {items.map((item) => (
             <li key={item.id} className="py-4">
-              <a
-                href={item.originalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-base font-semibold leading-snug text-neutral-900 hover:underline"
-              >
-                {item.title}
-              </a>
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                {item.hannoonHref ? (
+                  <Link
+                    href={item.hannoonHref}
+                    className="shrink-0 rounded border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-neutral-500 hover:border-neutral-300 hover:text-neutral-700"
+                  >
+                    {locale === "ko" ? "한눈 기사" : "Hannoon"}
+                  </Link>
+                ) : null}
+                <a
+                  href={item.originalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-base font-semibold leading-snug text-neutral-900 hover:underline"
+                >
+                  {item.title}
+                </a>
+              </div>
               <p className="mt-1 text-sm text-neutral-500">
                 {item.sourceLabel}
                 <span className="mx-1.5 text-neutral-300">·</span>

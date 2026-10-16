@@ -96,9 +96,9 @@ export const CANDIDATE_STATUS_LABELS: Record<CollectionCandidateStatus, string> 
     pending: "수집 대기",
     shortlisted: "선정됨",
     selected: "선택됨",
-    enriching: "기사 만드는 중",
-    enriched: "검토 대기 저장됨",
-    enrich_failed: "기사 만들기 실패",
+    enriching: "제작 중",
+    enriched: "기사화 완료",
+    enrich_failed: "제작 실패",
     dismissed: "제외됨",
     expired: "만료",
   };

@@ -2,15 +2,20 @@ import "server-only";
 
 import { collectRowsByRangePagination } from "@/lib/collection-candidates/candidateFetchPagination";
 import {
+  archiveDbRowsToPublicItems,
+  buildHannoonArticleHref,
+  isPublicHannoonArticle,
+  newsWireArchiveDbRange,
+  newsWireArchiveHasMore,
+  newsWireArchivePageCount,
   newsWireIdOrder,
   nyDateKeyBounds,
-  paginateNewsWireItems,
   parseNewsWirePage,
-  rankDbRowsToPublicItems,
   selectHomeNewsWireItems,
   todayNyDateKey,
 } from "@/lib/news-wire/newsWireQuery";
 import {
+  NEWS_WIRE_ARCHIVE_INCLUDE_STATUSES,
   NEWS_WIRE_DB_SELECT,
   NEWS_WIRE_FETCH_MAX_PAGES,
   NEWS_WIRE_FETCH_PAGE_SIZE,
@@ -25,6 +30,7 @@ import {
   checkSupabaseServiceEnvWithDns,
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/serviceRole";
+import type { CollectionCandidateStatus } from "@/lib/collection-candidates/types";
 
 export {
   newsWireIdOrder,
@@ -50,8 +56,9 @@ function isMissingRelation(error: {
 }
 
 /**
- * Exclude candidates whose linked article is already live/public editorial.
- * Keep enrich_failed even if article_id is set (partial failure).
+ * Homepage only: exclude candidates whose linked article is already
+ * live/public editorial so the rail stays non-duplicate with home cards.
+ * Archive path must NOT use this — articleized rows stay visible.
  */
 async function filterDuplicateLiveArticles(
   client: ServiceClient,
@@ -99,10 +106,61 @@ async function filterDuplicateLiveArticles(
   );
 }
 
+/**
+ * Resolve public Hannoon hrefs using the same publish gates as SEO/home:
+ * approved + is_published + status published + published_at + locale slug.
+ */
+async function resolvePublishedHannoonHrefs(
+  client: ServiceClient,
+  articleIds: string[],
+  locale: NewsWireLocale
+): Promise<Map<string, string>> {
+  const hrefByArticleId = new Map<string, string>();
+  const unique = [...new Set(articleIds.filter(Boolean))];
+  if (unique.length === 0) return hrefByArticleId;
+
+  for (let i = 0; i < unique.length; i += 200) {
+    const chunk = unique.slice(i, i + 200);
+    const { data, error } = await client
+      .from("article_localizations")
+      .select(
+        `
+        article_id,
+        slug,
+        locale,
+        articles!inner (
+          id,
+          is_published,
+          status,
+          review_status,
+          published_at
+        )
+      `
+      )
+      .in("article_id", chunk)
+      .eq("locale", locale);
+
+    if (error || !data) continue;
+
+    for (const row of data) {
+      const articleRaw = row.articles;
+      const article = Array.isArray(articleRaw) ? articleRaw[0] : articleRaw;
+      if (!article || !isPublicHannoonArticle(article)) continue;
+      const href = buildHannoonArticleHref(locale, row.slug);
+      if (!href) continue;
+      hrefByArticleId.set(String(row.article_id), href);
+    }
+  }
+
+  return hrefByArticleId;
+}
+
+/** Home preview only — still scans the lookback window in batches. */
 async function fetchAllWireRowsInCreatedWindow(options: {
   client: ServiceClient;
   gteIso: string;
   ltIso?: string;
+  statuses: readonly CollectionCandidateStatus[];
 }): Promise<
   | { ok: true; rows: NewsWireDbRow[]; schemaReady: true }
   | { ok: false; schemaReady: boolean; error: string | null }
@@ -117,7 +175,7 @@ async function fetchAllWireRowsInCreatedWindow(options: {
       let query = options.client
         .from("collection_candidates")
         .select(NEWS_WIRE_DB_SELECT)
-        .in("status", NEWS_WIRE_INCLUDE_STATUSES)
+        .in("status", [...options.statuses])
         .gte("created_at", options.gteIso)
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
@@ -168,6 +226,7 @@ export async function fetchHomeNewsWireItems(options?: {
     const fetched = await fetchAllWireRowsInCreatedWindow({
       client,
       gteIso: sinceIso,
+      statuses: NEWS_WIRE_INCLUDE_STATUSES,
     });
     if (!fetched.ok) {
       return {
@@ -199,17 +258,22 @@ export type NewsWireDayPage = {
   pageSize: number;
   hasMore: boolean;
   totalReady: number;
+  pageCount: number;
   schemaReady: boolean;
   error: string | null;
 };
 
+/**
+ * Permanent /wire day archive: one exact count + one paged SELECT.
+ * Does not walk the full day with collectRowsByRangePagination.
+ */
 export async function fetchNewsWireDayPage(options: {
   locale: NewsWireLocale;
   dateKey: string;
   page?: number;
   nowMs?: number;
 }): Promise<NewsWireDayPage> {
-  const page = parseNewsWirePage(options.page ?? 1);
+  const { page, from, to } = newsWireArchiveDbRange(options.page ?? 1);
   const empty = (extra: Partial<NewsWireDayPage>): NewsWireDayPage => ({
     items: [],
     dateKey: options.dateKey,
@@ -217,6 +281,7 @@ export async function fetchNewsWireDayPage(options: {
     pageSize: NEWS_WIRE_PAGE_SIZE,
     hasMore: false,
     totalReady: 0,
+    pageCount: 0,
     schemaReady: true,
     error: null,
     ...extra,
@@ -234,29 +299,67 @@ export async function fetchNewsWireDayPage(options: {
 
   try {
     const { client } = createServiceRoleSupabaseClient();
-    const fetched = await fetchAllWireRowsInCreatedWindow({
-      client,
-      gteIso: bounds.startIso,
-      ltIso: bounds.endIso,
-    });
-    if (!fetched.ok) {
-      return empty({
-        schemaReady: fetched.schemaReady,
-        error: fetched.error,
-      });
+    const statuses = [...NEWS_WIRE_ARCHIVE_INCLUDE_STATUSES];
+
+    const { count, error: countError } = await client
+      .from("collection_candidates")
+      .select("id", { count: "exact", head: true })
+      .in("status", statuses)
+      .gte("created_at", bounds.startIso)
+      .lt("created_at", bounds.endIso);
+
+    if (countError) {
+      if (isMissingRelation(countError)) {
+        return empty({ schemaReady: false, error: null });
+      }
+      return empty({ schemaReady: true, error: countError.message });
     }
 
-    const filtered = await filterDuplicateLiveArticles(client, fetched.rows);
-    const nowMs = options.nowMs ?? Date.now();
-    const ranked = rankDbRowsToPublicItems(filtered, options.locale, nowMs);
-    const sliced = paginateNewsWireItems(ranked, page);
+    const totalReady = count ?? 0;
+    const pageCount = newsWireArchivePageCount(totalReady);
+
+    const { data, error } = await client
+      .from("collection_candidates")
+      .select(NEWS_WIRE_DB_SELECT)
+      .in("status", statuses)
+      .gte("created_at", bounds.startIso)
+      .lt("created_at", bounds.endIso)
+      .order("rss_published_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to);
+
+    if (error) {
+      if (isMissingRelation(error)) {
+        return empty({ schemaReady: false, error: null });
+      }
+      return empty({ schemaReady: true, error: error.message });
+    }
+
+    const pageRows = (data ?? []) as unknown as NewsWireDbRow[];
+    // At most one DB page of candidates (≤ NEWS_WIRE_PAGE_SIZE).
+    const articleIds = pageRows
+      .map((r) => r.article_id)
+      .filter((id): id is string => Boolean(id));
+    const hannoonHrefByArticleId = await resolvePublishedHannoonHrefs(
+      client,
+      articleIds,
+      options.locale
+    );
+    const items = archiveDbRowsToPublicItems(
+      pageRows,
+      options.locale,
+      hannoonHrefByArticleId
+    );
+
     return {
-      items: sliced.items,
+      items,
       dateKey: options.dateKey,
-      page: sliced.page,
-      pageSize: sliced.pageSize,
-      hasMore: sliced.hasMore,
-      totalReady: sliced.totalReady,
+      page,
+      pageSize: NEWS_WIRE_PAGE_SIZE,
+      hasMore: newsWireArchiveHasMore(page, totalReady),
+      totalReady,
+      pageCount,
       schemaReady: true,
       error: null,
     };
